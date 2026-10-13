@@ -125,6 +125,15 @@ fun ExplorerScreen(
                 ImageViewerScreen(
                     images = imageItems,
                     initialIndex = currentIndex,
+                    onDelete = { item ->
+                        viewModel.onEvent(ExplorerUiEvent.Delete(item))
+                        if (imageItems.size <= 1) {
+                            activeImageIndex = null
+                        } else if (currentIndex >= imageItems.size - 1) {
+                            activeImageIndex = (imageItems.size - 2).coerceAtLeast(0)
+                        }
+                    },
+                    onCopy = { viewModel.onEvent(ExplorerUiEvent.Copy(it)) },
                     onDismiss = { activeImageIndex = null }
                 )
             }

@@ -40,4 +40,5 @@
     <string name="properties_path">Konum</string>
     <string name="properties_size">Boyut</string>
     <string name="properties_modified">Değiştirilme</string>
+    <string name="action_share">Paylaş</string>
 </resources>

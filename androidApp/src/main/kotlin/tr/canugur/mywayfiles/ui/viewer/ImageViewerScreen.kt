@@ -1,8 +1,15 @@
 package tr.canugur.mywayfiles.ui.viewer
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculatePan
@@ -27,12 +34,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import kotlinx.coroutines.launch
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.core.image.BitmapDecoder
@@ -40,7 +49,10 @@ import tr.canugur.mywayfiles.core.image.DecodedBitmapResult
 import tr.canugur.mywayfiles.core.util.ByteFormatter
 import tr.canugur.mywayfiles.core.util.DateTimeFormatter
 import tr.canugur.mywayfiles.domain.model.FileItem
+import tr.canugur.mywayfiles.ui.explorer.components.DeleteConfirmDialog
+import tr.canugur.mywayfiles.ui.explorer.components.PropertiesDialog
 import tr.canugur.mywayfiles.ui.theme.Dimensions
+import java.io.File
 
 private sealed interface ImagePageState {
     data object Loading : ImagePageState
@@ -50,12 +62,14 @@ private sealed interface ImagePageState {
 
 /**
  * Enterprise gallery-grade image viewer with horizontal swipe pager, pinch-to-zoom,
- * pan, double-tap zoom, on-screen navigation controls, and photo counter.
+ * pan, double-tap zoom, photo counter, and quick action toolbar (delete, share, copy, info).
  */
 @Composable
 fun ImageViewerScreen(
     images: List<FileItem>,
     initialIndex: Int,
+    onDelete: (FileItem) -> Unit,
+    onCopy: (FileItem) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -64,11 +78,14 @@ fun ImageViewerScreen(
         return
     }
 
+    val context = LocalContext.current
     val safeInitial = initialIndex.coerceIn(0, images.size - 1)
     val pagerState = rememberPagerState(initialPage = safeInitial) { images.size }
     val scope = rememberCoroutineScope()
 
     var isCurrentZoomed by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showProperties by remember { mutableStateOf(false) }
 
     val currentItem = images.getOrNull(pagerState.currentPage) ?: images[0]
 
@@ -227,7 +244,137 @@ fun ImageViewerScreen(
                     }
                 }
             }
+
+            // Bottom Quick Action Bar (when not zoomed)
+            AnimatedVisibility(
+                visible = !isCurrentZoomed,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                Surface(
+                    color = Color(0xEE181818),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                vertical = Dimensions.SpacingSmall,
+                                horizontal = Dimensions.SpacingMedium
+                            ),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Share Action
+                        ActionBottomItem(
+                            iconRes = R.drawable.ic_share,
+                            label = stringResource(R.string.action_share),
+                            tint = Color.White,
+                            onClick = { shareImage(context, currentItem.path) }
+                        )
+
+                        // Copy Action
+                        ActionBottomItem(
+                            iconRes = R.drawable.ic_copy,
+                            label = stringResource(R.string.action_copy),
+                            tint = Color.White,
+                            onClick = { onCopy(currentItem) }
+                        )
+
+                        // Properties Action
+                        ActionBottomItem(
+                            iconRes = R.drawable.ic_info,
+                            label = stringResource(R.string.action_properties),
+                            tint = Color.White,
+                            onClick = { showProperties = true }
+                        )
+
+                        // Delete Action
+                        ActionBottomItem(
+                            iconRes = R.drawable.ic_delete,
+                            label = stringResource(R.string.action_delete),
+                            tint = Color(0xFFFF6B6B),
+                            onClick = { showDeleteConfirm = true }
+                        )
+                    }
+                }
+            }
+
+            // Dialogs
+            if (showDeleteConfirm) {
+                DeleteConfirmDialog(
+                    fileName = currentItem.name,
+                    onConfirm = {
+                        onDelete(currentItem)
+                        showDeleteConfirm = false
+                    },
+                    onDismiss = { showDeleteConfirm = false }
+                )
+            }
+
+            if (showProperties) {
+                PropertiesDialog(
+                    item = currentItem,
+                    onDismiss = { showProperties = false }
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun ActionBottomItem(
+    iconRes: Int,
+    label: String,
+    tint: Color,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
+            .clickable { onClick() }
+            .padding(horizontal = Dimensions.SpacingMedium, vertical = Dimensions.SpacingExtraSmall)
+    ) {
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(Dimensions.IconSizeMedium)
+        )
+        Spacer(modifier = Modifier.height(Dimensions.SpacingMicro))
+        Text(
+            text = label,
+            color = tint,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+private fun shareImage(context: Context, filePath: String) {
+    try {
+        val file = File(filePath)
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "image/*"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, null))
+    } catch (_: Exception) {
+        val fallbackIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "image/*"
+            putExtra(Intent.EXTRA_STREAM, Uri.fromFile(File(filePath)))
+        }
+        context.startActivity(Intent.createChooser(fallbackIntent, null))
     }
 }
 
@@ -241,7 +388,6 @@ private fun InteractiveImagePage(
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
 
-    // Reset zoom when swiped away
     LaunchedEffect(isCurrentPage) {
         if (!isCurrentPage) {
             scale = 1f
@@ -309,7 +455,6 @@ private fun InteractiveImagePage(
                                     val count = event.changes.size
 
                                     if (count >= 2) {
-                                        // Pinch-to-zoom with 2+ fingers
                                         val zoom = event.calculateZoom()
                                         val pan = event.calculatePan()
                                         val newScale = (scale * zoom).coerceIn(1f, 5f)
@@ -320,13 +465,10 @@ private fun InteractiveImagePage(
                                         }
                                         event.changes.forEach { it.consume() }
                                     } else if (scale > 1.05f && count == 1) {
-                                        // Panning while zoomed in with 1 finger
                                         val pan = event.calculatePan()
                                         offset += pan
                                         event.changes.forEach { it.consume() }
                                     }
-                                    // When count == 1 and scale <= 1.05f:
-                                    // DO NOT consume! HorizontalPager receives the swipe gesture!
                                 } while (event.changes.any { it.pressed })
                             }
                         },
