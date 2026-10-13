@@ -22,11 +22,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.domain.model.FileItem
+import tr.canugur.mywayfiles.domain.model.SortOption
 import tr.canugur.mywayfiles.ui.explorer.components.*
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 import tr.canugur.mywayfiles.ui.viewer.ImageViewerScreen
-import tr.canugur.mywayfiles.ui.viewer.VideoViewerScreen
 
 /**
  * Stateful entry point for the Directory and File Explorer screen.
@@ -50,6 +50,19 @@ fun ExplorerScreen(
         key = rootPath
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    var isSelectionMode by remember { mutableStateOf(false) }
+    var selectedPaths by remember { mutableStateOf(setOf<String>()) }
+
+    val currentPath = when (val s = state) {
+        is ExplorerUiState.Success -> s.currentPath
+        is ExplorerUiState.Empty -> s.currentPath
+        else -> rootPath
+    }
+    LaunchedEffect(currentPath) {
+        isSelectionMode = false
+        selectedPaths = emptySet()
+    }
 
     val mediaItems = remember(state) {
         val currentState = state
@@ -75,10 +88,18 @@ fun ExplorerScreen(
         }
     }
 
-    BackHandler(enabled = activeMediaIndex == null) {
-        if (!viewModel.navigateUp()) {
+    BackHandler(enabled = isSelectionMode || activeMediaIndex == null) {
+        if (isSelectionMode) {
+            isSelectionMode = false
+            selectedPaths = emptySet()
+        } else if (!viewModel.navigateUp()) {
             onNavigateBack()
         }
+    }
+
+    val currentItems = when (val s = state) {
+        is ExplorerUiState.Success -> s.items
+        else -> emptyList()
     }
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -87,21 +108,75 @@ fun ExplorerScreen(
             fallbackDriveName = driveName,
             fallbackRootPath = rootPath,
             isDarkTheme = isDarkTheme,
+            isSelectionMode = isSelectionMode,
+            selectedPaths = selectedPaths,
             onToggleTheme = onToggleTheme,
             onBackClick = {
-                if (!viewModel.navigateUp()) {
+                if (isSelectionMode) {
+                    isSelectionMode = false
+                    selectedPaths = emptySet()
+                } else if (!viewModel.navigateUp()) {
                     onNavigateBack()
                 }
             },
             onCreateFolderClick = { showCreateFolderDialog = true },
+            onEnterSelectionMode = { isSelectionMode = true },
+            onCloseSelectionMode = {
+                isSelectionMode = false
+                selectedPaths = emptySet()
+            },
+            onToggleSelectAll = {
+                selectedPaths = if (selectedPaths.size >= currentItems.size) {
+                    emptySet()
+                } else {
+                    currentItems.map { it.path }.toSet()
+                }
+            },
+            onBatchCopy = {
+                val items = currentItems.filter { it.path in selectedPaths }
+                viewModel.onEvent(ExplorerUiEvent.BatchCopy(items))
+                isSelectionMode = false
+                selectedPaths = emptySet()
+            },
+            onBatchCut = {
+                val items = currentItems.filter { it.path in selectedPaths }
+                viewModel.onEvent(ExplorerUiEvent.BatchCut(items))
+                isSelectionMode = false
+                selectedPaths = emptySet()
+            },
+            onBatchDelete = {
+                val items = currentItems.filter { it.path in selectedPaths }
+                viewModel.onEvent(ExplorerUiEvent.BatchMoveToTrash(items))
+                isSelectionMode = false
+                selectedPaths = emptySet()
+            },
+            onToggleHiddenFiles = { viewModel.onEvent(ExplorerUiEvent.ToggleShowHiddenFiles) },
+            onSortOptionSelected = { viewModel.onEvent(ExplorerUiEvent.ChangeSortOption(it)) },
             onItemClick = { item ->
-                if (item.isDirectory) {
+                if (isSelectionMode) {
+                    selectedPaths = if (item.path in selectedPaths) {
+                        selectedPaths - item.path
+                    } else {
+                        selectedPaths + item.path
+                    }
+                } else if (item.isDirectory) {
                     viewModel.onEvent(ExplorerUiEvent.ItemClick(item))
                 } else if (FileTypeClassifier.isImage(item) || FileTypeClassifier.isVideo(item)) {
                     val idx = mediaItems.indexOfFirst { it.path == item.path }
                     if (idx >= 0) {
                         activeMediaIndex = idx
                     }
+                }
+            },
+            onLongClick = { item ->
+                isSelectionMode = true
+                selectedPaths = selectedPaths + item.path
+            },
+            onToggleSelect = { item ->
+                selectedPaths = if (item.path in selectedPaths) {
+                    selectedPaths - item.path
+                } else {
+                    selectedPaths + item.path
                 }
             },
             onCopy = { viewModel.onEvent(ExplorerUiEvent.Copy(it)) },
@@ -177,10 +252,22 @@ fun ExplorerScreenContent(
     fallbackDriveName: String,
     fallbackRootPath: String,
     isDarkTheme: Boolean,
+    isSelectionMode: Boolean,
+    selectedPaths: Set<String>,
     onToggleTheme: () -> Unit,
     onBackClick: () -> Unit,
     onCreateFolderClick: () -> Unit,
+    onEnterSelectionMode: () -> Unit,
+    onCloseSelectionMode: () -> Unit,
+    onToggleSelectAll: () -> Unit,
+    onBatchCopy: () -> Unit,
+    onBatchCut: () -> Unit,
+    onBatchDelete: () -> Unit,
+    onToggleHiddenFiles: () -> Unit,
+    onSortOptionSelected: (SortOption) -> Unit,
     onItemClick: (FileItem) -> Unit,
+    onLongClick: (FileItem) -> Unit,
+    onToggleSelect: (FileItem) -> Unit,
     onCopy: (FileItem) -> Unit,
     onCut: (FileItem) -> Unit,
     onRename: (FileItem) -> Unit,
@@ -198,6 +285,24 @@ fun ExplorerScreenContent(
         else -> listOf(Breadcrumb(title = fallbackDriveName, path = fallbackRootPath))
     }
 
+    val showHiddenFiles = when (state) {
+        is ExplorerUiState.Success -> state.showHiddenFiles
+        is ExplorerUiState.Empty -> state.showHiddenFiles
+        else -> false
+    }
+
+    val sortOption = when (state) {
+        is ExplorerUiState.Success -> state.sortOption
+        is ExplorerUiState.Empty -> state.sortOption
+        else -> SortOption.NAME_ASC
+    }
+
+    val currentItems = when (state) {
+        is ExplorerUiState.Success -> state.items
+        else -> emptyList()
+    }
+    val isAllSelected = currentItems.isNotEmpty() && selectedPaths.size >= currentItems.size
+
     Box(modifier = modifier.fillMaxSize()) {
         Scaffold(
             containerColor = AppColors.canvasBackground,
@@ -205,9 +310,22 @@ fun ExplorerScreenContent(
                 ExplorerTopBar(
                     breadcrumbs = breadcrumbs,
                     isDarkTheme = isDarkTheme,
+                    isSelectionMode = isSelectionMode,
+                    selectedCount = selectedPaths.size,
+                    isAllSelected = isAllSelected,
+                    showHiddenFiles = showHiddenFiles,
+                    sortOption = sortOption,
                     onBackClick = onBackClick,
                     onBreadcrumbClick = { onEvent(ExplorerUiEvent.NavigateToBreadcrumb(it)) },
                     onCreateFolderClick = onCreateFolderClick,
+                    onEnterSelectionMode = onEnterSelectionMode,
+                    onCloseSelectionMode = onCloseSelectionMode,
+                    onToggleSelectAll = onToggleSelectAll,
+                    onBatchCopy = onBatchCopy,
+                    onBatchCut = onBatchCut,
+                    onBatchDelete = onBatchDelete,
+                    onToggleHiddenFiles = onToggleHiddenFiles,
+                    onSortOptionSelected = onSortOptionSelected,
                     onToggleTheme = onToggleTheme,
                     onRefreshClick = { onEvent(ExplorerUiEvent.Refresh) }
                 )
@@ -281,7 +399,11 @@ fun ExplorerScreenContent(
                         items(state.items, key = { it.id }) { item ->
                             FileItemRow(
                                 item = item,
+                                isSelectionMode = isSelectionMode,
+                                isSelected = item.path in selectedPaths,
                                 onClick = { onItemClick(item) },
+                                onLongClick = onLongClick,
+                                onToggleSelect = onToggleSelect,
                                 onCopy = onCopy,
                                 onCut = onCut,
                                 onRename = onRename,

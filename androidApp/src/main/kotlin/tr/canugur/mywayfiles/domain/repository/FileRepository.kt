@@ -6,7 +6,7 @@ import tr.canugur.mywayfiles.domain.model.FileItem
  * Universal repository contract for file system queries and state mutations.
  */
 interface FileRepository {
-    suspend fun getDirectoryContents(path: String): Result<List<FileItem>>
+    suspend fun getDirectoryContents(path: String, showHidden: Boolean = false): Result<List<FileItem>>
     fun hasStoragePermission(): Boolean
     suspend fun delete(path: String): Result<Unit>
     suspend fun rename(path: String, newName: String): Result<Unit>

@@ -10,8 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,26 +20,41 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import tr.canugur.mywayfiles.R
+import tr.canugur.mywayfiles.domain.model.SortOption
 import tr.canugur.mywayfiles.ui.explorer.Breadcrumb
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 
 /**
- * Explorer Top Bar with back navigation, breadcrumb path bar, new folder creation,
- * theme toggle, and refresh.
+ * Universal Explorer Top Bar supporting both standard browsing navigation and
+ * multi-item selection mode with overflow options menu.
  */
 @Composable
 fun ExplorerTopBar(
     breadcrumbs: List<Breadcrumb>,
     isDarkTheme: Boolean,
+    isSelectionMode: Boolean,
+    selectedCount: Int,
+    isAllSelected: Boolean,
+    showHiddenFiles: Boolean,
+    sortOption: SortOption,
     onBackClick: () -> Unit,
     onBreadcrumbClick: (String) -> Unit,
     onCreateFolderClick: () -> Unit,
+    onEnterSelectionMode: () -> Unit,
+    onCloseSelectionMode: () -> Unit,
+    onToggleSelectAll: () -> Unit,
+    onBatchCopy: () -> Unit,
+    onBatchCut: () -> Unit,
+    onBatchDelete: () -> Unit,
+    onToggleHiddenFiles: () -> Unit,
+    onSortOptionSelected: (SortOption) -> Unit,
     onToggleTheme: () -> Unit,
     onRefreshClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
+    var optionsMenuExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(breadcrumbs.size) {
         scrollState.animateScrollTo(scrollState.maxValue)
@@ -62,118 +76,123 @@ fun ExplorerTopBar(
                 ),
             verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall)
         ) {
-            // Main Top Bar Row: Back Button, Title, and Actions
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Back Button + Current Folder Name
+            if (isSelectionMode) {
+                ExplorerSelectionTopBar(
+                    selectedCount = selectedCount,
+                    isAllSelected = isAllSelected,
+                    onCloseSelection = onCloseSelectionMode,
+                    onToggleSelectAll = onToggleSelectAll,
+                    onBatchCopy = onBatchCopy,
+                    onBatchCut = onBatchCut,
+                    onBatchDelete = onBatchDelete
+                )
+            } else {
+                // Normal Navigation Row
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(Dimensions.ActionButtonSize)
-                            .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
-                            .background(AppColors.cardSurfaceSubtle)
-                            .border(
-                                width = Dimensions.CardBorderWidth,
-                                color = AppColors.cardStroke,
-                                shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
-                            )
-                            .clickable { onBackClick() },
-                        contentAlignment = Alignment.Center
+                    // Back Button + Current Folder Name
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_arrow_back),
-                            contentDescription = stringResource(R.string.navigate_up),
-                            tint = AppColors.textPrimary,
-                            modifier = Modifier.size(Dimensions.IconSizeMedium)
+                        Box(
+                            modifier = Modifier
+                                .size(Dimensions.ActionButtonSize)
+                                .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
+                                .background(AppColors.cardSurfaceSubtle)
+                                .border(
+                                    width = Dimensions.CardBorderWidth,
+                                    color = AppColors.cardStroke,
+                                    shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
+                                )
+                                .clickable { onBackClick() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_arrow_back),
+                                contentDescription = stringResource(R.string.navigate_up),
+                                tint = AppColors.textPrimary,
+                                modifier = Modifier.size(Dimensions.IconSizeMedium)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(Dimensions.SpacingSmall))
+
+                        val activeTitle = breadcrumbs.lastOrNull()?.title ?: ""
+                        Text(
+                            text = activeTitle,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AppColors.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(Dimensions.SpacingSmall))
-
-                    val activeTitle = breadcrumbs.lastOrNull()?.title ?: ""
-                    Text(
-                        text = activeTitle,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = AppColors.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                // Actions: New Folder, Theme Switcher & Refresh
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(Dimensions.ActionButtonSize)
-                            .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
-                            .background(AppColors.cardSurfaceSubtle)
-                            .border(
-                                width = Dimensions.CardBorderWidth,
-                                color = AppColors.cardStroke,
-                                shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
-                            )
-                            .clickable { onCreateFolderClick() },
-                        contentAlignment = Alignment.Center
+                    // Actions: Theme Switcher & Options Overflow Menu (replacing standalone new folder)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_new_folder),
-                            contentDescription = stringResource(R.string.action_new_folder),
-                            tint = AppColors.brandAccent,
-                            modifier = Modifier.size(Dimensions.IconSizeMedium)
-                        )
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(Dimensions.ActionButtonSize)
-                            .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
-                            .background(AppColors.cardSurfaceSubtle)
-                            .border(
-                                width = Dimensions.CardBorderWidth,
-                                color = AppColors.cardStroke,
-                                shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
+                        Box(
+                            modifier = Modifier
+                                .size(Dimensions.ActionButtonSize)
+                                .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
+                                .background(AppColors.cardSurfaceSubtle)
+                                .border(
+                                    width = Dimensions.CardBorderWidth,
+                                    color = AppColors.cardStroke,
+                                    shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
+                                )
+                                .clickable { onToggleTheme() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val themeIcon = if (isDarkTheme) R.drawable.ic_mode_light else R.drawable.ic_mode_dark
+                            Icon(
+                                painter = painterResource(themeIcon),
+                                contentDescription = stringResource(R.string.theme_toggle),
+                                tint = AppColors.textSecondary,
+                                modifier = Modifier.size(Dimensions.IconSizeMedium)
                             )
-                            .clickable { onToggleTheme() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        val themeIcon = if (isDarkTheme) R.drawable.ic_mode_light else R.drawable.ic_mode_dark
-                        Icon(
-                            painter = painterResource(themeIcon),
-                            contentDescription = stringResource(R.string.theme_toggle),
-                            tint = AppColors.textSecondary,
-                            modifier = Modifier.size(Dimensions.IconSizeMedium)
-                        )
-                    }
+                        }
 
-                    Box(
-                        modifier = Modifier
-                            .size(Dimensions.ActionButtonSize)
-                            .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
-                            .background(AppColors.cardSurfaceSubtle)
-                            .border(
-                                width = Dimensions.CardBorderWidth,
-                                color = AppColors.cardStroke,
-                                shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
+                        Box {
+                            Box(
+                                modifier = Modifier
+                                    .size(Dimensions.ActionButtonSize)
+                                    .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
+                                    .background(AppColors.cardSurfaceSubtle)
+                                    .border(
+                                        width = Dimensions.CardBorderWidth,
+                                        color = AppColors.cardStroke,
+                                        shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
+                                    )
+                                    .clickable { optionsMenuExpanded = true },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_more_vert),
+                                    contentDescription = stringResource(R.string.options_menu),
+                                    tint = AppColors.textPrimary,
+                                    modifier = Modifier.size(Dimensions.IconSizeMedium)
+                                )
+                            }
+
+                            ExplorerOptionsMenu(
+                                expanded = optionsMenuExpanded,
+                                showHiddenFiles = showHiddenFiles,
+                                currentSortOption = sortOption,
+                                onDismissRequest = { optionsMenuExpanded = false },
+                                onCreateFolderClick = onCreateFolderClick,
+                                onEnterSelectionMode = onEnterSelectionMode,
+                                onToggleHiddenFiles = onToggleHiddenFiles,
+                                onSortOptionSelected = onSortOptionSelected,
+                                onRefreshClick = onRefreshClick
                             )
-                            .clickable { onRefreshClick() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_refresh),
-                            contentDescription = stringResource(R.string.refresh_drives),
-                            tint = AppColors.textSecondary,
-                            modifier = Modifier.size(Dimensions.IconSizeMedium)
-                        )
+                        }
                     }
                 }
             }

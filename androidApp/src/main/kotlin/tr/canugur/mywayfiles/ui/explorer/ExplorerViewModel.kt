@@ -12,6 +12,7 @@ import tr.canugur.mywayfiles.data.datasource.AndroidFileLocalDataSource
 import tr.canugur.mywayfiles.data.repository.FileRepositoryImpl
 import tr.canugur.mywayfiles.data.repository.RecycleBinRepositoryImpl
 import tr.canugur.mywayfiles.domain.model.FileItem
+import tr.canugur.mywayfiles.domain.model.SortOption
 import tr.canugur.mywayfiles.domain.repository.FileRepository
 import tr.canugur.mywayfiles.domain.repository.RecycleBinRepository
 import tr.canugur.mywayfiles.domain.usecase.GetDirectoryContentsUseCase
@@ -34,6 +35,8 @@ class ExplorerViewModel(
 
     private var activePath: String = rootPath
     private var activeClipboard: Clipboard? = null
+    private var showHiddenFiles: Boolean = false
+    private var sortOption: SortOption = SortOption.NAME_ASC
 
     init {
         loadDirectory(rootPath)
@@ -60,6 +63,18 @@ class ExplorerViewModel(
                 activeClipboard = Clipboard(item = event.item, isCut = true)
                 updateStateClipboard()
             }
+            is ExplorerUiEvent.BatchCopy -> {
+                if (event.items.isNotEmpty()) {
+                    activeClipboard = Clipboard(items = event.items, isCut = false)
+                    updateStateClipboard()
+                }
+            }
+            is ExplorerUiEvent.BatchCut -> {
+                if (event.items.isNotEmpty()) {
+                    activeClipboard = Clipboard(items = event.items, isCut = true)
+                    updateStateClipboard()
+                }
+            }
             is ExplorerUiEvent.ClearClipboard -> {
                 activeClipboard = null
                 updateStateClipboard()
@@ -68,7 +83,17 @@ class ExplorerViewModel(
             is ExplorerUiEvent.Rename -> handleRename(event.item, event.newName)
             is ExplorerUiEvent.MoveToTrash -> handleMoveToTrash(event.item)
             is ExplorerUiEvent.Delete -> handleDelete(event.item)
+            is ExplorerUiEvent.BatchMoveToTrash -> handleBatchMoveToTrash(event.items)
+            is ExplorerUiEvent.BatchDelete -> handleBatchDelete(event.items)
             is ExplorerUiEvent.CreateFolder -> handleCreateFolder(event.folderName)
+            is ExplorerUiEvent.ToggleShowHiddenFiles -> {
+                showHiddenFiles = !showHiddenFiles
+                loadDirectory(activePath, isRefreshing = true)
+            }
+            is ExplorerUiEvent.ChangeSortOption -> {
+                sortOption = event.sortOption
+                loadDirectory(activePath, isRefreshing = true)
+            }
         }
     }
 
@@ -81,13 +106,16 @@ class ExplorerViewModel(
     private fun handlePaste() {
         val clip = activeClipboard ?: return
         viewModelScope.launch {
-            val result = if (clip.isCut) {
-                fileRepository.move(clip.item.path, activePath)
-            } else {
-                fileRepository.copy(clip.item.path, activePath)
+            var allSucceeded = true
+            for (item in clip.items) {
+                val result = if (clip.isCut) {
+                    fileRepository.move(item.path, activePath)
+                } else {
+                    fileRepository.copy(item.path, activePath)
+                }
+                if (result.isFailure) allSucceeded = false
             }
-
-            if (result.isSuccess && clip.isCut) {
+            if (allSucceeded && clip.isCut) {
                 activeClipboard = null
             }
             loadDirectory(activePath, isRefreshing = true)
@@ -108,9 +136,27 @@ class ExplorerViewModel(
         }
     }
 
+    private fun handleBatchMoveToTrash(items: List<FileItem>) {
+        viewModelScope.launch {
+            for (item in items) {
+                recycleBinRepository.moveToTrash(item)
+            }
+            loadDirectory(activePath, isRefreshing = true)
+        }
+    }
+
     private fun handleDelete(item: FileItem) {
         viewModelScope.launch {
             fileRepository.delete(item.path)
+            loadDirectory(activePath, isRefreshing = true)
+        }
+    }
+
+    private fun handleBatchDelete(items: List<FileItem>) {
+        viewModelScope.launch {
+            for (item in items) {
+                fileRepository.delete(item.path)
+            }
             loadDirectory(activePath, isRefreshing = true)
         }
     }
@@ -165,13 +211,15 @@ class ExplorerViewModel(
                 _uiState.value = ExplorerUiState.Loading
             }
 
-            getDirectoryContentsUseCase(path).fold(
+            getDirectoryContentsUseCase(path, showHidden = showHiddenFiles, sortOption = sortOption).fold(
                 onSuccess = { items ->
                     _uiState.value = if (items.isEmpty()) {
                         ExplorerUiState.Empty(
                             currentPath = path,
                             breadcrumbs = breadcrumbs,
-                            clipboard = activeClipboard
+                            clipboard = activeClipboard,
+                            showHiddenFiles = showHiddenFiles,
+                            sortOption = sortOption
                         )
                     } else {
                         ExplorerUiState.Success(
@@ -179,7 +227,9 @@ class ExplorerViewModel(
                             breadcrumbs = breadcrumbs,
                             items = items,
                             isRefreshing = false,
-                            clipboard = activeClipboard
+                            clipboard = activeClipboard,
+                            showHiddenFiles = showHiddenFiles,
+                            sortOption = sortOption
                         )
                     }
                 },

@@ -11,5 +11,6 @@ data class FileItem(
     val sizeBytes: Long,
     val lastModifiedMs: Long,
     val extension: String,
-    val childCount: Int? = null
+    val childCount: Int? = null,
+    val isHidden: Boolean = false
 )

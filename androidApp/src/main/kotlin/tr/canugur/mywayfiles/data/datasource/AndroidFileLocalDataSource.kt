@@ -19,7 +19,7 @@ class AndroidFileLocalDataSource(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : FileLocalDataSource {
 
-    override suspend fun listFiles(path: String): Result<List<FileItem>> = withContext(ioDispatcher) {
+    override suspend fun listFiles(path: String, showHidden: Boolean): Result<List<FileItem>> = withContext(ioDispatcher) {
         try {
             val directory = File(path)
             if (!directory.exists()) {
@@ -32,11 +32,12 @@ class AndroidFileLocalDataSource(
             val files = directory.listFiles() ?: emptyArray()
             val items = files.mapNotNull { file ->
                 try {
-                    if (file.name.startsWith(".")) return@mapNotNull null
+                    val isHidden = file.name.startsWith(".") || file.isHidden
+                    if (!showHidden && isHidden) return@mapNotNull null
 
                     val isDir = file.isDirectory
                     val childCount = if (isDir) {
-                        file.list()?.count { !it.startsWith(".") }
+                        file.list()?.count { showHidden || !it.startsWith(".") }
                     } else null
 
                     FileItem(
@@ -47,7 +48,8 @@ class AndroidFileLocalDataSource(
                         sizeBytes = if (isDir) 0L else file.length(),
                         lastModifiedMs = file.lastModified(),
                         extension = if (isDir) "" else file.extension.lowercase(),
-                        childCount = childCount
+                        childCount = childCount,
+                        isHidden = isHidden
                     )
                 } catch (_: Exception) {
                     null

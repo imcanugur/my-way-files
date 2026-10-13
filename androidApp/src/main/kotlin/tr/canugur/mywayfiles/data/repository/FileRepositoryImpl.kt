@@ -8,8 +8,8 @@ class FileRepositoryImpl(
     private val localDataSource: FileLocalDataSource
 ) : FileRepository {
 
-    override suspend fun getDirectoryContents(path: String): Result<List<FileItem>> {
-        return localDataSource.listFiles(path)
+    override suspend fun getDirectoryContents(path: String, showHidden: Boolean): Result<List<FileItem>> {
+        return localDataSource.listFiles(path, showHidden)
     }
 
     override fun hasStoragePermission(): Boolean {
