@@ -1,0 +1,107 @@
+package tr.canugur.mywayfiles.ui.explorer.components
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import tr.canugur.mywayfiles.R
+import tr.canugur.mywayfiles.core.image.ThumbnailLoader
+import tr.canugur.mywayfiles.core.util.FileTypeClassifier
+import tr.canugur.mywayfiles.domain.model.FileItem
+import tr.canugur.mywayfiles.ui.theme.AppColors
+import tr.canugur.mywayfiles.ui.theme.Dimensions
+
+/**
+ * Thumbnail component rendering asynchronously loaded, cached image thumbnails
+ * or vector file/folder indicators.
+ */
+@Composable
+fun FileThumbnailView(
+    item: FileItem,
+    modifier: Modifier = Modifier
+) {
+    val isImage = remember(item.extension, item.isDirectory) {
+        FileTypeClassifier.isImage(item)
+    }
+
+    val iconContainerShape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
+
+    if (isImage) {
+        var thumbnailBitmap by remember(item.path) {
+            mutableStateOf(ThumbnailLoader.getFromCache(item.path))
+        }
+
+        LaunchedEffect(item.path) {
+            if (thumbnailBitmap == null) {
+                thumbnailBitmap = ThumbnailLoader.loadThumbnail(item.path)
+            }
+        }
+
+        val bitmap = thumbnailBitmap
+        if (bitmap != null) {
+            Box(
+                modifier = modifier
+                    .size(36.dp)
+                    .clip(iconContainerShape)
+                    .border(
+                        width = Dimensions.CardBorderWidth,
+                        color = AppColors.cardStroke,
+                        shape = iconContainerShape
+                    )
+            ) {
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = item.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        } else {
+            Box(
+                modifier = modifier
+                    .size(36.dp)
+                    .clip(iconContainerShape)
+                    .background(AppColors.cardSurfaceSubtle)
+                    .border(
+                        width = Dimensions.CardBorderWidth,
+                        color = AppColors.cardStroke,
+                        shape = iconContainerShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_image),
+                    contentDescription = null,
+                    tint = AppColors.brandAccent,
+                    modifier = Modifier.size(Dimensions.IconSizeMedium)
+                )
+            }
+        }
+    } else {
+        val iconRes = if (item.isDirectory) R.drawable.ic_folder else R.drawable.ic_file_generic
+        val iconTint = if (item.isDirectory) AppColors.statusWarning else AppColors.textSecondary
+
+        Box(
+            modifier = modifier.size(36.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(id = iconRes),
+                contentDescription = null,
+                tint = iconTint,
+                modifier = Modifier.size(Dimensions.IconSizeDefault)
+            )
+        }
+    }
+}

@@ -1,15 +1,16 @@
 package tr.canugur.mywayfiles.ui.explorer
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -19,12 +20,15 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import tr.canugur.mywayfiles.core.util.FileTypeClassifier
+import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.ui.explorer.components.EmptyFolderView
 import tr.canugur.mywayfiles.ui.explorer.components.ExplorerTopBar
 import tr.canugur.mywayfiles.ui.explorer.components.FileItemRow
 import tr.canugur.mywayfiles.ui.explorer.components.PermissionCard
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
+import tr.canugur.mywayfiles.ui.viewer.ImageViewerScreen
 
 /**
  * Stateful entry point for the Directory and File Explorer screen.
@@ -48,6 +52,7 @@ fun ExplorerScreen(
         key = rootPath
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var selectedImage by remember { mutableStateOf<FileItem?>(null) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -62,26 +67,49 @@ fun ExplorerScreen(
         }
     }
 
-    BackHandler {
+    BackHandler(enabled = selectedImage == null) {
         if (!viewModel.navigateUp()) {
             onNavigateBack()
         }
     }
 
-    ExplorerScreenContent(
-        state = state,
-        fallbackDriveName = driveName,
-        fallbackRootPath = rootPath,
-        isDarkTheme = isDarkTheme,
-        onToggleTheme = onToggleTheme,
-        onBackClick = {
-            if (!viewModel.navigateUp()) {
-                onNavigateBack()
+    Box(modifier = modifier.fillMaxSize()) {
+        ExplorerScreenContent(
+            state = state,
+            fallbackDriveName = driveName,
+            fallbackRootPath = rootPath,
+            isDarkTheme = isDarkTheme,
+            onToggleTheme = onToggleTheme,
+            onBackClick = {
+                if (!viewModel.navigateUp()) {
+                    onNavigateBack()
+                }
+            },
+            onItemClick = { item ->
+                if (item.isDirectory) {
+                    viewModel.onEvent(ExplorerUiEvent.ItemClick(item))
+                } else if (FileTypeClassifier.isImage(item)) {
+                    selectedImage = item
+                }
+            },
+            onEvent = viewModel::onEvent
+        )
+
+        // Integrated Full-Screen Image Viewer Overlay
+        val activeImage = selectedImage
+        AnimatedVisibility(
+            visible = activeImage != null,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            if (activeImage != null) {
+                ImageViewerScreen(
+                    fileItem = activeImage,
+                    onDismiss = { selectedImage = null }
+                )
             }
-        },
-        onEvent = viewModel::onEvent,
-        modifier = modifier
-    )
+        }
+    }
 }
 
 /**
@@ -95,6 +123,7 @@ fun ExplorerScreenContent(
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
     onBackClick: () -> Unit,
+    onItemClick: (FileItem) -> Unit,
     onEvent: (ExplorerUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -187,7 +216,7 @@ fun ExplorerScreenContent(
                     items(state.items, key = { it.id }) { item ->
                         FileItemRow(
                             item = item,
-                            onClick = { onEvent(ExplorerUiEvent.ItemClick(item)) }
+                            onClick = { onItemClick(item) }
                         )
                     }
 

@@ -51,14 +51,8 @@ fun FileItemRow(
             ),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Icon
-        val iconRes = if (item.isDirectory) R.drawable.ic_folder else R.drawable.ic_file_generic
-        Icon(
-            painter = painterResource(id = iconRes),
-            contentDescription = null,
-            tint = if (item.isDirectory) AppColors.statusWarning else AppColors.textSecondary,
-            modifier = Modifier.size(Dimensions.IconSizeDefault)
-        )
+        // Leading Thumbnail or Vector Icon
+        FileThumbnailView(item = item)
 
         Spacer(modifier = Modifier.width(Dimensions.SpacingMedium))
 
