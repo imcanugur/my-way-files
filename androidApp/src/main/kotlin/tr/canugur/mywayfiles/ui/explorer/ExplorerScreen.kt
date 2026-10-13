@@ -50,7 +50,13 @@ fun ExplorerScreen(
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    var selectedImage by remember { mutableStateOf<FileItem?>(null) }
+    val imageItems = remember(state) {
+        val currentState = state
+        if (currentState is ExplorerUiState.Success) {
+            currentState.items.filter { FileTypeClassifier.isImage(it) }
+        } else emptyList()
+    }
+    var activeImageIndex by remember { mutableStateOf<Int?>(null) }
     var itemToRename by remember { mutableStateOf<FileItem?>(null) }
     var itemToDelete by remember { mutableStateOf<FileItem?>(null) }
     var itemForProperties by remember { mutableStateOf<FileItem?>(null) }
@@ -69,7 +75,7 @@ fun ExplorerScreen(
         }
     }
 
-    BackHandler(enabled = selectedImage == null) {
+    BackHandler(enabled = activeImageIndex == null) {
         if (!viewModel.navigateUp()) {
             onNavigateBack()
         }
@@ -92,7 +98,10 @@ fun ExplorerScreen(
                 if (item.isDirectory) {
                     viewModel.onEvent(ExplorerUiEvent.ItemClick(item))
                 } else if (FileTypeClassifier.isImage(item)) {
-                    selectedImage = item
+                    val idx = imageItems.indexOfFirst { it.path == item.path }
+                    if (idx >= 0) {
+                        activeImageIndex = idx
+                    }
                 }
             },
             onCopy = { viewModel.onEvent(ExplorerUiEvent.Copy(it)) },
@@ -105,17 +114,18 @@ fun ExplorerScreen(
             onEvent = viewModel::onEvent
         )
 
-        // Integrated Full-Screen Image Viewer Overlay
-        val activeImage = selectedImage
+        // Integrated Full-Screen Image Gallery Pager Overlay
+        val currentIndex = activeImageIndex
         AnimatedVisibility(
-            visible = activeImage != null,
+            visible = currentIndex != null && imageItems.isNotEmpty(),
             enter = fadeIn(),
             exit = fadeOut()
         ) {
-            if (activeImage != null) {
+            if (currentIndex != null && imageItems.isNotEmpty()) {
                 ImageViewerScreen(
-                    fileItem = activeImage,
-                    onDismiss = { selectedImage = null }
+                    images = imageItems,
+                    initialIndex = currentIndex,
+                    onDismiss = { activeImageIndex = null }
                 )
             }
         }

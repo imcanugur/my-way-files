@@ -3,10 +3,15 @@ package tr.canugur.mywayfiles.ui.viewer
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -28,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.core.image.BitmapDecoder
 import tr.canugur.mywayfiles.core.image.DecodedBitmapResult
@@ -36,137 +42,120 @@ import tr.canugur.mywayfiles.core.util.DateTimeFormatter
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 
-private sealed interface ImageViewerState {
-    data object Loading : ImageViewerState
-    data class Success(val decoded: DecodedBitmapResult) : ImageViewerState
-    data class Error(val message: String) : ImageViewerState
+private sealed interface ImagePageState {
+    data object Loading : ImagePageState
+    data class Success(val decoded: DecodedBitmapResult) : ImagePageState
+    data class Error(val message: String) : ImagePageState
 }
 
 /**
- * Enterprise image viewer featuring pinch-to-zoom, pan, double-tap zoom, and image metadata overlay.
+ * Enterprise gallery-grade image viewer with horizontal swipe pager, pinch-to-zoom,
+ * pan, double-tap zoom, on-screen navigation controls, and photo counter.
  */
 @Composable
 fun ImageViewerScreen(
-    fileItem: FileItem,
+    images: List<FileItem>,
+    initialIndex: Int,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var state by remember(fileItem.path) { mutableStateOf<ImageViewerState>(ImageViewerState.Loading) }
-
-    var scale by remember { mutableFloatStateOf(1f) }
-    var offset by remember { mutableStateOf(Offset.Zero) }
-
-    LaunchedEffect(fileItem.path) {
-        state = ImageViewerState.Loading
-        scale = 1f
-        offset = Offset.Zero
-        val result = BitmapDecoder.decode(fileItem.path)
-        state = result.fold(
-            onSuccess = { ImageViewerState.Success(it) },
-            onFailure = { ImageViewerState.Error(it.localizedMessage ?: "Failed to decode image") }
-        )
+    if (images.isEmpty()) {
+        onDismiss()
+        return
     }
 
+    val safeInitial = initialIndex.coerceIn(0, images.size - 1)
+    val pagerState = rememberPagerState(initialPage = safeInitial) { images.size }
+    val scope = rememberCoroutineScope()
+
+    var isCurrentZoomed by remember { mutableStateOf(false) }
+
+    val currentItem = images.getOrNull(pagerState.currentPage) ?: images[0]
+
     BackHandler {
-        if (scale > 1f) {
-            scale = 1f
-            offset = Offset.Zero
+        if (isCurrentZoomed) {
+            isCurrentZoomed = false
         } else {
             onDismiss()
         }
     }
 
     Surface(
-        color = Color(0xFF0F0F0F),
+        color = Color(0xFF0A0A0A),
         modifier = modifier.fillMaxSize()
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Main Canvas
-            when (val s = state) {
-                is ImageViewerState.Loading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            color = Color(0xFF4CC2FF),
-                            strokeWidth = Dimensions.SpacingMicro
-                        )
+            // Horizontal Pager for swiping between images
+            HorizontalPager(
+                state = pagerState,
+                userScrollEnabled = !isCurrentZoomed,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val item = images[page]
+                InteractiveImagePage(
+                    fileItem = item,
+                    isCurrentPage = page == pagerState.currentPage,
+                    onZoomScaleChanged = { scale ->
+                        if (page == pagerState.currentPage) {
+                            isCurrentZoomed = scale > 1.05f
+                        }
                     }
-                }
+                )
+            }
 
-                is ImageViewerState.Error -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(Dimensions.SpacingLarge),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = stringResource(R.string.image_load_failed),
-                            color = Color(0xFFFF99A4),
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(Dimensions.SpacingSmall))
-                        Text(
-                            text = s.message,
-                            color = Color(0xFF9E9E9E),
-                            fontSize = 12.sp
-                        )
-                    }
+            // Navigation Arrow: Previous Image (when not zoomed)
+            if (!isCurrentZoomed && pagerState.currentPage > 0) {
+                IconButton(
+                    onClick = {
+                        scope.launch {
+                            pagerState.animateScrollToPage(pagerState.currentPage - 1)
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = Dimensions.SpacingMedium)
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x99202020))
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_arrow_back),
+                        contentDescription = "Previous",
+                        tint = Color.White,
+                        modifier = Modifier.size(Dimensions.IconSizeMedium)
+                    )
                 }
+            }
 
-                is ImageViewerState.Success -> {
-                    Box(
+            // Navigation Arrow: Next Image (when not zoomed)
+            if (!isCurrentZoomed && pagerState.currentPage < images.size - 1) {
+                IconButton(
+                    onClick = {
+                        scope.launch {
+                            pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = Dimensions.SpacingMedium)
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x99202020))
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_arrow_back),
+                        contentDescription = "Next",
+                        tint = Color.White,
                         modifier = Modifier
-                            .fillMaxSize()
-                            .pointerInput(Unit) {
-                                detectTapGestures(
-                                    onDoubleTap = {
-                                        if (scale > 1f) {
-                                            scale = 1f
-                                            offset = Offset.Zero
-                                        } else {
-                                            scale = 2.5f
-                                        }
-                                    }
-                                )
-                            }
-                            .pointerInput(Unit) {
-                                detectTransformGestures { _, pan, zoom, _ ->
-                                    val newScale = (scale * zoom).coerceIn(1f, 5f)
-                                    scale = newScale
-                                    if (newScale > 1f) {
-                                        offset += pan
-                                    } else {
-                                        offset = Offset.Zero
-                                    }
-                                }
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Image(
-                            bitmap = s.decoded.imageBitmap,
-                            contentDescription = fileItem.name,
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer(
-                                    scaleX = scale,
-                                    scaleY = scale,
-                                    translationX = offset.x,
-                                    translationY = offset.y
-                                )
-                        )
-                    }
+                            .size(Dimensions.IconSizeMedium)
+                            .graphicsLayer(rotationZ = 180f)
+                    )
                 }
             }
 
             // Top Bar Overlay
             Surface(
-                color = Color(0xCC1F1F1F),
+                color = Color(0xDD181818),
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.TopCenter)
@@ -193,10 +182,10 @@ fun ImageViewerScreen(
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .padding(end = Dimensions.SpacingSmall)
+                            .padding(horizontal = Dimensions.SpacingSmall)
                     ) {
                         Text(
-                            text = fileItem.name,
+                            text = currentItem.name,
                             color = Color.White,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -204,19 +193,9 @@ fun ImageViewerScreen(
                             overflow = TextOverflow.Ellipsis
                         )
 
-                        val stateVal = state
-                        val resolution = if (stateVal is ImageViewerState.Success) {
-                            stringResource(
-                                R.string.image_dimensions,
-                                stateVal.decoded.originalWidth,
-                                stateVal.decoded.originalHeight
-                            )
-                        } else null
-
                         val meta = buildString {
-                            if (resolution != null) append("$resolution • ")
-                            append(ByteFormatter.format(fileItem.sizeBytes))
-                            val dateStr = DateTimeFormatter.format(fileItem.lastModifiedMs)
+                            append(ByteFormatter.format(currentItem.sizeBytes))
+                            val dateStr = DateTimeFormatter.format(currentItem.lastModifiedMs)
                             if (dateStr.isNotEmpty()) append(" • $dateStr")
                         }
 
@@ -228,6 +207,144 @@ fun ImageViewerScreen(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+
+                    // Gallery Index Pill Badge (e.g. 3 / 24)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(Dimensions.CornerRadiusPill))
+                            .background(Color(0xFF2A2A2A))
+                            .padding(
+                                horizontal = Dimensions.SpacingMedium,
+                                vertical = Dimensions.SpacingExtraSmall
+                            )
+                    ) {
+                        Text(
+                            text = "${pagerState.currentPage + 1} / ${images.size}",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InteractiveImagePage(
+    fileItem: FileItem,
+    isCurrentPage: Boolean,
+    onZoomScaleChanged: (Float) -> Unit
+) {
+    var state by remember(fileItem.path) { mutableStateOf<ImagePageState>(ImagePageState.Loading) }
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+
+    // Reset zoom when swiped away
+    LaunchedEffect(isCurrentPage) {
+        if (!isCurrentPage) {
+            scale = 1f
+            offset = Offset.Zero
+            onZoomScaleChanged(1f)
+        }
+    }
+
+    LaunchedEffect(fileItem.path) {
+        state = ImagePageState.Loading
+        scale = 1f
+        offset = Offset.Zero
+        val result = BitmapDecoder.decode(fileItem.path)
+        state = result.fold(
+            onSuccess = { ImagePageState.Success(it) },
+            onFailure = { ImagePageState.Error(it.localizedMessage ?: "Failed to decode image") }
+        )
+    }
+
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        when (val s = state) {
+            is ImagePageState.Loading -> {
+                CircularProgressIndicator(
+                    color = Color(0xFF4CC2FF),
+                    strokeWidth = Dimensions.SpacingMicro
+                )
+            }
+
+            is ImagePageState.Error -> {
+                Column(
+                    modifier = Modifier.padding(Dimensions.SpacingLarge),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = stringResource(R.string.image_load_failed),
+                        color = Color(0xFFFF99A4),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            is ImagePageState.Success -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(fileItem.path) {
+                            detectTapGestures(
+                                onDoubleTap = {
+                                    val newScale = if (scale > 1.05f) 1f else 2.5f
+                                    scale = newScale
+                                    offset = Offset.Zero
+                                    onZoomScaleChanged(newScale)
+                                }
+                            )
+                        }
+                        .pointerInput(fileItem.path) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                do {
+                                    val event = awaitPointerEvent()
+                                    val count = event.changes.size
+
+                                    if (count >= 2) {
+                                        // Pinch-to-zoom with 2+ fingers
+                                        val zoom = event.calculateZoom()
+                                        val pan = event.calculatePan()
+                                        val newScale = (scale * zoom).coerceIn(1f, 5f)
+                                        scale = newScale
+                                        onZoomScaleChanged(newScale)
+                                        if (newScale > 1.05f) {
+                                            offset += pan
+                                        }
+                                        event.changes.forEach { it.consume() }
+                                    } else if (scale > 1.05f && count == 1) {
+                                        // Panning while zoomed in with 1 finger
+                                        val pan = event.calculatePan()
+                                        offset += pan
+                                        event.changes.forEach { it.consume() }
+                                    }
+                                    // When count == 1 and scale <= 1.05f:
+                                    // DO NOT consume! HorizontalPager receives the swipe gesture!
+                                } while (event.changes.any { it.pressed })
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        bitmap = s.decoded.imageBitmap,
+                        contentDescription = fileItem.name,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale,
+                                translationX = offset.x,
+                                translationY = offset.y
+                            )
+                    )
                 }
             }
         }
