@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.core.image.BitmapDecoder
@@ -65,7 +66,8 @@ private sealed interface ImagePageState {
 
 /**
  * Enterprise gallery-grade unified Media Viewer (Images & Videos in the same swipe queue).
- * Supports pinch-to-zoom for photos, high-res video preview slides with one-touch launch play button,
+ * Supports immersive autohiding top and bottom bars (with 3.5s inactivity timer and tap toggle),
+ * pinch-to-zoom for photos, high-res video preview slides with one-touch launch play button,
  * swipe navigation, and quick action toolbar (share, copy, properties, instant trash deletion).
  */
 @Composable
@@ -90,6 +92,7 @@ fun ImageViewerScreen(
 
     var isCurrentZoomed by remember { mutableStateOf(false) }
     var showProperties by remember { mutableStateOf(false) }
+    var controlsVisible by remember { mutableStateOf(true) }
 
     var playingVideoItem by remember(initialIndex, initialPlayVideo) {
         mutableStateOf<FileItem?>(
@@ -97,6 +100,14 @@ fun ImageViewerScreen(
                 images[safeInitial]
             } else null
         )
+    }
+
+    // Auto-hide top and bottom bars after 3.5 seconds of inactivity
+    LaunchedEffect(controlsVisible, pagerState.currentPage, isCurrentZoomed) {
+        if (controlsVisible && !isCurrentZoomed && playingVideoItem == null) {
+            delay(3500)
+            controlsVisible = false
+        }
     }
 
     val currentItem = images.getOrNull(pagerState.currentPage) ?: images[0]
@@ -127,12 +138,14 @@ fun ImageViewerScreen(
                     VideoSlidePage(
                         fileItem = item,
                         isCurrentPage = page == pagerState.currentPage,
-                        onPlay = { playingVideoItem = item }
+                        onPlay = { playingVideoItem = item },
+                        onToggleControls = { controlsVisible = !controlsVisible }
                     )
                 } else {
                     InteractiveImagePage(
                         fileItem = item,
                         isCurrentPage = page == pagerState.currentPage,
+                        onToggleControls = { controlsVisible = !controlsVisible },
                         onZoomScaleChanged = { scale ->
                             if (page == pagerState.currentPage) {
                                 isCurrentZoomed = scale > 1.05f
@@ -142,8 +155,8 @@ fun ImageViewerScreen(
                 }
             }
 
-            // Navigation Arrow: Previous Media (when not zoomed)
-            if (!isCurrentZoomed && playingVideoItem == null && pagerState.currentPage > 0) {
+            // Navigation Arrow: Previous Media (when not zoomed and controls visible)
+            if (controlsVisible && !isCurrentZoomed && playingVideoItem == null && pagerState.currentPage > 0) {
                 IconButton(
                     onClick = {
                         scope.launch {
@@ -166,8 +179,8 @@ fun ImageViewerScreen(
                 }
             }
 
-            // Navigation Arrow: Next Media (when not zoomed)
-            if (!isCurrentZoomed && playingVideoItem == null && pagerState.currentPage < images.size - 1) {
+            // Navigation Arrow: Next Media (when not zoomed and controls visible)
+            if (controlsVisible && !isCurrentZoomed && playingVideoItem == null && pagerState.currentPage < images.size - 1) {
                 IconButton(
                     onClick = {
                         scope.launch {
@@ -192,87 +205,93 @@ fun ImageViewerScreen(
                 }
             }
 
-            // Top Bar Overlay
-            Surface(
-                color = Color(0xDD181818),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-                    .statusBarsPadding()
+            // Top Bar Overlay (Autohiding with fade animation)
+            AnimatedVisibility(
+                visible = controlsVisible && !isCurrentZoomed && playingVideoItem == null,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.TopCenter)
             ) {
-                Row(
+                Surface(
+                    color = Color(0xDD181818),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(
-                            horizontal = Dimensions.SpacingSmall,
-                            vertical = Dimensions.SpacingExtraSmall
-                        ),
-                    verticalAlignment = Alignment.CenterVertically
+                        .statusBarsPadding()
                 ) {
-                    IconButton(onClick = onDismiss) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_arrow_back),
-                            contentDescription = stringResource(R.string.close_viewer),
-                            tint = Color.White,
-                            modifier = Modifier.size(Dimensions.IconSizeMedium)
-                        )
-                    }
-
-                    Column(
+                    Row(
                         modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = Dimensions.SpacingSmall)
+                            .fillMaxWidth()
+                            .padding(
+                                horizontal = Dimensions.SpacingSmall,
+                                vertical = Dimensions.SpacingExtraSmall
+                            ),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = currentItem.name,
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                        val meta = buildString {
-                            append(ByteFormatter.format(currentItem.sizeBytes))
-                            val dateStr = DateTimeFormatter.format(currentItem.lastModifiedMs)
-                            if (dateStr.isNotEmpty()) append(" • $dateStr")
-                            if (FileTypeClassifier.isVideo(currentItem)) {
-                                append(" • Video")
-                            }
+                        IconButton(onClick = onDismiss) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_arrow_back),
+                                contentDescription = stringResource(R.string.close_viewer),
+                                tint = Color.White,
+                                modifier = Modifier.size(Dimensions.IconSizeMedium)
+                            )
                         }
 
-                        Text(
-                            text = meta,
-                            color = Color(0xFFB0B0B0),
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    // Gallery Index Pill Badge (e.g. 3 / 24)
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(Dimensions.CornerRadiusPill))
-                            .background(Color(0xFF2A2A2A))
-                            .padding(
-                                horizontal = Dimensions.SpacingMedium,
-                                vertical = Dimensions.SpacingExtraSmall
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = Dimensions.SpacingSmall)
+                        ) {
+                            Text(
+                                text = currentItem.name,
+                                color = Color.White,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                    ) {
-                        Text(
-                            text = "${pagerState.currentPage + 1} / ${images.size}",
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
+
+                            val meta = buildString {
+                                append(ByteFormatter.format(currentItem.sizeBytes))
+                                val dateStr = DateTimeFormatter.format(currentItem.lastModifiedMs)
+                                if (dateStr.isNotEmpty()) append(" • $dateStr")
+                                if (FileTypeClassifier.isVideo(currentItem)) {
+                                    append(" • Video")
+                                }
+                            }
+
+                            Text(
+                                text = meta,
+                                color = Color(0xFFB0B0B0),
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        // Gallery Index Pill Badge (e.g. 3 / 24)
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(Dimensions.CornerRadiusPill))
+                                .background(Color(0xFF2A2A2A))
+                                .padding(
+                                    horizontal = Dimensions.SpacingMedium,
+                                    vertical = Dimensions.SpacingExtraSmall
+                                )
+                        ) {
+                            Text(
+                                text = "${pagerState.currentPage + 1} / ${images.size}",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
             }
 
-            // Bottom Quick Action Bar (when not zoomed)
+            // Bottom Quick Action Bar (Autohiding with fade animation)
             AnimatedVisibility(
-                visible = !isCurrentZoomed && playingVideoItem == null,
+                visible = controlsVisible && !isCurrentZoomed && playingVideoItem == null,
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier.align(Alignment.BottomCenter)
@@ -369,7 +388,8 @@ fun ImageViewerScreen(
 private fun VideoSlidePage(
     fileItem: FileItem,
     isCurrentPage: Boolean,
-    onPlay: () -> Unit
+    onPlay: () -> Unit,
+    onToggleControls: () -> Unit
 ) {
     var state by remember(fileItem.path) { mutableStateOf<ImagePageState>(ImagePageState.Loading) }
     var durationMs by remember(fileItem.path) { mutableLongStateOf(0L) }
@@ -394,7 +414,11 @@ private fun VideoSlidePage(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .clickable(onClick = onPlay),
+            .pointerInput(fileItem.path) {
+                detectTapGestures(
+                    onTap = { onToggleControls() }
+                )
+            },
         contentAlignment = Alignment.Center
     ) {
         when (val s = state) {
@@ -593,6 +617,7 @@ private fun shareMedia(context: Context, filePath: String) {
 private fun InteractiveImagePage(
     fileItem: FileItem,
     isCurrentPage: Boolean,
+    onToggleControls: () -> Unit,
     onZoomScaleChanged: (Float) -> Unit
 ) {
     var state by remember(fileItem.path) { mutableStateOf<ImagePageState>(ImagePageState.Loading) }
@@ -655,6 +680,9 @@ private fun InteractiveImagePage(
                                     scale = newScale
                                     offset = Offset.Zero
                                     onZoomScaleChanged(newScale)
+                                },
+                                onTap = {
+                                    onToggleControls()
                                 }
                             )
                         }
