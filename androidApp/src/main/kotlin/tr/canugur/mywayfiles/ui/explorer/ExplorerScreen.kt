@@ -26,6 +26,7 @@ import tr.canugur.mywayfiles.ui.explorer.components.*
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 import tr.canugur.mywayfiles.ui.viewer.ImageViewerScreen
+import tr.canugur.mywayfiles.ui.viewer.VideoViewerScreen
 
 /**
  * Stateful entry point for the Directory and File Explorer screen.
@@ -50,13 +51,13 @@ fun ExplorerScreen(
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    val imageItems = remember(state) {
+    val mediaItems = remember(state) {
         val currentState = state
         if (currentState is ExplorerUiState.Success) {
-            currentState.items.filter { FileTypeClassifier.isImage(it) }
+            currentState.items.filter { FileTypeClassifier.isImage(it) || FileTypeClassifier.isVideo(it) }
         } else emptyList()
     }
-    var activeImageIndex by remember { mutableStateOf<Int?>(null) }
+    var activeMediaIndex by remember { mutableStateOf<Int?>(null) }
     var itemToRename by remember { mutableStateOf<FileItem?>(null) }
     var itemForProperties by remember { mutableStateOf<FileItem?>(null) }
     var showCreateFolderDialog by remember { mutableStateOf(false) }
@@ -74,7 +75,7 @@ fun ExplorerScreen(
         }
     }
 
-    BackHandler(enabled = activeImageIndex == null) {
+    BackHandler(enabled = activeMediaIndex == null) {
         if (!viewModel.navigateUp()) {
             onNavigateBack()
         }
@@ -96,10 +97,10 @@ fun ExplorerScreen(
             onItemClick = { item ->
                 if (item.isDirectory) {
                     viewModel.onEvent(ExplorerUiEvent.ItemClick(item))
-                } else if (FileTypeClassifier.isImage(item)) {
-                    val idx = imageItems.indexOfFirst { it.path == item.path }
+                } else if (FileTypeClassifier.isImage(item) || FileTypeClassifier.isVideo(item)) {
+                    val idx = mediaItems.indexOfFirst { it.path == item.path }
                     if (idx >= 0) {
-                        activeImageIndex = idx
+                        activeMediaIndex = idx
                     }
                 }
             },
@@ -113,27 +114,29 @@ fun ExplorerScreen(
             onEvent = viewModel::onEvent
         )
 
-        // Integrated Full-Screen Image Gallery Pager Overlay
-        val currentIndex = activeImageIndex
+        // Integrated Full-Screen Unified Media Gallery Pager Overlay (Photos & Videos together)
+        val currentMediaIndex = activeMediaIndex
         AnimatedVisibility(
-            visible = currentIndex != null && imageItems.isNotEmpty(),
+            visible = currentMediaIndex != null && mediaItems.isNotEmpty(),
             enter = fadeIn(),
             exit = fadeOut()
         ) {
-            if (currentIndex != null && imageItems.isNotEmpty()) {
+            if (currentMediaIndex != null && mediaItems.isNotEmpty()) {
                 ImageViewerScreen(
-                    images = imageItems,
-                    initialIndex = currentIndex,
+                    images = mediaItems,
+                    initialIndex = currentMediaIndex,
                     onDelete = { item ->
                         viewModel.onEvent(ExplorerUiEvent.MoveToTrash(item))
-                        if (imageItems.size <= 1) {
-                            activeImageIndex = null
-                        } else if (currentIndex >= imageItems.size - 1) {
-                            activeImageIndex = (imageItems.size - 2).coerceAtLeast(0)
+                        if (mediaItems.size <= 1) {
+                            activeMediaIndex = null
+                        } else if (currentMediaIndex >= mediaItems.size - 1) {
+                            activeMediaIndex = (mediaItems.size - 2).coerceAtLeast(0)
                         }
                     },
                     onCopy = { viewModel.onEvent(ExplorerUiEvent.Copy(it)) },
-                    onDismiss = { activeImageIndex = null }
+                    onDismiss = {
+                        activeMediaIndex = null
+                    }
                 )
             }
         }

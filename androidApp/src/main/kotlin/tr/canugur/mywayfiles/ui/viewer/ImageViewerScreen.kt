@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -46,12 +47,15 @@ import kotlinx.coroutines.launch
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.core.image.BitmapDecoder
 import tr.canugur.mywayfiles.core.image.DecodedBitmapResult
+import tr.canugur.mywayfiles.core.image.ThumbnailLoader
 import tr.canugur.mywayfiles.core.util.ByteFormatter
 import tr.canugur.mywayfiles.core.util.DateTimeFormatter
+import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.ui.explorer.components.PropertiesDialog
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 import java.io.File
+import java.util.Locale
 
 private sealed interface ImagePageState {
     data object Loading : ImagePageState
@@ -60,8 +64,9 @@ private sealed interface ImagePageState {
 }
 
 /**
- * Enterprise gallery-grade image viewer with horizontal swipe pager, pinch-to-zoom,
- * pan, double-tap zoom, photo counter, and quick action toolbar (delete, share, copy, info).
+ * Enterprise gallery-grade unified Media Viewer (Images & Videos in the same swipe queue).
+ * Supports pinch-to-zoom for photos, high-res video preview slides with one-touch launch play button,
+ * swipe navigation, and quick action toolbar (share, copy, properties, instant trash deletion).
  */
 @Composable
 fun ImageViewerScreen(
@@ -70,6 +75,7 @@ fun ImageViewerScreen(
     onDelete: (FileItem) -> Unit,
     onCopy: (FileItem) -> Unit,
     onDismiss: () -> Unit,
+    initialPlayVideo: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     if (images.isEmpty()) {
@@ -85,10 +91,20 @@ fun ImageViewerScreen(
     var isCurrentZoomed by remember { mutableStateOf(false) }
     var showProperties by remember { mutableStateOf(false) }
 
+    var playingVideoItem by remember(initialIndex, initialPlayVideo) {
+        mutableStateOf<FileItem?>(
+            if (initialPlayVideo && images.isNotEmpty() && FileTypeClassifier.isVideo(images[safeInitial])) {
+                images[safeInitial]
+            } else null
+        )
+    }
+
     val currentItem = images.getOrNull(pagerState.currentPage) ?: images[0]
 
     BackHandler {
-        if (isCurrentZoomed) {
+        if (playingVideoItem != null) {
+            playingVideoItem = null
+        } else if (isCurrentZoomed) {
             isCurrentZoomed = false
         } else {
             onDismiss()
@@ -100,26 +116,34 @@ fun ImageViewerScreen(
         modifier = modifier.fillMaxSize()
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Horizontal Pager for swiping between images
+            // Horizontal Pager for swiping between both photos and videos
             HorizontalPager(
                 state = pagerState,
                 userScrollEnabled = !isCurrentZoomed,
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 val item = images[page]
-                InteractiveImagePage(
-                    fileItem = item,
-                    isCurrentPage = page == pagerState.currentPage,
-                    onZoomScaleChanged = { scale ->
-                        if (page == pagerState.currentPage) {
-                            isCurrentZoomed = scale > 1.05f
+                if (FileTypeClassifier.isVideo(item)) {
+                    VideoSlidePage(
+                        fileItem = item,
+                        isCurrentPage = page == pagerState.currentPage,
+                        onPlay = { playingVideoItem = item }
+                    )
+                } else {
+                    InteractiveImagePage(
+                        fileItem = item,
+                        isCurrentPage = page == pagerState.currentPage,
+                        onZoomScaleChanged = { scale ->
+                            if (page == pagerState.currentPage) {
+                                isCurrentZoomed = scale > 1.05f
+                            }
                         }
-                    }
-                )
+                    )
+                }
             }
 
-            // Navigation Arrow: Previous Image (when not zoomed)
-            if (!isCurrentZoomed && pagerState.currentPage > 0) {
+            // Navigation Arrow: Previous Media (when not zoomed)
+            if (!isCurrentZoomed && playingVideoItem == null && pagerState.currentPage > 0) {
                 IconButton(
                     onClick = {
                         scope.launch {
@@ -142,8 +166,8 @@ fun ImageViewerScreen(
                 }
             }
 
-            // Navigation Arrow: Next Image (when not zoomed)
-            if (!isCurrentZoomed && pagerState.currentPage < images.size - 1) {
+            // Navigation Arrow: Next Media (when not zoomed)
+            if (!isCurrentZoomed && playingVideoItem == null && pagerState.currentPage < images.size - 1) {
                 IconButton(
                     onClick = {
                         scope.launch {
@@ -212,6 +236,9 @@ fun ImageViewerScreen(
                             append(ByteFormatter.format(currentItem.sizeBytes))
                             val dateStr = DateTimeFormatter.format(currentItem.lastModifiedMs)
                             if (dateStr.isNotEmpty()) append(" • $dateStr")
+                            if (FileTypeClassifier.isVideo(currentItem)) {
+                                append(" • Video")
+                            }
                         }
 
                         Text(
@@ -245,7 +272,7 @@ fun ImageViewerScreen(
 
             // Bottom Quick Action Bar (when not zoomed)
             AnimatedVisibility(
-                visible = !isCurrentZoomed,
+                visible = !isCurrentZoomed && playingVideoItem == null,
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier.align(Alignment.BottomCenter)
@@ -266,12 +293,12 @@ fun ImageViewerScreen(
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Share Action
+                        // Share Action (Images or Videos)
                         ActionBottomItem(
                             iconRes = R.drawable.ic_share,
                             label = stringResource(R.string.action_share),
                             tint = Color.White,
-                            onClick = { shareImage(context, currentItem.path) }
+                            onClick = { shareMedia(context, currentItem.path) }
                         )
 
                         // Copy Action
@@ -301,6 +328,32 @@ fun ImageViewerScreen(
                 }
             }
 
+            // High-Performance Hardware Video Player Overlay
+            val activeVideo = playingVideoItem
+            if (activeVideo != null) {
+                val allVideos = remember(images) { images.filter { FileTypeClassifier.isVideo(it) } }
+                val videoIndex = allVideos.indexOfFirst { it.path == activeVideo.path }.coerceAtLeast(0)
+                VideoViewerScreen(
+                    videos = allVideos.ifEmpty { listOf(activeVideo) },
+                    initialIndex = videoIndex,
+                    onDelete = { deleted ->
+                        playingVideoItem = null
+                        onDelete(deleted)
+                    },
+                    onCopy = onCopy,
+                    onIndexChanged = { newIdx ->
+                        val currentPlayed = allVideos.getOrNull(newIdx)
+                        if (currentPlayed != null) {
+                            val mediaIdx = images.indexOfFirst { it.path == currentPlayed.path }
+                            if (mediaIdx >= 0 && mediaIdx != pagerState.currentPage) {
+                                scope.launch { pagerState.scrollToPage(mediaIdx) }
+                            }
+                        }
+                    },
+                    onDismiss = { playingVideoItem = null }
+                )
+            }
+
             // Dialogs
             if (showProperties) {
                 PropertiesDialog(
@@ -309,6 +362,175 @@ fun ImageViewerScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun VideoSlidePage(
+    fileItem: FileItem,
+    isCurrentPage: Boolean,
+    onPlay: () -> Unit
+) {
+    var state by remember(fileItem.path) { mutableStateOf<ImagePageState>(ImagePageState.Loading) }
+    var durationMs by remember(fileItem.path) { mutableLongStateOf(0L) }
+
+    LaunchedEffect(fileItem.path) {
+        state = ImagePageState.Loading
+        durationMs = BitmapDecoder.getVideoDurationMs(fileItem.path)
+        val result = BitmapDecoder.decodeVideoFrame(fileItem.path)
+        state = result.fold(
+            onSuccess = { ImagePageState.Success(it) },
+            onFailure = {
+                val cached = ThumbnailLoader.getFromCache(fileItem.path)
+                if (cached != null) {
+                    ImagePageState.Success(DecodedBitmapResult(cached, cached.width, cached.height))
+                } else {
+                    ImagePageState.Error(it.localizedMessage ?: "Failed to load video preview")
+                }
+            }
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable(onClick = onPlay),
+        contentAlignment = Alignment.Center
+    ) {
+        when (val s = state) {
+            is ImagePageState.Loading -> {
+                CircularProgressIndicator(
+                    color = Color(0xFF4CC2FF),
+                    strokeWidth = Dimensions.SpacingMicro
+                )
+            }
+
+            is ImagePageState.Error -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0xFF141414)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingMedium)
+                    ) {
+                        PlayButtonCircle(onClick = onPlay)
+                        Text(
+                            text = fileItem.name,
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+
+            is ImagePageState.Success -> {
+                Image(
+                    bitmap = s.decoded.imageBitmap,
+                    contentDescription = fileItem.name,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                // High-contrast translucent vignette
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.35f))
+                )
+
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingMedium)
+                ) {
+                    PlayButtonCircle(onClick = onPlay)
+
+                    val durationBadge = if (durationMs > 0) {
+                        formatDurationBadge(durationMs) + " • " + ByteFormatter.format(fileItem.sizeBytes)
+                    } else {
+                        "VIDEO • " + ByteFormatter.format(fileItem.sizeBytes)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(Dimensions.CornerRadiusPill))
+                            .background(Color(0xCC181818))
+                            .border(
+                                width = 1.dp,
+                                color = Color(0x33FFFFFF),
+                                shape = RoundedCornerShape(Dimensions.CornerRadiusPill)
+                            )
+                            .padding(
+                                horizontal = Dimensions.SpacingMedium,
+                                vertical = Dimensions.SpacingExtraSmall
+                            )
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Dimensions.SpacingExtraSmall)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_video),
+                                contentDescription = null,
+                                tint = Color(0xFF4CC2FF),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = durationBadge,
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlayButtonCircle(
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(76.dp)
+            .clip(CircleShape)
+            .background(Color(0xD91E1E1E))
+            .border(
+                width = 2.dp,
+                color = Color(0xFF4CC2FF).copy(alpha = 0.85f),
+                shape = CircleShape
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_play),
+            contentDescription = "Play Video",
+            tint = Color.White,
+            modifier = Modifier
+                .size(36.dp)
+                .offset(x = 2.dp)
+        )
+    }
+}
+
+private fun formatDurationBadge(millis: Long): String {
+    val totalSeconds = (millis / 1000).coerceAtLeast(0)
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format(Locale.US, "%02d:%02d", minutes, seconds)
     }
 }
 
@@ -342,7 +564,9 @@ private fun ActionBottomItem(
     }
 }
 
-private fun shareImage(context: Context, filePath: String) {
+private fun shareMedia(context: Context, filePath: String) {
+    val isVideo = FileTypeClassifier.isVideo(filePath)
+    val mimeType = if (isVideo) "video/*" else "image/*"
     try {
         val file = File(filePath)
         val uri = FileProvider.getUriForFile(
@@ -351,14 +575,14 @@ private fun shareImage(context: Context, filePath: String) {
             file
         )
         val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "image/*"
+            type = mimeType
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         context.startActivity(Intent.createChooser(intent, null))
     } catch (_: Exception) {
         val fallbackIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "image/*"
+            type = mimeType
             putExtra(Intent.EXTRA_STREAM, Uri.fromFile(File(filePath)))
         }
         context.startActivity(Intent.createChooser(fallbackIntent, null))

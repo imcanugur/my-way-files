@@ -31,13 +31,16 @@ fun FileThumbnailView(
     item: FileItem,
     modifier: Modifier = Modifier
 ) {
-    val isImage = remember(item.extension, item.isDirectory) {
-        FileTypeClassifier.isImage(item)
+    val isVideo = remember(item.extension, item.isDirectory) {
+        FileTypeClassifier.isVideo(item)
+    }
+    val isVisualMedia = remember(item.extension, item.isDirectory) {
+        FileTypeClassifier.isImage(item) || isVideo
     }
 
     val iconContainerShape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
 
-    if (isImage) {
+    if (isVisualMedia) {
         var thumbnailBitmap by remember(item.path) {
             mutableStateOf(ThumbnailLoader.getFromCache(item.path))
         }
@@ -58,7 +61,8 @@ fun FileThumbnailView(
                         width = Dimensions.CardBorderWidth,
                         color = AppColors.cardStroke,
                         shape = iconContainerShape
-                    )
+                    ),
+                contentAlignment = Alignment.Center
             ) {
                 Image(
                     bitmap = bitmap,
@@ -66,6 +70,22 @@ fun FileThumbnailView(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
+                if (isVideo) {
+                    Box(
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(androidx.compose.ui.graphics.Color(0x99000000)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_play),
+                            contentDescription = null,
+                            tint = androidx.compose.ui.graphics.Color.White,
+                            modifier = Modifier.size(10.dp)
+                        )
+                    }
+                }
             }
         } else {
             Box(
@@ -81,7 +101,7 @@ fun FileThumbnailView(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_image),
+                    painter = painterResource(id = if (isVideo) R.drawable.ic_video else R.drawable.ic_image),
                     contentDescription = null,
                     tint = AppColors.brandAccent,
                     modifier = Modifier.size(Dimensions.IconSizeMedium)
@@ -117,13 +137,16 @@ fun TrashedItemThumbnailView(
     val extension = remember(item.name) {
         item.name.substringAfterLast('.', "").lowercase()
     }
-    val isImage = remember(extension, item.isDirectory) {
-        !item.isDirectory && FileTypeClassifier.isImage(extension)
+    val isVideo = remember(extension, item.isDirectory) {
+        !item.isDirectory && FileTypeClassifier.isVideo(extension)
+    }
+    val isVisualMedia = remember(extension, item.isDirectory) {
+        !item.isDirectory && (FileTypeClassifier.isImage(extension) || isVideo)
     }
 
     val iconContainerShape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
 
-    if (isImage) {
+    if (isVisualMedia) {
         var thumbnailBitmap by remember(item.trashPath) {
             mutableStateOf(ThumbnailLoader.getFromCache(item.trashPath))
         }
@@ -144,7 +167,8 @@ fun TrashedItemThumbnailView(
                         width = Dimensions.CardBorderWidth,
                         color = AppColors.cardStroke,
                         shape = iconContainerShape
-                    )
+                    ),
+                contentAlignment = Alignment.Center
             ) {
                 Image(
                     bitmap = bitmap,
@@ -152,6 +176,22 @@ fun TrashedItemThumbnailView(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
+                if (isVideo) {
+                    Box(
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(androidx.compose.ui.graphics.Color(0x99000000)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_play),
+                            contentDescription = null,
+                            tint = androidx.compose.ui.graphics.Color.White,
+                            modifier = Modifier.size(10.dp)
+                        )
+                    }
+                }
             }
         } else {
             Box(
@@ -167,7 +207,7 @@ fun TrashedItemThumbnailView(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    painter = painterResource(id = R.drawable.ic_image),
+                    painter = painterResource(id = if (isVideo) R.drawable.ic_video else R.drawable.ic_image),
                     contentDescription = null,
                     tint = AppColors.brandAccent,
                     modifier = Modifier.size(Dimensions.IconSizeMedium)

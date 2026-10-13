@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import java.io.File
 
 /**
@@ -37,6 +38,37 @@ object ThumbnailLoader {
         try {
             val file = File(path)
             if (!file.exists() || !file.canRead()) return@withContext null
+
+            val ext = file.extension.lowercase()
+            if (FileTypeClassifier.isVideo(ext)) {
+                val retriever = android.media.MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(path)
+                    val frame = retriever.getFrameAtTime(1000000, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                        ?: retriever.frameAtTime
+                    if (frame != null) {
+                        val maxDim = THUMBNAIL_MAX_DIMENSION
+                        val w = frame.width
+                        val h = frame.height
+                        val scaled = if (w > maxDim || h > maxDim) {
+                            val ratio = w.toFloat() / h.toFloat()
+                            val (targetW, targetH) = if (ratio > 1) {
+                                maxDim to (maxDim / ratio).toInt().coerceAtLeast(1)
+                            } else {
+                                (maxDim * ratio).toInt().coerceAtLeast(1) to maxDim
+                            }
+                            Bitmap.createScaledBitmap(frame, targetW, targetH, true)
+                        } else {
+                            frame
+                        }
+                        val imageBitmap = scaled.asImageBitmap()
+                        memoryCache.put(path, imageBitmap)
+                        return@withContext imageBitmap
+                    }
+                } finally {
+                    try { retriever.release() } catch (_: Exception) {}
+                }
+            }
 
             val boundsOptions = BitmapFactory.Options().apply {
                 inJustDecodeBounds = true

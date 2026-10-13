@@ -79,6 +79,68 @@ object BitmapDecoder {
         }
     }
 
+    suspend fun decodeVideoFrame(
+        filePath: String,
+        maxDimension: Int = DEFAULT_MAX_DIMENSION
+    ): Result<DecodedBitmapResult> = withContext(Dispatchers.IO) {
+        try {
+            val file = File(filePath)
+            if (!file.exists() || !file.canRead()) {
+                return@withContext Result.failure(IllegalArgumentException("File cannot be read: $filePath"))
+            }
+
+            val retriever = android.media.MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(filePath)
+                val frame = retriever.getFrameAtTime(1000000, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    ?: retriever.frameAtTime
+                if (frame != null) {
+                    val w = frame.width
+                    val h = frame.height
+                    val scaled = if (w > maxDimension || h > maxDimension) {
+                        val ratio = w.toFloat() / h.toFloat()
+                        val (targetW, targetH) = if (ratio > 1) {
+                            maxDimension to (maxDimension / ratio).toInt().coerceAtLeast(1)
+                        } else {
+                            (maxDimension * ratio).toInt().coerceAtLeast(1) to maxDimension
+                        }
+                        Bitmap.createScaledBitmap(frame, targetW, targetH, true)
+                    } else {
+                        frame
+                    }
+                    Result.success(
+                        DecodedBitmapResult(
+                            imageBitmap = scaled.asImageBitmap(),
+                            originalWidth = w,
+                            originalHeight = h
+                        )
+                    )
+                } else {
+                    Result.failure(IllegalStateException("Failed to extract video frame"))
+                }
+            } finally {
+                try { retriever.release() } catch (_: Exception) {}
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun getVideoDurationMs(filePath: String): Long {
+        return try {
+            val retriever = android.media.MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(filePath)
+                val durationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+                durationStr?.toLongOrNull() ?: 0L
+            } finally {
+                try { retriever.release() } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {
+            0L
+        }
+    }
+
     private fun applyExifRotation(filePath: String, bitmap: Bitmap): Bitmap {
         return try {
             val exif = ExifInterface(filePath)

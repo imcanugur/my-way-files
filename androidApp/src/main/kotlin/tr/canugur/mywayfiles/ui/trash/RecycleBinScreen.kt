@@ -27,6 +27,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.core.image.BitmapDecoder
 import tr.canugur.mywayfiles.core.image.DecodedBitmapResult
+import tr.canugur.mywayfiles.core.image.ThumbnailLoader
 import tr.canugur.mywayfiles.core.util.ByteFormatter
 import tr.canugur.mywayfiles.core.util.DateTimeFormatter
 import tr.canugur.mywayfiles.core.util.FileTypeClassifier
@@ -449,6 +450,9 @@ private fun TrashedItemPreviewDialog(
     val isImage = remember(extension, item.isDirectory) {
         !item.isDirectory && FileTypeClassifier.isImage(extension)
     }
+    val isVideo = remember(extension, item.isDirectory) {
+        !item.isDirectory && FileTypeClassifier.isVideo(extension)
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -468,16 +472,19 @@ private fun TrashedItemPreviewDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall)
             ) {
-                if (isImage) {
-                    var decodedResult by remember(item.trashPath) {
-                        mutableStateOf<DecodedBitmapResult?>(null)
+                if (isImage || isVideo) {
+                    var previewBitmap by remember(item.trashPath) {
+                        mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
                     }
                     var isLoading by remember(item.trashPath) { mutableStateOf(true) }
 
                     LaunchedEffect(item.trashPath) {
                         isLoading = true
-                        val res = BitmapDecoder.decode(item.trashPath)
-                        decodedResult = res.getOrNull()
+                        previewBitmap = if (isImage) {
+                            BitmapDecoder.decode(item.trashPath).getOrNull()?.imageBitmap
+                        } else {
+                            ThumbnailLoader.loadThumbnail(item.trashPath)
+                        }
                         isLoading = false
                     }
 
@@ -500,7 +507,7 @@ private fun TrashedItemPreviewDialog(
                                 strokeWidth = Dimensions.SpacingMicro
                             )
                         } else {
-                            val bitmap = decodedResult?.imageBitmap
+                            val bitmap = previewBitmap
                             if (bitmap != null) {
                                 Image(
                                     bitmap = bitmap,
@@ -508,9 +515,25 @@ private fun TrashedItemPreviewDialog(
                                     contentScale = ContentScale.Fit,
                                     modifier = Modifier.fillMaxSize()
                                 )
+                                if (isVideo) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .clip(RoundedCornerShape(22.dp))
+                                            .background(androidx.compose.ui.graphics.Color(0x99000000)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(id = R.drawable.ic_play),
+                                            contentDescription = null,
+                                            tint = androidx.compose.ui.graphics.Color.White,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                }
                             } else {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_image),
+                                    painter = painterResource(if (isVideo) R.drawable.ic_video else R.drawable.ic_image),
                                     contentDescription = null,
                                     tint = AppColors.textMuted,
                                     modifier = Modifier.size(Dimensions.IconSizeLarge)

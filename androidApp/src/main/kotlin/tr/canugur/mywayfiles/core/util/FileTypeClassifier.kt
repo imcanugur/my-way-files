@@ -11,11 +11,23 @@ object FileTypeClassifier {
         "jpg", "jpeg", "png", "webp", "gif", "bmp", "heic", "heif"
     )
 
+    private val VIDEO_EXTENSIONS = setOf(
+        "mp4", "mkv", "mov", "avi", "3gp", "webm", "flv", "m4v", "wmv", "ts"
+    )
+
     fun isImage(extension: String): Boolean {
         return extension.lowercase() in IMAGE_EXTENSIONS
     }
 
     fun isImage(item: FileItem): Boolean {
         return !item.isDirectory && isImage(item.extension)
+    }
+
+    fun isVideo(extension: String): Boolean {
+        return extension.lowercase() in VIDEO_EXTENSIONS
+    }
+
+    fun isVideo(item: FileItem): Boolean {
+        return !item.isDirectory && isVideo(item.extension)
     }
 }
