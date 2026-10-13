@@ -1,7 +1,13 @@
 <resources>
     <string name="app_name">MyWayFiles</string>
-    <string name="btn_click_me">Click me!</string>
-    <string name="compose_logo_desc">Compose Logo</string>
-    <string name="greeting_format">Hello, %1$s!</string>
-    <string name="greeting_compose_format">Compose: %1$s</string>
+
+    <!-- Storage Devices & Drives -->
+    <string name="devices_and_drives">Devices and drives</string>
+    <string name="storage_overview_title">This Device</string>
+    <string name="free_of_total">%1$s free of %2$s</string>
+    <string name="type_internal">Local Disk</string>
+    <string name="type_sdcard">SD Card</string>
+    <string name="type_usb">USB Drive</string>
+    <string name="refresh_drives">Refresh</string>
+    <string name="no_drives_found">No drives found</string>
 </resources>

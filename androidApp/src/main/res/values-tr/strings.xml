@@ -1,7 +1,13 @@
 <resources>
     <string name="app_name">MyWayFiles</string>
-    <string name="btn_click_me">Bana tıkla!</string>
-    <string name="compose_logo_desc">Compose Logosu</string>
-    <string name="greeting_format">Merhaba, %1$s!</string>
-    <string name="greeting_compose_format">Compose: %1$s</string>
+
+    <!-- Depolama Aygıtları ve Sürücüler -->
+    <string name="devices_and_drives">Aygıtlar ve sürücüler</string>
+    <string name="storage_overview_title">Bu Cihaz</string>
+    <string name="free_of_total">%2$s alandan %1$s boş</string>
+    <string name="type_internal">Yerel Disk</string>
+    <string name="type_sdcard">SD Kart</string>
+    <string name="type_usb">USB Sürücü</string>
+    <string name="refresh_drives">Yenile</string>
+    <string name="no_drives_found">Sürücü bulunamadı</string>
 </resources>
