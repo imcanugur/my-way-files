@@ -1,0 +1,25 @@
+services:
+  kmp-dev:
+    build:
+      context: .devcontainer
+      dockerfile: Dockerfile
+    container_name: mobile_app
+    volumes:
+      - .:/workspaces/mobile
+      - /dev/bus/usb:/dev/bus/usb
+      - gradle-cache:/root/.gradle
+      - command-history:/root/.commandhistory
+      - adb-data:/root/.android
+    network_mode: "host"
+    privileged: true
+    tty: true
+    stdin_open: true
+    working_dir: /workspaces/mobile
+    mem_limit: 4g
+    cpus: 6
+    pids_limit: 512
+
+volumes:
+  gradle-cache:
+  command-history:
+  adb-data:

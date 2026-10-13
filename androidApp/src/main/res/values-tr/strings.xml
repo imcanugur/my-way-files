@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">MyWayFiles</string>
+    <string name="btn_click_me">Bana tıkla!</string>
+    <string name="compose_logo_desc">Compose Logosu</string>
+    <string name="greeting_format">Merhaba, %1$s!</string>
+    <string name="greeting_compose_format">Compose: %1$s</string>
+</resources>

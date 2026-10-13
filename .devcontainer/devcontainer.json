@@ -1,0 +1,17 @@
+{
+  "name": "Dev Container",
+  "dockerComposeFile": ["../docker-compose.yml"],
+  "service": "kmp-dev",
+  "workspaceFolder": "/workspaces/mobile",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "fwcd.kotlin",
+        "mathiasfrohlich.Kotlin",
+        "vscjava.vscode-java-pack"
+      ]
+    }
+  },
+  "remoteUser": "root",
+  "postCreateCommand": "chmod +x ./gradlew 2>/dev/null || true"
+}
