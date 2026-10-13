@@ -11,4 +11,13 @@
     <string name="refresh_drives">Refresh</string>
     <string name="theme_toggle">Toggle theme</string>
     <string name="no_drives_found">No drives found</string>
+
+    <!-- File Explorer -->
+    <string name="folder_empty">This folder is empty</string>
+    <string name="items_count">%1$d items</string>
+    <string name="item_count_single">1 item</string>
+    <string name="permission_title">Storage Access Required</string>
+    <string name="permission_message">To browse files and folders on this device, please grant All Files Access in Settings.</string>
+    <string name="permission_button">Open Settings</string>
+    <string name="navigate_up">Back</string>
 </resources>

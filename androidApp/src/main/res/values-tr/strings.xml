@@ -11,4 +11,13 @@
     <string name="refresh_drives">Yenile</string>
     <string name="theme_toggle">Temayı değiştir</string>
     <string name="no_drives_found">Sürücü bulunamadı</string>
+
+    <!-- Dosya Gezgini -->
+    <string name="folder_empty">Bu klasör boş</string>
+    <string name="items_count">%1$d öge</string>
+    <string name="item_count_single">1 öge</string>
+    <string name="permission_title">Depolama Erişimi Gerekli</string>
+    <string name="permission_message">Bu cihazdaki dosya ve klasörlere göz atmak için lütfen Ayarlar\'dan Tüm Dosyalara Erişim iznini verin.</string>
+    <string name="permission_button">Ayarları Aç</string>
+    <string name="navigate_up">Geri</string>
 </resources>

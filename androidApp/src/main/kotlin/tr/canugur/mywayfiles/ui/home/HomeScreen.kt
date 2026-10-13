@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import tr.canugur.mywayfiles.R
+import tr.canugur.mywayfiles.domain.model.StorageDrive
 import tr.canugur.mywayfiles.ui.home.components.EmptyDrivesView
 import tr.canugur.mywayfiles.ui.home.components.HomeTopBar
 import tr.canugur.mywayfiles.ui.home.components.OverallStorageCard
@@ -29,6 +30,7 @@ import tr.canugur.mywayfiles.ui.theme.Dimensions
 fun HomeScreen(
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
+    onDriveClick: (StorageDrive) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -41,6 +43,7 @@ fun HomeScreen(
         state = state,
         isDarkTheme = isDarkTheme,
         onToggleTheme = onToggleTheme,
+        onDriveClick = onDriveClick,
         onEvent = viewModel::onEvent,
         modifier = modifier
     )
@@ -54,6 +57,7 @@ fun HomeScreenContent(
     state: HomeUiState,
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
+    onDriveClick: (StorageDrive) -> Unit,
     onEvent: (HomeUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -157,7 +161,7 @@ fun HomeScreenContent(
                     items(state.drives, key = { it.id }) { drive ->
                         StorageDriveCard(
                             drive = drive,
-                            onClick = { onEvent(HomeUiEvent.DriveClick(drive)) }
+                            onClick = { onDriveClick(drive) }
                         )
                     }
 
