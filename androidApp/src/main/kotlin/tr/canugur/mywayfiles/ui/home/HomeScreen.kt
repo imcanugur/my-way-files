@@ -27,6 +27,8 @@ import tr.canugur.mywayfiles.ui.theme.Dimensions
  */
 @Composable
 fun HomeScreen(
+    isDarkTheme: Boolean,
+    onToggleTheme: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -37,6 +39,8 @@ fun HomeScreen(
 
     HomeScreenContent(
         state = state,
+        isDarkTheme = isDarkTheme,
+        onToggleTheme = onToggleTheme,
         onEvent = viewModel::onEvent,
         modifier = modifier
     )
@@ -48,13 +52,17 @@ fun HomeScreen(
 @Composable
 fun HomeScreenContent(
     state: HomeUiState,
+    isDarkTheme: Boolean,
+    onToggleTheme: () -> Unit,
     onEvent: (HomeUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
-        containerColor = AppColors.CanvasBackground,
+        containerColor = AppColors.canvasBackground,
         topBar = {
             HomeTopBar(
+                isDarkTheme = isDarkTheme,
+                onToggleTheme = onToggleTheme,
                 onRefreshClick = { onEvent(HomeUiEvent.Refresh) }
             )
         },
@@ -69,7 +77,7 @@ fun HomeScreenContent(
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(
-                        color = AppColors.BrandAccent,
+                        color = AppColors.brandAccent,
                         strokeWidth = Dimensions.SpacingMicro
                     )
                 }
@@ -97,7 +105,7 @@ fun HomeScreenContent(
                 ) {
                     Text(
                         text = state.message,
-                        color = AppColors.StatusCritical,
+                        color = AppColors.statusCritical,
                         fontSize = 13.sp
                     )
                 }
@@ -135,12 +143,12 @@ fun HomeScreenContent(
                                 text = stringResource(R.string.devices_and_drives),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = AppColors.TextPrimary
+                                color = AppColors.textPrimary
                             )
                             Text(
                                 text = "(${state.drives.size})",
                                 fontSize = 12.sp,
-                                color = AppColors.TextMuted
+                                color = AppColors.textMuted
                             )
                         }
                     }

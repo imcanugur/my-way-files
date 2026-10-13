@@ -56,13 +56,13 @@ fun StorageDriveCard(
     )
 
     Surface(
-        color = AppColors.CardSurface,
+        color = AppColors.cardSurface,
         shape = RoundedCornerShape(Dimensions.CornerRadiusDefault),
         modifier = modifier
             .fillMaxWidth()
             .border(
                 width = Dimensions.CardBorderWidth,
-                color = AppColors.CardStroke,
+                color = AppColors.cardStroke,
                 shape = RoundedCornerShape(Dimensions.CornerRadiusDefault)
             )
             .clip(RoundedCornerShape(Dimensions.CornerRadiusDefault))
@@ -77,13 +77,13 @@ fun StorageDriveCard(
                 modifier = Modifier
                     .size(Dimensions.IconContainerSize)
                     .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
-                    .background(AppColors.CardSurfaceSubtle),
+                    .background(AppColors.cardSurfaceSubtle),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     painter = painterResource(iconRes),
                     contentDescription = drive.name,
-                    tint = AppColors.BrandAccent,
+                    tint = AppColors.brandAccent,
                     modifier = Modifier.size(Dimensions.IconSizeLarge)
                 )
             }
@@ -104,7 +104,7 @@ fun StorageDriveCard(
                         text = drive.name,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = AppColors.TextPrimary,
+                        color = AppColors.textPrimary,
                         maxLines = 1,
                         modifier = Modifier.weight(1f, fill = false)
                     )
@@ -114,7 +114,7 @@ fun StorageDriveCard(
                     Text(
                         text = stringResource(typeLabelRes),
                         fontSize = 11.sp,
-                        color = AppColors.TextMuted
+                        color = AppColors.textMuted
                     )
                 }
 
@@ -126,7 +126,7 @@ fun StorageDriveCard(
                         .fillMaxWidth()
                         .height(Dimensions.ProgressBarHeight)
                         .clip(RoundedCornerShape(Dimensions.ProgressBarRadius))
-                        .background(AppColors.ProgressTrack)
+                        .background(AppColors.progressTrack)
                 ) {
                     Box(
                         modifier = Modifier
@@ -135,9 +135,9 @@ fun StorageDriveCard(
                             .clip(RoundedCornerShape(Dimensions.ProgressBarRadius))
                             .background(
                                 when {
-                                    drive.usageRatio >= StorageThresholds.CRITICAL_RATIO -> AppColors.StatusCritical
-                                    drive.usageRatio >= StorageThresholds.WARNING_RATIO -> AppColors.StatusWarning
-                                    else -> AppColors.BrandAccent
+                                    drive.usageRatio >= StorageThresholds.CRITICAL_RATIO -> AppColors.statusCritical
+                                    drive.usageRatio >= StorageThresholds.WARNING_RATIO -> AppColors.statusWarning
+                                    else -> AppColors.brandAccent
                                 }
                             )
                     )
@@ -153,7 +153,7 @@ fun StorageDriveCard(
                         ByteFormatter.format(drive.totalBytes)
                     ),
                     fontSize = 12.sp,
-                    color = AppColors.TextSecondary
+                    color = AppColors.textSecondary
                 )
             }
         }

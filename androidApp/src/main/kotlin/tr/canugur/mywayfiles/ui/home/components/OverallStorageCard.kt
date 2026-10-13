@@ -39,13 +39,13 @@ fun OverallStorageCard(
     )
 
     Surface(
-        color = AppColors.CardSurface,
+        color = AppColors.cardSurface,
         shape = RoundedCornerShape(Dimensions.CornerRadiusDefault),
         modifier = modifier
             .fillMaxWidth()
             .border(
                 width = Dimensions.CardBorderWidth,
-                color = AppColors.CardStroke,
+                color = AppColors.cardStroke,
                 shape = RoundedCornerShape(Dimensions.CornerRadiusDefault)
             )
     ) {
@@ -61,12 +61,12 @@ fun OverallStorageCard(
                     text = stringResource(R.string.storage_overview_title),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = AppColors.TextPrimary
+                    color = AppColors.textPrimary
                 )
                 Text(
                     text = "${summary.driveCount} ${stringResource(R.string.devices_and_drives).lowercase()}",
                     fontSize = 12.sp,
-                    color = AppColors.TextSecondary
+                    color = AppColors.textSecondary
                 )
             }
 
@@ -78,7 +78,7 @@ fun OverallStorageCard(
                     .fillMaxWidth()
                     .height(Dimensions.ProgressBarHeight)
                     .clip(RoundedCornerShape(Dimensions.ProgressBarRadius))
-                    .background(AppColors.ProgressTrack)
+                    .background(AppColors.progressTrack)
             ) {
                 Box(
                     modifier = Modifier
@@ -87,9 +87,9 @@ fun OverallStorageCard(
                         .clip(RoundedCornerShape(Dimensions.ProgressBarRadius))
                         .background(
                             when {
-                                summary.usageRatio >= StorageThresholds.CRITICAL_RATIO -> AppColors.StatusCritical
-                                summary.usageRatio >= StorageThresholds.WARNING_RATIO -> AppColors.StatusWarning
-                                else -> AppColors.BrandAccent
+                                summary.usageRatio >= StorageThresholds.CRITICAL_RATIO -> AppColors.statusCritical
+                                summary.usageRatio >= StorageThresholds.WARNING_RATIO -> AppColors.statusWarning
+                                else -> AppColors.brandAccent
                             }
                         )
                 )
@@ -108,16 +108,16 @@ fun OverallStorageCard(
                         ByteFormatter.format(summary.totalBytes)
                     ),
                     fontSize = 12.sp,
-                    color = AppColors.TextSecondary
+                    color = AppColors.textSecondary
                 )
                 Text(
                     text = "%${(summary.usageRatio * 100).toInt()}",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (summary.usageRatio >= StorageThresholds.CRITICAL_RATIO) {
-                        AppColors.StatusCritical
+                        AppColors.statusCritical
                     } else {
-                        AppColors.TextPrimary
+                        AppColors.textPrimary
                     }
                 )
             }

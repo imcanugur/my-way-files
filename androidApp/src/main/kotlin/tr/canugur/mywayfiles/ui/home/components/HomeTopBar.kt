@@ -21,19 +21,21 @@ import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 
 /**
- * Clean navigation top bar following structured design tokens.
+ * Navigation top bar featuring title breadcrumbs, theme switcher, and refresh controls.
  */
 @Composable
 fun HomeTopBar(
+    isDarkTheme: Boolean,
+    onToggleTheme: () -> Unit,
     onRefreshClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Surface(
-        color = AppColors.CardSurface,
+        color = AppColors.cardSurface,
         modifier = modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .border(width = Dimensions.CardBorderWidth, color = AppColors.CardStroke)
+            .border(width = Dimensions.CardBorderWidth, color = AppColors.cardStroke)
     ) {
         Row(
             modifier = Modifier
@@ -51,41 +53,70 @@ fun HomeTopBar(
                     text = stringResource(R.string.app_name),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = AppColors.TextPrimary
+                    color = AppColors.textPrimary
                 )
                 Text(
                     text = ">",
                     fontSize = 14.sp,
-                    color = AppColors.TextMuted
+                    color = AppColors.textMuted
                 )
                 Text(
                     text = stringResource(R.string.devices_and_drives),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
-                    color = AppColors.TextSecondary
+                    color = AppColors.textSecondary
                 )
             }
 
-            // Action Button
-            Box(
-                modifier = Modifier
-                    .size(Dimensions.ActionButtonSize)
-                    .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
-                    .background(AppColors.CardSurfaceSubtle)
-                    .border(
-                        width = Dimensions.CardBorderWidth,
-                        color = AppColors.CardStroke,
-                        shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
-                    )
-                    .clickable { onRefreshClick() },
-                contentAlignment = Alignment.Center
+            // Action Buttons: Theme Toggle & Refresh
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_refresh),
-                    contentDescription = stringResource(R.string.refresh_drives),
-                    tint = AppColors.TextSecondary,
-                    modifier = Modifier.size(Dimensions.IconSizeMedium)
-                )
+                // Theme Switcher Toggle Button
+                Box(
+                    modifier = Modifier
+                        .size(Dimensions.ActionButtonSize)
+                        .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
+                        .background(AppColors.cardSurfaceSubtle)
+                        .border(
+                            width = Dimensions.CardBorderWidth,
+                            color = AppColors.cardStroke,
+                            shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
+                        )
+                        .clickable { onToggleTheme() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    val themeIcon = if (isDarkTheme) R.drawable.ic_mode_light else R.drawable.ic_mode_dark
+                    Icon(
+                        painter = painterResource(themeIcon),
+                        contentDescription = stringResource(R.string.theme_toggle),
+                        tint = AppColors.textSecondary,
+                        modifier = Modifier.size(Dimensions.IconSizeMedium)
+                    )
+                }
+
+                // Refresh Action Button
+                Box(
+                    modifier = Modifier
+                        .size(Dimensions.ActionButtonSize)
+                        .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
+                        .background(AppColors.cardSurfaceSubtle)
+                        .border(
+                            width = Dimensions.CardBorderWidth,
+                            color = AppColors.cardStroke,
+                            shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
+                        )
+                        .clickable { onRefreshClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_refresh),
+                        contentDescription = stringResource(R.string.refresh_drives),
+                        tint = AppColors.textSecondary,
+                        modifier = Modifier.size(Dimensions.IconSizeMedium)
+                    )
+                }
             }
         }
     }

@@ -9,5 +9,6 @@
     <string name="type_sdcard">SD Kart</string>
     <string name="type_usb">USB Sürücü</string>
     <string name="refresh_drives">Yenile</string>
+    <string name="theme_toggle">Temayı değiştir</string>
     <string name="no_drives_found">Sürücü bulunamadı</string>
 </resources>

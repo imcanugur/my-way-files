@@ -9,5 +9,6 @@
     <string name="type_sdcard">SD Card</string>
     <string name="type_usb">USB Drive</string>
     <string name="refresh_drives">Refresh</string>
+    <string name="theme_toggle">Toggle theme</string>
     <string name="no_drives_found">No drives found</string>
 </resources>

@@ -24,13 +24,13 @@ fun EmptyDrivesView(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        color = AppColors.CardSurface,
+        color = AppColors.cardSurface,
         shape = RoundedCornerShape(Dimensions.CornerRadiusDefault),
         modifier = modifier
             .fillMaxWidth()
             .border(
                 width = Dimensions.CardBorderWidth,
-                color = AppColors.CardStroke,
+                color = AppColors.cardStroke,
                 shape = RoundedCornerShape(Dimensions.CornerRadiusDefault)
             )
             .padding(vertical = Dimensions.SpacingHuge, horizontal = Dimensions.SpacingDefault)
@@ -42,14 +42,14 @@ fun EmptyDrivesView(
             Icon(
                 painter = painterResource(R.drawable.ic_drive_disk),
                 contentDescription = null,
-                tint = AppColors.TextMuted,
+                tint = AppColors.textMuted,
                 modifier = Modifier.size(Dimensions.IconSizeLarge)
             )
             Spacer(modifier = Modifier.height(Dimensions.SpacingMedium))
             Text(
                 text = stringResource(R.string.no_drives_found),
                 fontSize = 13.sp,
-                color = AppColors.TextSecondary
+                color = AppColors.textSecondary
             )
         }
     }
