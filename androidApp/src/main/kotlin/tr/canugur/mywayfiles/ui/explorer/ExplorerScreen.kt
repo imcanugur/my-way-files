@@ -22,10 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.domain.model.FileItem
-import tr.canugur.mywayfiles.ui.explorer.components.EmptyFolderView
-import tr.canugur.mywayfiles.ui.explorer.components.ExplorerTopBar
-import tr.canugur.mywayfiles.ui.explorer.components.FileItemRow
-import tr.canugur.mywayfiles.ui.explorer.components.PermissionCard
+import tr.canugur.mywayfiles.ui.explorer.components.*
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 import tr.canugur.mywayfiles.ui.viewer.ImageViewerScreen
@@ -52,7 +49,12 @@ fun ExplorerScreen(
         key = rootPath
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
     var selectedImage by remember { mutableStateOf<FileItem?>(null) }
+    var itemToRename by remember { mutableStateOf<FileItem?>(null) }
+    var itemToDelete by remember { mutableStateOf<FileItem?>(null) }
+    var itemForProperties by remember { mutableStateOf<FileItem?>(null) }
+    var showCreateFolderDialog by remember { mutableStateOf(false) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -85,6 +87,7 @@ fun ExplorerScreen(
                     onNavigateBack()
                 }
             },
+            onCreateFolderClick = { showCreateFolderDialog = true },
             onItemClick = { item ->
                 if (item.isDirectory) {
                     viewModel.onEvent(ExplorerUiEvent.ItemClick(item))
@@ -92,6 +95,13 @@ fun ExplorerScreen(
                     selectedImage = item
                 }
             },
+            onCopy = { viewModel.onEvent(ExplorerUiEvent.Copy(it)) },
+            onCut = { viewModel.onEvent(ExplorerUiEvent.Cut(it)) },
+            onRename = { itemToRename = it },
+            onDelete = { itemToDelete = it },
+            onProperties = { itemForProperties = it },
+            onPaste = { viewModel.onEvent(ExplorerUiEvent.Paste) },
+            onClearClipboard = { viewModel.onEvent(ExplorerUiEvent.ClearClipboard) },
             onEvent = viewModel::onEvent
         )
 
@@ -109,6 +119,40 @@ fun ExplorerScreen(
                 )
             }
         }
+
+        // Operation Dialogs
+        val renameItem = itemToRename
+        if (renameItem != null) {
+            RenameDialog(
+                initialName = renameItem.name,
+                onConfirm = { viewModel.onEvent(ExplorerUiEvent.Rename(renameItem, it)) },
+                onDismiss = { itemToRename = null }
+            )
+        }
+
+        val deleteItem = itemToDelete
+        if (deleteItem != null) {
+            DeleteConfirmDialog(
+                fileName = deleteItem.name,
+                onConfirm = { viewModel.onEvent(ExplorerUiEvent.Delete(deleteItem)) },
+                onDismiss = { itemToDelete = null }
+            )
+        }
+
+        val propItem = itemForProperties
+        if (propItem != null) {
+            PropertiesDialog(
+                item = propItem,
+                onDismiss = { itemForProperties = null }
+            )
+        }
+
+        if (showCreateFolderDialog) {
+            CreateFolderDialog(
+                onConfirm = { viewModel.onEvent(ExplorerUiEvent.CreateFolder(it)) },
+                onDismiss = { showCreateFolderDialog = false }
+            )
+        }
     }
 }
 
@@ -123,7 +167,15 @@ fun ExplorerScreenContent(
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
     onBackClick: () -> Unit,
+    onCreateFolderClick: () -> Unit,
     onItemClick: (FileItem) -> Unit,
+    onCopy: (FileItem) -> Unit,
+    onCut: (FileItem) -> Unit,
+    onRename: (FileItem) -> Unit,
+    onDelete: (FileItem) -> Unit,
+    onProperties: (FileItem) -> Unit,
+    onPaste: () -> Unit,
+    onClearClipboard: () -> Unit,
     onEvent: (ExplorerUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -134,97 +186,121 @@ fun ExplorerScreenContent(
         else -> listOf(Breadcrumb(title = fallbackDriveName, path = fallbackRootPath))
     }
 
-    Scaffold(
-        containerColor = AppColors.canvasBackground,
-        topBar = {
-            ExplorerTopBar(
-                breadcrumbs = breadcrumbs,
-                isDarkTheme = isDarkTheme,
-                onBackClick = onBackClick,
-                onBreadcrumbClick = { onEvent(ExplorerUiEvent.NavigateToBreadcrumb(it)) },
-                onToggleTheme = onToggleTheme,
-                onRefreshClick = { onEvent(ExplorerUiEvent.Refresh) }
-            )
-        },
-        modifier = modifier
-    ) { innerPadding ->
-        when (state) {
-            is ExplorerUiState.Loading -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(
-                        color = AppColors.brandAccent,
-                        strokeWidth = Dimensions.SpacingMicro
-                    )
-                }
+    Box(modifier = modifier.fillMaxSize()) {
+        Scaffold(
+            containerColor = AppColors.canvasBackground,
+            topBar = {
+                ExplorerTopBar(
+                    breadcrumbs = breadcrumbs,
+                    isDarkTheme = isDarkTheme,
+                    onBackClick = onBackClick,
+                    onBreadcrumbClick = { onEvent(ExplorerUiEvent.NavigateToBreadcrumb(it)) },
+                    onCreateFolderClick = onCreateFolderClick,
+                    onToggleTheme = onToggleTheme,
+                    onRefreshClick = { onEvent(ExplorerUiEvent.Refresh) }
+                )
             }
-
-            is ExplorerUiState.PermissionRequired -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                        .padding(Dimensions.SpacingLarge),
-                    contentAlignment = Alignment.Center
-                ) {
-                    PermissionCard()
-                }
-            }
-
-            is ExplorerUiState.Empty -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    EmptyFolderView()
-                }
-            }
-
-            is ExplorerUiState.Error -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                        .padding(Dimensions.SpacingLarge),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = state.message,
-                        color = AppColors.statusCritical,
-                        fontSize = 13.sp
-                    )
-                }
-            }
-
-            is ExplorerUiState.Success -> {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                    contentPadding = PaddingValues(
-                        horizontal = Dimensions.SpacingDefault,
-                        vertical = Dimensions.SpacingMedium
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall)
-                ) {
-                    items(state.items, key = { it.id }) { item ->
-                        FileItemRow(
-                            item = item,
-                            onClick = { onItemClick(item) }
+        ) { innerPadding ->
+            when (state) {
+                is ExplorerUiState.Loading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = AppColors.brandAccent,
+                            strokeWidth = Dimensions.SpacingMicro
                         )
                     }
+                }
 
-                    item {
-                        Spacer(modifier = Modifier.height(Dimensions.SpacingExtraLarge))
+                is ExplorerUiState.PermissionRequired -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                            .padding(Dimensions.SpacingLarge),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        PermissionCard()
+                    }
+                }
+
+                is ExplorerUiState.Empty -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        EmptyFolderView()
+                    }
+                }
+
+                is ExplorerUiState.Error -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                            .padding(Dimensions.SpacingLarge),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = state.message,
+                            color = AppColors.statusCritical,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+
+                is ExplorerUiState.Success -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding),
+                        contentPadding = PaddingValues(
+                            horizontal = Dimensions.SpacingDefault,
+                            vertical = Dimensions.SpacingMedium
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall)
+                    ) {
+                        items(state.items, key = { it.id }) { item ->
+                            FileItemRow(
+                                item = item,
+                                onClick = { onItemClick(item) },
+                                onCopy = onCopy,
+                                onCut = onCut,
+                                onRename = onRename,
+                                onDelete = onDelete,
+                                onProperties = onProperties
+                            )
+                        }
+
+                        item {
+                            Spacer(modifier = Modifier.height(Dimensions.SpacingHuge))
+                        }
                     }
                 }
             }
+        }
+
+        // Floating Clipboard Banner
+        val activeClipboard = when (state) {
+            is ExplorerUiState.Success -> state.clipboard
+            is ExplorerUiState.Empty -> state.clipboard
+            else -> null
+        }
+        if (activeClipboard != null) {
+            ClipboardBar(
+                clipboard = activeClipboard,
+                onPaste = onPaste,
+                onClear = onClearClipboard,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(Dimensions.SpacingDefault)
+            )
         }
     }
 }

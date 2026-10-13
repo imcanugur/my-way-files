@@ -24,4 +24,20 @@
     <string name="image_dimensions">%1$d × %2$d</string>
     <string name="image_load_failed">Unable to load image</string>
     <string name="close_viewer">Close</string>
+    <string name="action_copy">Copy</string>
+    <string name="action_cut">Cut</string>
+    <string name="action_paste">Paste</string>
+    <string name="action_rename">Rename</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_new_folder">New Folder</string>
+    <string name="action_properties">Properties</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_confirm">OK</string>
+    <string name="dialog_rename_title">Rename Item</string>
+    <string name="dialog_new_folder_title">Create New Folder</string>
+    <string name="dialog_new_folder_placeholder">Folder name</string>
+    <string name="dialog_delete_confirm">Are you sure you want to permanently delete \"%1$s\"?</string>
+    <string name="properties_path">Location</string>
+    <string name="properties_size">Size</string>
+    <string name="properties_modified">Modified</string>
 </resources>

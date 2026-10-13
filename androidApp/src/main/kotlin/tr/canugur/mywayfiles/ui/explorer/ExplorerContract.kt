@@ -7,6 +7,11 @@ data class Breadcrumb(
     val path: String
 )
 
+data class Clipboard(
+    val item: FileItem,
+    val isCut: Boolean
+)
+
 sealed interface ExplorerUiState {
     data object Loading : ExplorerUiState
 
@@ -16,12 +21,14 @@ sealed interface ExplorerUiState {
         val currentPath: String,
         val breadcrumbs: List<Breadcrumb>,
         val items: List<FileItem>,
-        val isRefreshing: Boolean = false
+        val isRefreshing: Boolean = false,
+        val clipboard: Clipboard? = null
     ) : ExplorerUiState
 
     data class Empty(
         val currentPath: String,
-        val breadcrumbs: List<Breadcrumb>
+        val breadcrumbs: List<Breadcrumb>,
+        val clipboard: Clipboard? = null
     ) : ExplorerUiState
 
     data class Error(
@@ -37,4 +44,11 @@ sealed interface ExplorerUiEvent {
     data object NavigateUp : ExplorerUiEvent
     data object Refresh : ExplorerUiEvent
     data object CheckPermission : ExplorerUiEvent
+    data class Copy(val item: FileItem) : ExplorerUiEvent
+    data class Cut(val item: FileItem) : ExplorerUiEvent
+    data object Paste : ExplorerUiEvent
+    data object ClearClipboard : ExplorerUiEvent
+    data class Rename(val item: FileItem, val newName: String) : ExplorerUiEvent
+    data class Delete(val item: FileItem) : ExplorerUiEvent
+    data class CreateFolder(val folderName: String) : ExplorerUiEvent
 }

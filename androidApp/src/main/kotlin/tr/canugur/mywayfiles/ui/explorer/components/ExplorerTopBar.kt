@@ -26,7 +26,8 @@ import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 
 /**
- * Explorer Top Bar with back navigation, breadcrumb path bar, theme toggle, and refresh.
+ * Explorer Top Bar with back navigation, breadcrumb path bar, new folder creation,
+ * theme toggle, and refresh.
  */
 @Composable
 fun ExplorerTopBar(
@@ -34,6 +35,7 @@ fun ExplorerTopBar(
     isDarkTheme: Boolean,
     onBackClick: () -> Unit,
     onBreadcrumbClick: (String) -> Unit,
+    onCreateFolderClick: () -> Unit,
     onToggleTheme: () -> Unit,
     onRefreshClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -105,11 +107,32 @@ fun ExplorerTopBar(
                     )
                 }
 
-                // Actions: Theme Switcher & Refresh
+                // Actions: New Folder, Theme Switcher & Refresh
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(Dimensions.ActionButtonSize)
+                            .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
+                            .background(AppColors.cardSurfaceSubtle)
+                            .border(
+                                width = Dimensions.CardBorderWidth,
+                                color = AppColors.cardStroke,
+                                shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
+                            )
+                            .clickable { onCreateFolderClick() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_new_folder),
+                            contentDescription = stringResource(R.string.action_new_folder),
+                            tint = AppColors.brandAccent,
+                            modifier = Modifier.size(Dimensions.IconSizeMedium)
+                        )
+                    }
+
                     Box(
                         modifier = Modifier
                             .size(Dimensions.ActionButtonSize)

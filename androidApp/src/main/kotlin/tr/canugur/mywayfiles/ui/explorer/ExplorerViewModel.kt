@@ -16,8 +16,8 @@ import tr.canugur.mywayfiles.domain.usecase.GetDirectoryContentsUseCase
 import java.io.File
 
 /**
- * Production-ready ViewModel governing file system browsing and breadcrumb navigation.
- * Follows Unidirectional Data Flow (UDF) and strictly relies on real filesystem I/O.
+ * Production-ready ViewModel governing file system browsing, breadcrumb navigation,
+ * and universal file operations (copy, cut, paste, rename, delete, mkdir).
  */
 class ExplorerViewModel(
     val rootPath: String,
@@ -30,6 +30,7 @@ class ExplorerViewModel(
     val uiState: StateFlow<ExplorerUiState> = _uiState.asStateFlow()
 
     private var activePath: String = rootPath
+    private var activeClipboard: Clipboard? = null
 
     init {
         loadDirectory(rootPath)
@@ -48,12 +49,77 @@ class ExplorerViewModel(
                     _uiState.value = ExplorerUiState.PermissionRequired
                 }
             }
+            is ExplorerUiEvent.Copy -> {
+                activeClipboard = Clipboard(item = event.item, isCut = false)
+                updateStateClipboard()
+            }
+            is ExplorerUiEvent.Cut -> {
+                activeClipboard = Clipboard(item = event.item, isCut = true)
+                updateStateClipboard()
+            }
+            is ExplorerUiEvent.ClearClipboard -> {
+                activeClipboard = null
+                updateStateClipboard()
+            }
+            is ExplorerUiEvent.Paste -> handlePaste()
+            is ExplorerUiEvent.Rename -> handleRename(event.item, event.newName)
+            is ExplorerUiEvent.Delete -> handleDelete(event.item)
+            is ExplorerUiEvent.CreateFolder -> handleCreateFolder(event.folderName)
         }
     }
 
     private fun handleItemClick(item: FileItem) {
         if (item.isDirectory) {
             loadDirectory(item.path)
+        }
+    }
+
+    private fun handlePaste() {
+        val clip = activeClipboard ?: return
+        viewModelScope.launch {
+            val result = if (clip.isCut) {
+                fileRepository.move(clip.item.path, activePath)
+            } else {
+                fileRepository.copy(clip.item.path, activePath)
+            }
+
+            if (result.isSuccess && clip.isCut) {
+                activeClipboard = null
+            }
+            loadDirectory(activePath, isRefreshing = true)
+        }
+    }
+
+    private fun handleRename(item: FileItem, newName: String) {
+        viewModelScope.launch {
+            fileRepository.rename(item.path, newName)
+            loadDirectory(activePath, isRefreshing = true)
+        }
+    }
+
+    private fun handleDelete(item: FileItem) {
+        viewModelScope.launch {
+            fileRepository.delete(item.path)
+            loadDirectory(activePath, isRefreshing = true)
+        }
+    }
+
+    private fun handleCreateFolder(name: String) {
+        viewModelScope.launch {
+            fileRepository.createFolder(activePath, name)
+            loadDirectory(activePath, isRefreshing = true)
+        }
+    }
+
+    private fun updateStateClipboard() {
+        when (val state = _uiState.value) {
+            is ExplorerUiState.Success -> {
+                _uiState.value = state.copy(clipboard = activeClipboard)
+            }
+            is ExplorerUiState.Empty -> {
+                _uiState.value = state.copy(clipboard = activeClipboard)
+            }
+            else -> Unit
         }
     }
 
@@ -91,13 +157,18 @@ class ExplorerViewModel(
             getDirectoryContentsUseCase(path).fold(
                 onSuccess = { items ->
                     _uiState.value = if (items.isEmpty()) {
-                        ExplorerUiState.Empty(currentPath = path, breadcrumbs = breadcrumbs)
+                        ExplorerUiState.Empty(
+                            currentPath = path,
+                            breadcrumbs = breadcrumbs,
+                            clipboard = activeClipboard
+                        )
                     } else {
                         ExplorerUiState.Success(
                             currentPath = path,
                             breadcrumbs = breadcrumbs,
                             items = items,
-                            isRefreshing = false
+                            isRefreshing = false,
+                            clipboard = activeClipboard
                         )
                     }
                 },
@@ -126,7 +197,6 @@ class ExplorerViewModel(
             return crumbs
         }
 
-        // Relative path segments between root and current
         if (currentCanonical.startsWith(rootCanonical)) {
             val relative = currentCanonical.removePrefix(rootCanonical).trimStart(File.separatorChar)
             if (relative.isNotEmpty()) {

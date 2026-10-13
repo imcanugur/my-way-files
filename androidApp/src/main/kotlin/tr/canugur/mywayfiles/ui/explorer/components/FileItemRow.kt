@@ -5,9 +5,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,12 +23,17 @@ import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 
 /**
- * Enterprise list item rendering a directory or file entry with precise metadata.
+ * Enterprise list item rendering a directory or file entry with precise metadata and action menu.
  */
 @Composable
 fun FileItemRow(
     item: FileItem,
     onClick: (FileItem) -> Unit,
+    onCopy: (FileItem) -> Unit,
+    onCut: (FileItem) -> Unit,
+    onRename: (FileItem) -> Unit,
+    onDelete: (FileItem) -> Unit,
+    onProperties: (FileItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val shape = RoundedCornerShape(Dimensions.CornerRadiusDefault)
@@ -127,6 +131,80 @@ fun FileItemRow(
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = AppColors.textSecondary
+                )
+            }
+        }
+
+        // Overflow Context Menu (3-dots)
+        Box {
+            var menuExpanded by remember { mutableStateOf(false) }
+
+            IconButton(
+                onClick = { menuExpanded = true },
+                modifier = Modifier.size(Dimensions.ActionButtonSize)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_more_vert),
+                    contentDescription = null,
+                    tint = AppColors.textSecondary,
+                    modifier = Modifier.size(Dimensions.IconSizeMedium)
+                )
+            }
+
+            DropdownMenu(
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
+                modifier = Modifier.background(AppColors.cardSurface)
+            ) {
+                DropdownMenuItem(
+                    text = { Text(text = stringResource(R.string.action_copy), color = AppColors.textPrimary) },
+                    leadingIcon = {
+                        Icon(painterResource(R.drawable.ic_copy), null, tint = AppColors.textSecondary, modifier = Modifier.size(Dimensions.IconSizeMedium))
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onCopy(item)
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(text = stringResource(R.string.action_cut), color = AppColors.textPrimary) },
+                    leadingIcon = {
+                        Icon(painterResource(R.drawable.ic_cut), null, tint = AppColors.textSecondary, modifier = Modifier.size(Dimensions.IconSizeMedium))
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onCut(item)
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(text = stringResource(R.string.action_rename), color = AppColors.textPrimary) },
+                    leadingIcon = {
+                        Icon(painterResource(R.drawable.ic_edit_rename), null, tint = AppColors.textSecondary, modifier = Modifier.size(Dimensions.IconSizeMedium))
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onRename(item)
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(text = stringResource(R.string.action_delete), color = AppColors.statusCritical) },
+                    leadingIcon = {
+                        Icon(painterResource(R.drawable.ic_delete), null, tint = AppColors.statusCritical, modifier = Modifier.size(Dimensions.IconSizeMedium))
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onDelete(item)
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(text = stringResource(R.string.action_properties), color = AppColors.textPrimary) },
+                    leadingIcon = {
+                        Icon(painterResource(R.drawable.ic_info), null, tint = AppColors.textSecondary, modifier = Modifier.size(Dimensions.IconSizeMedium))
+                    },
+                    onClick = {
+                        menuExpanded = false
+                        onProperties(item)
+                    }
                 )
             }
         }

@@ -24,4 +24,20 @@
     <string name="image_dimensions">%1$d × %2$d</string>
     <string name="image_load_failed">Resim yüklenemedi</string>
     <string name="close_viewer">Kapat</string>
+    <string name="action_copy">Kopyala</string>
+    <string name="action_cut">Kes</string>
+    <string name="action_paste">Yapıştır</string>
+    <string name="action_rename">Yeniden Adlandır</string>
+    <string name="action_delete">Sil</string>
+    <string name="action_new_folder">Yeni Klasör</string>
+    <string name="action_properties">Özellikler</string>
+    <string name="action_cancel">İptal</string>
+    <string name="action_confirm">Tamam</string>
+    <string name="dialog_rename_title">Yeniden Adlandır</string>
+    <string name="dialog_new_folder_title">Yeni Klasör Oluştur</string>
+    <string name="dialog_new_folder_placeholder">Klasör adı</string>
+    <string name="dialog_delete_confirm">\"%1$s\" ögesini kalıcı olarak silmek istediğinizden emin misiniz?</string>
+    <string name="properties_path">Konum</string>
+    <string name="properties_size">Boyut</string>
+    <string name="properties_modified">Değiştirilme</string>
 </resources>
