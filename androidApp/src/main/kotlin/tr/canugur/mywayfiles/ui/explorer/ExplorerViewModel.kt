@@ -10,20 +10,23 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import tr.canugur.mywayfiles.data.datasource.AndroidFileLocalDataSource
 import tr.canugur.mywayfiles.data.repository.FileRepositoryImpl
+import tr.canugur.mywayfiles.data.repository.RecycleBinRepositoryImpl
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.domain.repository.FileRepository
+import tr.canugur.mywayfiles.domain.repository.RecycleBinRepository
 import tr.canugur.mywayfiles.domain.usecase.GetDirectoryContentsUseCase
 import java.io.File
 
 /**
  * Production-ready ViewModel governing file system browsing, breadcrumb navigation,
- * and universal file operations (copy, cut, paste, rename, delete, mkdir).
+ * universal file operations (copy, cut, paste, rename, delete, mkdir), and Recycle Bin integration.
  */
 class ExplorerViewModel(
     val rootPath: String,
     private val driveName: String,
     private val getDirectoryContentsUseCase: GetDirectoryContentsUseCase,
-    private val fileRepository: FileRepository
+    private val fileRepository: FileRepository,
+    private val recycleBinRepository: RecycleBinRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ExplorerUiState>(ExplorerUiState.Loading)
@@ -63,6 +66,7 @@ class ExplorerViewModel(
             }
             is ExplorerUiEvent.Paste -> handlePaste()
             is ExplorerUiEvent.Rename -> handleRename(event.item, event.newName)
+            is ExplorerUiEvent.MoveToTrash -> handleMoveToTrash(event.item)
             is ExplorerUiEvent.Delete -> handleDelete(event.item)
             is ExplorerUiEvent.CreateFolder -> handleCreateFolder(event.folderName)
         }
@@ -93,6 +97,13 @@ class ExplorerViewModel(
     private fun handleRename(item: FileItem, newName: String) {
         viewModelScope.launch {
             fileRepository.rename(item.path, newName)
+            loadDirectory(activePath, isRefreshing = true)
+        }
+    }
+
+    private fun handleMoveToTrash(item: FileItem) {
+        viewModelScope.launch {
+            recycleBinRepository.moveToTrash(item)
             loadDirectory(activePath, isRefreshing = true)
         }
     }
@@ -219,14 +230,17 @@ class ExplorerViewModel(
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                val dataSource = AndroidFileLocalDataSource(context.applicationContext)
+                val appContext = context.applicationContext
+                val dataSource = AndroidFileLocalDataSource(appContext)
                 val repository = FileRepositoryImpl(dataSource)
+                val recycleBinRepository = RecycleBinRepositoryImpl.getInstance(appContext)
                 val useCase = GetDirectoryContentsUseCase(repository)
                 return ExplorerViewModel(
                     rootPath = rootPath,
                     driveName = driveName,
                     getDirectoryContentsUseCase = useCase,
-                    fileRepository = repository
+                    fileRepository = repository,
+                    recycleBinRepository = recycleBinRepository
                 ) as T
             }
         }

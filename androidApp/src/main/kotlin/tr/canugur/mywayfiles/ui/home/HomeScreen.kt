@@ -19,6 +19,7 @@ import tr.canugur.mywayfiles.domain.model.StorageDrive
 import tr.canugur.mywayfiles.ui.home.components.EmptyDrivesView
 import tr.canugur.mywayfiles.ui.home.components.HomeTopBar
 import tr.canugur.mywayfiles.ui.home.components.OverallStorageCard
+import tr.canugur.mywayfiles.ui.home.components.RecycleBinCard
 import tr.canugur.mywayfiles.ui.home.components.StorageDriveCard
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
@@ -31,6 +32,7 @@ fun HomeScreen(
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
     onDriveClick: (StorageDrive) -> Unit,
+    onRecycleBinClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -44,6 +46,7 @@ fun HomeScreen(
         isDarkTheme = isDarkTheme,
         onToggleTheme = onToggleTheme,
         onDriveClick = onDriveClick,
+        onRecycleBinClick = onRecycleBinClick,
         onEvent = viewModel::onEvent,
         modifier = modifier
     )
@@ -58,6 +61,7 @@ fun HomeScreenContent(
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
     onDriveClick: (StorageDrive) -> Unit,
+    onRecycleBinClick: () -> Unit,
     onEvent: (HomeUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -129,6 +133,11 @@ fun HomeScreenContent(
                     // Overall Storage Device Header
                     item {
                         OverallStorageCard(summary = state.summary)
+                    }
+
+                    // Recycle Bin Quick Access Card
+                    item {
+                        RecycleBinCard(onClick = onRecycleBinClick)
                     }
 
                     // Section Header: "Devices and drives"

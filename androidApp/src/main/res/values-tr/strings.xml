@@ -41,4 +41,14 @@
     <string name="properties_size">Boyut</string>
     <string name="properties_modified">Değiştirilme</string>
     <string name="action_share">Paylaş</string>
+    <string name="recycle_bin">Geri Dönüşüm Kutusu</string>
+    <string name="recycle_bin_empty">Geri Dönüşüm Kutusu boş</string>
+    <string name="action_restore">Geri Yükle</string>
+    <string name="action_empty_recycle_bin">Kutuyu Boşalt</string>
+    <string name="dialog_empty_recycle_bin_confirm">Geri Dönüşüm Kutusundaki tüm ögeleri kalıcı olarak silmek istediğinizden emin misiniz?</string>
+    <string name="action_move_to_trash">Geri Dönüşüm Kutusuna Taşı</string>
+    <string name="action_delete_permanently">Kalıcı Olarak Sil</string>
+    <string name="dialog_move_to_trash_confirm">\"%1$s\" ögesini Geri Dönüşüm Kutusuna taşımak istiyor musunuz?</string>
+    <string name="original_location">Özgün Konum</string>
+    <string name="deleted_time">Silinme Tarihi</string>
 </resources>

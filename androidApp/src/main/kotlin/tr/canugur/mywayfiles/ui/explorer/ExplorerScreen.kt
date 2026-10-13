@@ -58,7 +58,6 @@ fun ExplorerScreen(
     }
     var activeImageIndex by remember { mutableStateOf<Int?>(null) }
     var itemToRename by remember { mutableStateOf<FileItem?>(null) }
-    var itemToDelete by remember { mutableStateOf<FileItem?>(null) }
     var itemForProperties by remember { mutableStateOf<FileItem?>(null) }
     var showCreateFolderDialog by remember { mutableStateOf(false) }
 
@@ -107,7 +106,7 @@ fun ExplorerScreen(
             onCopy = { viewModel.onEvent(ExplorerUiEvent.Copy(it)) },
             onCut = { viewModel.onEvent(ExplorerUiEvent.Cut(it)) },
             onRename = { itemToRename = it },
-            onDelete = { itemToDelete = it },
+            onDelete = { viewModel.onEvent(ExplorerUiEvent.MoveToTrash(it)) },
             onProperties = { itemForProperties = it },
             onPaste = { viewModel.onEvent(ExplorerUiEvent.Paste) },
             onClearClipboard = { viewModel.onEvent(ExplorerUiEvent.ClearClipboard) },
@@ -126,7 +125,7 @@ fun ExplorerScreen(
                     images = imageItems,
                     initialIndex = currentIndex,
                     onDelete = { item ->
-                        viewModel.onEvent(ExplorerUiEvent.Delete(item))
+                        viewModel.onEvent(ExplorerUiEvent.MoveToTrash(item))
                         if (imageItems.size <= 1) {
                             activeImageIndex = null
                         } else if (currentIndex >= imageItems.size - 1) {
@@ -146,15 +145,6 @@ fun ExplorerScreen(
                 initialName = renameItem.name,
                 onConfirm = { viewModel.onEvent(ExplorerUiEvent.Rename(renameItem, it)) },
                 onDismiss = { itemToRename = null }
-            )
-        }
-
-        val deleteItem = itemToDelete
-        if (deleteItem != null) {
-            DeleteConfirmDialog(
-                fileName = deleteItem.name,
-                onConfirm = { viewModel.onEvent(ExplorerUiEvent.Delete(deleteItem)) },
-                onDismiss = { itemToDelete = null }
             )
         }
 

@@ -41,4 +41,14 @@
     <string name="properties_size">Size</string>
     <string name="properties_modified">Modified</string>
     <string name="action_share">Share</string>
+    <string name="recycle_bin">Recycle Bin</string>
+    <string name="recycle_bin_empty">Recycle Bin is empty</string>
+    <string name="action_restore">Restore</string>
+    <string name="action_empty_recycle_bin">Empty Recycle Bin</string>
+    <string name="dialog_empty_recycle_bin_confirm">Are you sure you want to permanently delete all items in the Recycle Bin?</string>
+    <string name="action_move_to_trash">Move to Recycle Bin</string>
+    <string name="action_delete_permanently">Delete Permanently</string>
+    <string name="dialog_move_to_trash_confirm">Move \"%1$s\" to Recycle Bin?</string>
+    <string name="original_location">Original Location</string>
+    <string name="deleted_time">Deleted</string>
 </resources>

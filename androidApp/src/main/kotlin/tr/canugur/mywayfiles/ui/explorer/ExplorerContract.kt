@@ -49,6 +49,7 @@ sealed interface ExplorerUiEvent {
     data object Paste : ExplorerUiEvent
     data object ClearClipboard : ExplorerUiEvent
     data class Rename(val item: FileItem, val newName: String) : ExplorerUiEvent
+    data class MoveToTrash(val item: FileItem) : ExplorerUiEvent
     data class Delete(val item: FileItem) : ExplorerUiEvent
     data class CreateFolder(val folderName: String) : ExplorerUiEvent
 }

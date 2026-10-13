@@ -15,34 +15,52 @@ import tr.canugur.mywayfiles.domain.model.StorageDrive
 import tr.canugur.mywayfiles.ui.explorer.ExplorerScreen
 import tr.canugur.mywayfiles.ui.home.HomeScreen
 import tr.canugur.mywayfiles.ui.theme.MyWayFilesTheme
+import tr.canugur.mywayfiles.ui.trash.RecycleBinScreen
+
+sealed interface NavigationDestination {
+    data object Home : NavigationDestination
+    data class Explorer(val drive: StorageDrive) : NavigationDestination
+    data object RecycleBin : NavigationDestination
+}
 
 @Composable
 @Preview
 fun App() {
     val systemInDark = isSystemInDarkTheme()
     var isDarkTheme by remember { mutableStateOf(systemInDark) }
-    var selectedDrive by remember { mutableStateOf<StorageDrive?>(null) }
+    var currentDestination by remember { mutableStateOf<NavigationDestination>(NavigationDestination.Home) }
 
     MyWayFilesTheme(darkTheme = isDarkTheme) {
         AnimatedContent(
-            targetState = selectedDrive,
+            targetState = currentDestination,
             transitionSpec = { fadeIn() togetherWith fadeOut() },
             label = "ScreenTransition"
-        ) { drive ->
-            if (drive != null) {
-                ExplorerScreen(
-                    rootPath = drive.path,
-                    driveName = drive.name,
-                    isDarkTheme = isDarkTheme,
-                    onToggleTheme = { isDarkTheme = !isDarkTheme },
-                    onNavigateBack = { selectedDrive = null }
-                )
-            } else {
-                HomeScreen(
-                    isDarkTheme = isDarkTheme,
-                    onToggleTheme = { isDarkTheme = !isDarkTheme },
-                    onDriveClick = { selectedDrive = it }
-                )
+        ) { destination ->
+            when (destination) {
+                is NavigationDestination.Home -> {
+                    HomeScreen(
+                        isDarkTheme = isDarkTheme,
+                        onToggleTheme = { isDarkTheme = !isDarkTheme },
+                        onDriveClick = { drive -> currentDestination = NavigationDestination.Explorer(drive) },
+                        onRecycleBinClick = { currentDestination = NavigationDestination.RecycleBin }
+                    )
+                }
+
+                is NavigationDestination.Explorer -> {
+                    ExplorerScreen(
+                        rootPath = destination.drive.path,
+                        driveName = destination.drive.name,
+                        isDarkTheme = isDarkTheme,
+                        onToggleTheme = { isDarkTheme = !isDarkTheme },
+                        onNavigateBack = { currentDestination = NavigationDestination.Home }
+                    )
+                }
+
+                is NavigationDestination.RecycleBin -> {
+                    RecycleBinScreen(
+                        onNavigateBack = { currentDestination = NavigationDestination.Home }
+                    )
+                }
             }
         }
     }

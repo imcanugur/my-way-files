@@ -49,7 +49,6 @@ import tr.canugur.mywayfiles.core.image.DecodedBitmapResult
 import tr.canugur.mywayfiles.core.util.ByteFormatter
 import tr.canugur.mywayfiles.core.util.DateTimeFormatter
 import tr.canugur.mywayfiles.domain.model.FileItem
-import tr.canugur.mywayfiles.ui.explorer.components.DeleteConfirmDialog
 import tr.canugur.mywayfiles.ui.explorer.components.PropertiesDialog
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 import java.io.File
@@ -84,7 +83,6 @@ fun ImageViewerScreen(
     val scope = rememberCoroutineScope()
 
     var isCurrentZoomed by remember { mutableStateOf(false) }
-    var showDeleteConfirm by remember { mutableStateOf(false) }
     var showProperties by remember { mutableStateOf(false) }
 
     val currentItem = images.getOrNull(pagerState.currentPage) ?: images[0]
@@ -292,29 +290,18 @@ fun ImageViewerScreen(
                             onClick = { showProperties = true }
                         )
 
-                        // Delete Action
+                        // Delete Action (moves directly to Recycle Bin)
                         ActionBottomItem(
                             iconRes = R.drawable.ic_delete,
                             label = stringResource(R.string.action_delete),
                             tint = Color(0xFFFF6B6B),
-                            onClick = { showDeleteConfirm = true }
+                            onClick = { onDelete(currentItem) }
                         )
                     }
                 }
             }
 
             // Dialogs
-            if (showDeleteConfirm) {
-                DeleteConfirmDialog(
-                    fileName = currentItem.name,
-                    onConfirm = {
-                        onDelete(currentItem)
-                        showDeleteConfirm = false
-                    },
-                    onDismiss = { showDeleteConfirm = false }
-                )
-            }
-
             if (showProperties) {
                 PropertiesDialog(
                     item = currentItem,

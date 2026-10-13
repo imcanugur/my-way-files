@@ -138,31 +138,44 @@ fun DeleteConfirmDialog(
         title = {
             Text(
                 text = stringResource(R.string.action_delete),
-                color = AppColors.statusCritical,
+                color = AppColors.textPrimary,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold
             )
         },
         text = {
             Text(
-                text = stringResource(R.string.dialog_delete_confirm, fileName),
+                text = stringResource(R.string.dialog_move_to_trash_confirm, fileName),
                 color = AppColors.textPrimary,
                 fontSize = 13.sp
             )
         },
         confirmButton = {
-            TextButton(
+            Button(
                 onClick = {
                     onConfirm()
                     onDismiss()
-                }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AppColors.statusCritical,
+                    contentColor = AppColors.textPrimary
+                ),
+                shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
             ) {
-                Text(text = stringResource(R.string.action_delete), color = AppColors.statusCritical)
+                Text(
+                    text = stringResource(R.string.action_delete),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(text = stringResource(R.string.action_cancel), color = AppColors.textSecondary)
+                Text(
+                    text = stringResource(R.string.action_cancel),
+                    color = AppColors.textSecondary,
+                    fontSize = 12.sp
+                )
             }
         }
     )
