@@ -15,9 +15,10 @@ class GetDirectoryContentsUseCase(
     suspend operator fun invoke(
         path: String,
         showHidden: Boolean = false,
-        sortOption: SortOption = SortOption.NAME_ASC
+        sortOption: SortOption = SortOption.NAME_ASC,
+        forceRefresh: Boolean = false
     ): Result<List<FileItem>> {
-        return repository.getDirectoryContents(path, showHidden).map { items ->
+        return repository.getDirectoryContents(path, showHidden, forceRefresh).map { items ->
             val comparator = when (sortOption) {
                 SortOption.NAME_ASC -> compareBy<FileItem> { it.name.lowercase(Locale.ROOT) }
                 SortOption.NAME_DESC -> compareByDescending<FileItem> { it.name.lowercase(Locale.ROOT) }

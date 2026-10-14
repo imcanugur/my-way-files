@@ -1,15 +1,9 @@
 package tr.canugur.mywayfiles
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.tooling.preview.Preview
 import tr.canugur.mywayfiles.domain.model.StorageDrive
 import tr.canugur.mywayfiles.ui.explorer.ExplorerScreen
@@ -33,7 +27,33 @@ fun App() {
     MyWayFilesTheme(darkTheme = isDarkTheme) {
         AnimatedContent(
             targetState = currentDestination,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            transitionSpec = {
+                if (initialState is NavigationDestination.Home) {
+                    // Forward navigation (Home -> Explorer/RecycleBin): Shared axis slide & fade
+                    (slideInHorizontally(
+                        initialOffsetX = { fullWidth -> (fullWidth * 0.15f).toInt() },
+                        animationSpec = tween(220)
+                    ) + fadeIn(animationSpec = tween(220)))
+                        .togetherWith(
+                            slideOutHorizontally(
+                                targetOffsetX = { fullWidth -> (-fullWidth * 0.15f).toInt() },
+                                animationSpec = tween(180)
+                            ) + fadeOut(animationSpec = tween(180))
+                        )
+                } else {
+                    // Backward navigation (Explorer/RecycleBin -> Home): Reverse slide & fade
+                    (slideInHorizontally(
+                        initialOffsetX = { fullWidth -> (-fullWidth * 0.15f).toInt() },
+                        animationSpec = tween(220)
+                    ) + fadeIn(animationSpec = tween(220)))
+                        .togetherWith(
+                            slideOutHorizontally(
+                                targetOffsetX = { fullWidth -> (fullWidth * 0.15f).toInt() },
+                                animationSpec = tween(180)
+                            ) + fadeOut(animationSpec = tween(180))
+                        )
+                }
+            },
             label = "ScreenTransition"
         ) { destination ->
             when (destination) {

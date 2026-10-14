@@ -8,13 +8,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import tr.canugur.mywayfiles.data.cache.DriveCache
 import tr.canugur.mywayfiles.data.datasource.AndroidStorageLocalDataSource
 import tr.canugur.mywayfiles.data.repository.StorageRepositoryImpl
 import tr.canugur.mywayfiles.domain.model.StorageSummary
+import tr.canugur.mywayfiles.domain.repository.StorageRepository
 import tr.canugur.mywayfiles.domain.usecase.GetStorageDrivesUseCase
 
 class HomeViewModel(
-    private val getStorageDrivesUseCase: GetStorageDrivesUseCase
+    private val getStorageDrivesUseCase: GetStorageDrivesUseCase,
+    private val storageRepository: StorageRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
@@ -35,7 +38,16 @@ class HomeViewModel(
 
     private fun loadDrives() {
         viewModelScope.launch {
-            _uiState.value = HomeUiState.Loading
+            val cachedDrives = storageRepository.getCachedStorageDrives()
+            if (cachedDrives.isNotEmpty()) {
+                _uiState.value = HomeUiState.Success(
+                    summary = StorageSummary.from(cachedDrives),
+                    drives = cachedDrives,
+                    isRefreshing = false
+                )
+            } else {
+                _uiState.value = HomeUiState.Loading
+            }
             fetchDrivesInternal()
         }
     }
@@ -54,7 +66,9 @@ class HomeViewModel(
         try {
             val drives = getStorageDrivesUseCase()
             if (drives.isEmpty()) {
-                _uiState.value = HomeUiState.Empty
+                if (_uiState.value !is HomeUiState.Success) {
+                    _uiState.value = HomeUiState.Empty
+                }
             } else {
                 _uiState.value = HomeUiState.Success(
                     summary = StorageSummary.from(drives),
@@ -63,7 +77,9 @@ class HomeViewModel(
                 )
             }
         } catch (e: Exception) {
-            _uiState.value = HomeUiState.Error(e.message ?: "Failed to read storage drives")
+            if (_uiState.value !is HomeUiState.Success) {
+                _uiState.value = HomeUiState.Error(e.message ?: "Failed to read storage drives")
+            }
         }
     }
 
@@ -74,9 +90,10 @@ class HomeViewModel(
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     val appContext = context.applicationContext
                     val dataSource = AndroidStorageLocalDataSource(appContext)
-                    val repository = StorageRepositoryImpl(dataSource)
+                    val driveCache = DriveCache(appContext)
+                    val repository = StorageRepositoryImpl(dataSource, driveCache)
                     val useCase = GetStorageDrivesUseCase(repository)
-                    return HomeViewModel(useCase) as T
+                    return HomeViewModel(useCase, repository) as T
                 }
             }
     }

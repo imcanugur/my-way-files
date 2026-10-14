@@ -30,33 +30,50 @@ class AndroidFileLocalDataSource(
             }
 
             val files = directory.listFiles() ?: emptyArray()
-            val items = files.mapNotNull { file ->
+            val allItems = ArrayList<FileItem>(files.size)
+
+            for (file in files) {
                 try {
-                    val isHidden = file.name.startsWith(".") || file.isHidden
-                    if (!showHidden && isHidden) return@mapNotNull null
+                    val name = file.name
+                    if (name.isNullOrEmpty()) continue
+                    val isDir = try { file.isDirectory } catch (_: Exception) { false }
+                    val isHidden = if (name.startsWith(".")) {
+                        true
+                    } else if (!isDir) {
+                        try { file.isHidden } catch (_: Exception) { false }
+                    } else {
+                        false
+                    }
+                    val size = if (isDir) 0L else try { file.length() } catch (_: Exception) { 0L }
+                    val lastMod = try { file.lastModified() } catch (_: Exception) { 0L }
+                    val ext = if (isDir) {
+                        ""
+                    } else {
+                        val dotIdx = name.lastIndexOf('.')
+                        if (dotIdx > 0 && dotIdx < name.length - 1) name.substring(dotIdx + 1).lowercase() else ""
+                    }
+                    val filePath = file.path
 
-                    val isDir = file.isDirectory
-                    val childCount = if (isDir) {
-                        file.list()?.count { showHidden || !it.startsWith(".") }
-                    } else null
-
-                    FileItem(
-                        id = file.absolutePath,
-                        name = file.name,
-                        path = file.absolutePath,
-                        isDirectory = isDir,
-                        sizeBytes = if (isDir) 0L else file.length(),
-                        lastModifiedMs = file.lastModified(),
-                        extension = if (isDir) "" else file.extension.lowercase(),
-                        childCount = childCount,
-                        isHidden = isHidden
+                    allItems.add(
+                        FileItem(
+                            id = filePath,
+                            name = name,
+                            path = filePath,
+                            isDirectory = isDir,
+                            sizeBytes = size,
+                            lastModifiedMs = lastMod,
+                            extension = ext,
+                            childCount = null,
+                            isHidden = isHidden
+                        )
                     )
                 } catch (_: Exception) {
-                    null
+                    // Skip completely inaccessible entry
                 }
             }
 
-            Result.success(items)
+            val resultItems = if (showHidden) allItems else allItems.filter { !it.isHidden }
+            Result.success(resultItems)
         } catch (e: Exception) {
             Result.failure(e)
         }

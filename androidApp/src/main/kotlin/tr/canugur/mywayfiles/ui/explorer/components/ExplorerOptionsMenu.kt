@@ -1,6 +1,7 @@
 package tr.canugur.mywayfiles.ui.explorer.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -85,21 +86,21 @@ fun ExplorerOptionsMenu(
             DropdownMenuItem(
                 text = {
                     Text(
-                        text = stringResource(
-                            if (showHiddenFiles) R.string.hide_hidden_files else R.string.show_hidden_files
-                        ),
+                        text = stringResource(R.string.show_hidden_files),
                         color = AppColors.textPrimary
                     )
                 },
                 leadingIcon = {
-                    Icon(
-                        painter = painterResource(
-                            if (showHiddenFiles) R.drawable.ic_check else R.drawable.ic_info
-                        ),
-                        contentDescription = null,
-                        tint = if (showHiddenFiles) AppColors.brandAccent else AppColors.textSecondary,
-                        modifier = Modifier.size(Dimensions.IconSizeMedium)
-                    )
+                    if (showHiddenFiles) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_check),
+                            contentDescription = null,
+                            tint = AppColors.brandAccent,
+                            modifier = Modifier.size(Dimensions.IconSizeMedium)
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.size(Dimensions.IconSizeMedium))
+                    }
                 },
                 onClick = {
                     onDismissRequest()

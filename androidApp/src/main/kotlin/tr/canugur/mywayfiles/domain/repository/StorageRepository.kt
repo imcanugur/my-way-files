@@ -4,4 +4,5 @@ import tr.canugur.mywayfiles.domain.model.StorageDrive
 
 interface StorageRepository {
     suspend fun getStorageDrives(): List<StorageDrive>
+    suspend fun getCachedStorageDrives(): List<StorageDrive> = emptyList()
 }

@@ -4,11 +4,14 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import tr.canugur.mywayfiles.data.cache.DirectoryCache
 import tr.canugur.mywayfiles.data.datasource.AndroidFileLocalDataSource
+import tr.canugur.mywayfiles.data.preferences.ExplorerPreferences
 import tr.canugur.mywayfiles.data.repository.FileRepositoryImpl
 import tr.canugur.mywayfiles.data.repository.RecycleBinRepositoryImpl
 import tr.canugur.mywayfiles.domain.model.FileItem
@@ -17,6 +20,7 @@ import tr.canugur.mywayfiles.domain.repository.FileRepository
 import tr.canugur.mywayfiles.domain.repository.RecycleBinRepository
 import tr.canugur.mywayfiles.domain.usecase.GetDirectoryContentsUseCase
 import java.io.File
+import java.util.Locale
 
 /**
  * Production-ready ViewModel governing file system browsing, breadcrumb navigation,
@@ -27,7 +31,8 @@ class ExplorerViewModel(
     private val driveName: String,
     private val getDirectoryContentsUseCase: GetDirectoryContentsUseCase,
     private val fileRepository: FileRepository,
-    private val recycleBinRepository: RecycleBinRepository
+    private val recycleBinRepository: RecycleBinRepository,
+    private val explorerPreferences: ExplorerPreferences
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ExplorerUiState>(ExplorerUiState.Loading)
@@ -35,8 +40,8 @@ class ExplorerViewModel(
 
     private var activePath: String = rootPath
     private var activeClipboard: Clipboard? = null
-    private var showHiddenFiles: Boolean = false
-    private var sortOption: SortOption = SortOption.NAME_ASC
+    private var showHiddenFiles: Boolean = explorerPreferences.showHiddenFiles
+    private var sortOption: SortOption = explorerPreferences.sortOption
 
     init {
         loadDirectory(rootPath)
@@ -88,10 +93,12 @@ class ExplorerViewModel(
             is ExplorerUiEvent.CreateFolder -> handleCreateFolder(event.folderName)
             is ExplorerUiEvent.ToggleShowHiddenFiles -> {
                 showHiddenFiles = !showHiddenFiles
+                explorerPreferences.showHiddenFiles = showHiddenFiles
                 loadDirectory(activePath, isRefreshing = true)
             }
             is ExplorerUiEvent.ChangeSortOption -> {
                 sortOption = event.sortOption
+                explorerPreferences.sortOption = event.sortOption
                 loadDirectory(activePath, isRefreshing = true)
             }
         }
@@ -207,11 +214,39 @@ class ExplorerViewModel(
             activePath = path
             val breadcrumbs = buildBreadcrumbs(path)
 
-            if (!isRefreshing) {
+            // Fast SWR Path: Instantly render cached directory contents if available (0ms cold wait)
+            val cached = fileRepository.getCachedContents(path, showHiddenFiles)
+            if (cached != null) {
+                val sortedCached = sortItems(cached, sortOption)
+                _uiState.value = if (sortedCached.isEmpty()) {
+                    ExplorerUiState.Empty(
+                        currentPath = path,
+                        breadcrumbs = breadcrumbs,
+                        clipboard = activeClipboard,
+                        showHiddenFiles = showHiddenFiles,
+                        sortOption = sortOption
+                    )
+                } else {
+                    ExplorerUiState.Success(
+                        currentPath = path,
+                        breadcrumbs = breadcrumbs,
+                        items = sortedCached,
+                        isRefreshing = isRefreshing,
+                        clipboard = activeClipboard,
+                        showHiddenFiles = showHiddenFiles,
+                        sortOption = sortOption
+                    )
+                }
+            } else if (!isRefreshing && _uiState.value !is ExplorerUiState.Success) {
                 _uiState.value = ExplorerUiState.Loading
             }
 
-            getDirectoryContentsUseCase(path, showHidden = showHiddenFiles, sortOption = sortOption).fold(
+            getDirectoryContentsUseCase(
+                path = path,
+                showHidden = showHiddenFiles,
+                sortOption = sortOption,
+                forceRefresh = isRefreshing
+            ).fold(
                 onSuccess = { items ->
                     _uiState.value = if (items.isEmpty()) {
                         ExplorerUiState.Empty(
@@ -232,16 +267,44 @@ class ExplorerViewModel(
                             sortOption = sortOption
                         )
                     }
+                    prefetchSubdirectories(items)
                 },
                 onFailure = { error ->
-                    _uiState.value = ExplorerUiState.Error(
-                        message = error.localizedMessage ?: "Failed to read directory",
-                        currentPath = path,
-                        breadcrumbs = breadcrumbs
-                    )
+                    if (_uiState.value !is ExplorerUiState.Success) {
+                        _uiState.value = ExplorerUiState.Error(
+                            message = error.localizedMessage ?: "Failed to read directory",
+                            currentPath = path,
+                            breadcrumbs = breadcrumbs
+                        )
+                    }
                 }
             )
         }
+    }
+
+    private fun prefetchSubdirectories(items: List<FileItem>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val subdirs = items.filter { it.isDirectory }.take(8)
+            for (dir in subdirs) {
+                if (fileRepository.getCachedContents(dir.path, showHiddenFiles) == null) {
+                    fileRepository.getDirectoryContents(dir.path, showHiddenFiles, forceRefresh = false)
+                }
+            }
+        }
+    }
+
+    private fun sortItems(items: List<FileItem>, sortOption: SortOption): List<FileItem> {
+        val comparator = when (sortOption) {
+            SortOption.NAME_ASC -> compareBy<FileItem> { it.name.lowercase(Locale.ROOT) }
+            SortOption.NAME_DESC -> compareByDescending<FileItem> { it.name.lowercase(Locale.ROOT) }
+            SortOption.DATE_DESC -> compareByDescending<FileItem> { it.lastModifiedMs }
+            SortOption.DATE_ASC -> compareBy<FileItem> { it.lastModifiedMs }
+            SortOption.SIZE_DESC -> compareByDescending<FileItem> { it.sizeBytes }
+            SortOption.SIZE_ASC -> compareBy<FileItem> { it.sizeBytes }
+        }
+        return items.sortedWith(
+            compareBy<FileItem> { !it.isDirectory }.then(comparator)
+        )
     }
 
     private fun buildBreadcrumbs(currentPath: String): List<Breadcrumb> {
@@ -282,15 +345,18 @@ class ExplorerViewModel(
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val appContext = context.applicationContext
                 val dataSource = AndroidFileLocalDataSource(appContext)
-                val repository = FileRepositoryImpl(dataSource)
+                val directoryCache = DirectoryCache(appContext)
+                val repository = FileRepositoryImpl(dataSource, directoryCache)
                 val recycleBinRepository = RecycleBinRepositoryImpl.getInstance(appContext)
                 val useCase = GetDirectoryContentsUseCase(repository)
+                val explorerPreferences = ExplorerPreferences(appContext)
                 return ExplorerViewModel(
                     rootPath = rootPath,
                     driveName = driveName,
                     getDirectoryContentsUseCase = useCase,
                     fileRepository = repository,
-                    recycleBinRepository = recycleBinRepository
+                    recycleBinRepository = recycleBinRepository,
+                    explorerPreferences = explorerPreferences
                 ) as T
             }
         }
