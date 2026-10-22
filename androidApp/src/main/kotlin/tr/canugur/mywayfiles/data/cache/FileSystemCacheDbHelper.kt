@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteOpenHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import tr.canugur.mywayfiles.domain.model.FileItem
+import java.io.File
 
 /**
  * Enterprise SQLite database backing directory and file indexing.
@@ -183,12 +184,17 @@ class FileSystemCacheDbHelper(context: Context) : SQLiteOpenHelper(
         }
     }
 
-    suspend fun invalidateDirectory(dirPath: String) = withContext(Dispatchers.IO) {
+    suspend fun invalidateDirectory(dirPath: String, includeDescendants: Boolean = false) = withContext(Dispatchers.IO) {
         val db = writableDatabase
         db.beginTransaction()
         try {
             db.delete(TABLE_DIR_META, "$COL_META_PATH = ?", arrayOf(dirPath))
             db.delete(TABLE_FILES, "$COL_FILE_DIR_PATH = ?", arrayOf(dirPath))
+            if (includeDescendants) {
+                val prefix = "$dirPath${File.separator}"
+                db.delete(TABLE_DIR_META, "substr($COL_META_PATH, 1, length(?) + 1) = ?", arrayOf(dirPath, prefix))
+                db.delete(TABLE_FILES, "substr($COL_FILE_DIR_PATH, 1, length(?) + 1) = ?", arrayOf(dirPath, prefix))
+            }
             db.setTransactionSuccessful()
         } catch (_: Exception) {
         } finally {

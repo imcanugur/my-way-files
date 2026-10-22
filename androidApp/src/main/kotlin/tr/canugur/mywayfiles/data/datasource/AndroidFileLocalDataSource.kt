@@ -29,7 +29,8 @@ class AndroidFileLocalDataSource(
                 return@withContext Result.failure(IllegalArgumentException("Path is not a directory: $path"))
             }
 
-            val files = directory.listFiles() ?: emptyArray()
+            val files = directory.listFiles()
+                ?: return@withContext Result.failure(IOException("Unable to read directory: $path"))
             val allItems = ArrayList<FileItem>(files.size)
 
             for (file in files) {
@@ -106,6 +107,7 @@ class AndroidFileLocalDataSource(
         try {
             val file = File(path)
             if (!file.exists()) return@withContext Result.failure(FileNotFoundException("File not found: $path"))
+            if (!isValidChildName(newName)) return@withContext Result.failure(IllegalArgumentException("Enter a valid file name"))
             val parent = file.parentFile ?: return@withContext Result.failure(IOException("Parent directory unavailable"))
             val target = File(parent, newName)
             if (target.exists()) return@withContext Result.failure(IOException("Destination already exists: $newName"))
@@ -136,8 +138,13 @@ class AndroidFileLocalDataSource(
 
             if (source.isDirectory) {
                 source.copyRecursively(dest, overwrite = false)
+                if (!dest.exists()) return@withContext Result.failure(IOException("Copy did not create ${dest.name}"))
             } else {
                 source.copyTo(dest, overwrite = false)
+                if (!dest.isFile || dest.length() != source.length()) {
+                    dest.delete()
+                    return@withContext Result.failure(IOException("Copy was incomplete: ${dest.name}"))
+                }
             }
             Result.success(Unit)
         } catch (e: Exception) {
@@ -160,11 +167,22 @@ class AndroidFileLocalDataSource(
                 Result.success(Unit)
             } else {
                 if (source.isDirectory) {
-                    source.copyRecursively(dest, overwrite = true)
-                    source.deleteRecursively()
+                    source.copyRecursively(dest, overwrite = false)
+                    if (!dest.exists()) return@withContext Result.failure(IOException("Move copy was incomplete"))
+                    if (!source.deleteRecursively()) {
+                        dest.deleteRecursively()
+                        return@withContext Result.failure(IOException("Copied ${source.name}, but could not remove the original"))
+                    }
                 } else {
-                    source.copyTo(dest, overwrite = true)
-                    source.delete()
+                    source.copyTo(dest, overwrite = false)
+                    if (!dest.isFile || dest.length() != source.length()) {
+                        dest.delete()
+                        return@withContext Result.failure(IOException("Move copy was incomplete"))
+                    }
+                    if (!source.delete()) {
+                        dest.delete()
+                        return@withContext Result.failure(IOException("Copied ${source.name}, but could not remove the original"))
+                    }
                 }
                 Result.success(Unit)
             }
@@ -177,6 +195,7 @@ class AndroidFileLocalDataSource(
         try {
             val parent = File(parentDirPath)
             if (!parent.exists() || !parent.isDirectory) return@withContext Result.failure(IllegalArgumentException("Parent is not a directory"))
+            if (!isValidChildName(folderName)) return@withContext Result.failure(IllegalArgumentException("Enter a valid folder name"))
             val newFolder = File(parent, folderName)
             if (newFolder.exists()) return@withContext Result.failure(IOException("Folder already exists: $folderName"))
             val success = newFolder.mkdirs()
@@ -185,4 +204,8 @@ class AndroidFileLocalDataSource(
             Result.failure(e)
         }
     }
+
+    private fun isValidChildName(name: String): Boolean =
+        name.isNotBlank() && name != "." && name != ".." &&
+            !name.contains('/') && !name.contains('\\') && !name.contains('\u0000')
 }

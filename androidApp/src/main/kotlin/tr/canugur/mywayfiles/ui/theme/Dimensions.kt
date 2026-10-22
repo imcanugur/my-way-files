@@ -20,9 +20,10 @@ object Dimensions {
 
     // Corner Radii
     val CornerRadiusNone: Dp = 0.dp
-    val CornerRadiusSmall: Dp = 4.dp
-    val CornerRadiusDefault: Dp = 6.dp
-    val CornerRadiusMedium: Dp = 8.dp
+    val CornerRadiusSmall: Dp = 8.dp
+    val CornerRadiusDefault: Dp = 12.dp
+    val CornerRadiusMedium: Dp = 16.dp
+    val CornerRadiusLarge: Dp = 24.dp
     val CornerRadiusPill: Dp = 100.dp
 
     // Component Dimensions
@@ -38,5 +39,9 @@ object Dimensions {
     val ProgressBarRadius: Dp = 3.dp
 
     // Header & Actions
-    val ActionButtonSize: Dp = 36.dp
+    /** Minimum touch target for compact icon actions across app headers and rows. */
+    val ActionButtonSize: Dp = 48.dp
+
+    // Responsive layout constraint (available content width after insets and padding).
+    val CompactActionBreakpoint: Dp = 380.dp
 }

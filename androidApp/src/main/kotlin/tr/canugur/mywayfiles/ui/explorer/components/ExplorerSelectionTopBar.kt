@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import tr.canugur.mywayfiles.R
@@ -33,15 +34,14 @@ fun ExplorerSelectionTopBar(
     onBatchDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
+    Column(
         modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+        verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall)
     ) {
         // Close Button + Count Badge
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.fillMaxWidth()
         ) {
             Box(
                 modifier = Modifier
@@ -53,7 +53,7 @@ fun ExplorerSelectionTopBar(
                         color = AppColors.cardStroke,
                         shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
                     )
-                    .clickable { onCloseSelection() },
+                    .clickable(role = Role.Button, onClick = onCloseSelection),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -80,7 +80,8 @@ fun ExplorerSelectionTopBar(
 
         // Batch Action Buttons
         Row(
-            horizontalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall, Alignment.End),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Select All / Deselect All
@@ -94,7 +95,7 @@ fun ExplorerSelectionTopBar(
                         color = if (isAllSelected) AppColors.brandAccent else AppColors.cardStroke,
                         shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
                     )
-                    .clickable { onToggleSelectAll() },
+                    .clickable(role = Role.Button, onClick = onToggleSelectAll),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -119,7 +120,7 @@ fun ExplorerSelectionTopBar(
                             color = AppColors.cardStroke,
                             shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
                         )
-                        .clickable { onBatchCopy() },
+                        .clickable(role = Role.Button, onClick = onBatchCopy),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -141,7 +142,7 @@ fun ExplorerSelectionTopBar(
                             color = AppColors.cardStroke,
                             shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
                         )
-                        .clickable { onBatchCut() },
+                        .clickable(role = Role.Button, onClick = onBatchCut),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -163,7 +164,7 @@ fun ExplorerSelectionTopBar(
                             color = AppColors.cardStroke,
                             shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
                         )
-                        .clickable { onBatchDelete() },
+                        .clickable(role = Role.Button, onClick = onBatchDelete),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(

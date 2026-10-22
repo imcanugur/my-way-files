@@ -9,7 +9,8 @@ sealed interface HomeUiState {
     data class Success(
         val summary: StorageSummary,
         val drives: List<StorageDrive>,
-        val isRefreshing: Boolean = false
+        val isRefreshing: Boolean = false,
+        val hasRefreshError: Boolean = false
     ) : HomeUiState
 
     data object Empty : HomeUiState

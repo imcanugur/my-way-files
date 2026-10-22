@@ -21,10 +21,7 @@ class RecycleBinViewModel(
 
     private val _uiState = MutableStateFlow<RecycleBinUiState>(RecycleBinUiState.Loading)
     val uiState: StateFlow<RecycleBinUiState> = _uiState.asStateFlow()
-
-    init {
-        loadItems()
-    }
+    private var loadRequestId = 0L
 
     fun onEvent(event: RecycleBinUiEvent) {
         when (event) {
@@ -36,10 +33,14 @@ class RecycleBinViewModel(
     }
 
     fun loadItems() {
+        val requestId = ++loadRequestId
         viewModelScope.launch {
-            _uiState.value = RecycleBinUiState.Loading
+            if (_uiState.value !is RecycleBinUiState.Success && _uiState.value !is RecycleBinUiState.Empty) {
+                _uiState.value = RecycleBinUiState.Loading
+            }
             repository.getTrashedItems().fold(
                 onSuccess = { items ->
+                    if (requestId != loadRequestId) return@fold
                     if (items.isEmpty()) {
                         _uiState.value = RecycleBinUiState.Empty
                     } else {
@@ -48,6 +49,7 @@ class RecycleBinViewModel(
                     }
                 },
                 onFailure = {
+                    if (requestId != loadRequestId) return@fold
                     _uiState.value = RecycleBinUiState.Error(it.localizedMessage ?: "Failed to read Recycle Bin")
                 }
             )
@@ -56,22 +58,28 @@ class RecycleBinViewModel(
 
     private fun restore(item: TrashedItem) {
         viewModelScope.launch {
-            repository.restore(item)
-            loadItems()
+            repository.restore(item).fold(
+                onSuccess = { loadItems() },
+                onFailure = { _uiState.value = RecycleBinUiState.Error(it.localizedMessage ?: "Unable to restore item") }
+            )
         }
     }
 
     private fun deletePermanently(item: TrashedItem) {
         viewModelScope.launch {
-            repository.deletePermanently(item)
-            loadItems()
+            repository.deletePermanently(item).fold(
+                onSuccess = { loadItems() },
+                onFailure = { _uiState.value = RecycleBinUiState.Error(it.localizedMessage ?: "Unable to delete item") }
+            )
         }
     }
 
     private fun emptyTrash() {
         viewModelScope.launch {
-            repository.emptyTrash()
-            loadItems()
+            repository.emptyTrash().fold(
+                onSuccess = { loadItems() },
+                onFailure = { _uiState.value = RecycleBinUiState.Error(it.localizedMessage ?: "Unable to empty Recycle Bin") }
+            )
         }
     }
 

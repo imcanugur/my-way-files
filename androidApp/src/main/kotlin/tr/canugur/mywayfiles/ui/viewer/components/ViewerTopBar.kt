@@ -11,7 +11,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -23,6 +22,7 @@ import tr.canugur.mywayfiles.core.util.DateTimeFormatter
 import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.ui.theme.Dimensions
+import tr.canugur.mywayfiles.ui.theme.AppColors
 
 /**
  * Unified top bar overlay for media viewers, displaying item title, metadata, and playlist counter.
@@ -36,10 +36,12 @@ fun ViewerTopBar(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        color = Color(0xDD181818),
+        color = AppColors.mediaControlSurfaceStrong,
+        shape = RoundedCornerShape(Dimensions.CornerRadiusLarge),
         modifier = modifier
             .fillMaxWidth()
             .statusBarsPadding()
+            .padding(horizontal = Dimensions.SpacingDefault, vertical = Dimensions.SpacingSmall)
     ) {
         Row(
             modifier = Modifier
@@ -54,7 +56,7 @@ fun ViewerTopBar(
                 Icon(
                     painter = painterResource(R.drawable.ic_arrow_back),
                     contentDescription = stringResource(R.string.close_viewer),
-                    tint = Color.White,
+                    tint = AppColors.mediaTextPrimary,
                     modifier = Modifier.size(Dimensions.IconSizeMedium)
                 )
             }
@@ -66,25 +68,26 @@ fun ViewerTopBar(
             ) {
                 Text(
                     text = item.name,
-                    color = Color.White,
+                    color = AppColors.mediaTextPrimary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
 
+                val videoTypeLabel = if (FileTypeClassifier.isVideo(item)) {
+                    stringResource(R.string.media_type_video)
+                } else null
                 val meta = buildString {
                     append(ByteFormatter.format(item.sizeBytes))
                     val dateStr = DateTimeFormatter.format(item.lastModifiedMs)
                     if (dateStr.isNotEmpty()) append(" • $dateStr")
-                    if (FileTypeClassifier.isVideo(item)) {
-                        append(" • Video")
-                    }
+                    videoTypeLabel?.let { append(" • $it") }
                 }
 
                 Text(
                     text = meta,
-                    color = Color(0xFFB0B0B0),
+                    color = AppColors.mediaTextSecondary,
                     fontSize = 11.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -95,7 +98,7 @@ fun ViewerTopBar(
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(Dimensions.CornerRadiusPill))
-                        .background(Color(0xFF2A2A2A))
+                        .background(AppColors.mediaSurfaceRaised)
                         .padding(
                             horizontal = Dimensions.SpacingMedium,
                             vertical = Dimensions.SpacingExtraSmall
@@ -103,7 +106,7 @@ fun ViewerTopBar(
                 ) {
                     Text(
                         text = "${currentIndex + 1} / $totalCount",
-                        color = Color.White,
+                        color = AppColors.mediaTextPrimary,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold
                     )

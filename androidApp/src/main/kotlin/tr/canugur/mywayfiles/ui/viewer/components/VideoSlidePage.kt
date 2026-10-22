@@ -15,10 +15,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -31,6 +32,7 @@ import tr.canugur.mywayfiles.core.util.ByteFormatter
 import tr.canugur.mywayfiles.core.util.DurationFormatter
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.ui.theme.Dimensions
+import tr.canugur.mywayfiles.ui.theme.AppColors
 
 private sealed interface VideoPreviewState {
     data object Loading : VideoPreviewState
@@ -82,7 +84,7 @@ fun VideoSlidePage(
         when (val s = state) {
             is VideoPreviewState.Loading -> {
                 CircularProgressIndicator(
-                    color = Color(0xFF4CC2FF),
+                    color = AppColors.mediaAccent,
                     strokeWidth = Dimensions.SpacingMicro
                 )
             }
@@ -91,7 +93,7 @@ fun VideoSlidePage(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color(0xFF141414)),
+                        .background(AppColors.mediaSurface),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
@@ -101,7 +103,7 @@ fun VideoSlidePage(
                         PlayButtonCircle(onClick = onPlay)
                         Text(
                             text = fileItem.name,
-                            color = Color.White,
+                            color = AppColors.mediaTextPrimary,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,
@@ -123,7 +125,7 @@ fun VideoSlidePage(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.35f))
+                        .background(AppColors.mediaCanvas.copy(alpha = 0.35f))
                 )
 
                 Column(
@@ -135,16 +137,16 @@ fun VideoSlidePage(
                     val durationBadge = if (durationMs > 0) {
                         DurationFormatter.format(durationMs) + " • " + ByteFormatter.format(fileItem.sizeBytes)
                     } else {
-                        "VIDEO • " + ByteFormatter.format(fileItem.sizeBytes)
+                        stringResource(R.string.media_type_video).uppercase() + " • " + ByteFormatter.format(fileItem.sizeBytes)
                     }
 
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(Dimensions.CornerRadiusPill))
-                            .background(Color(0xCC181818))
+                            .background(AppColors.mediaControlSurfaceStrong)
                             .border(
                                 width = 1.dp,
-                                color = Color(0x33FFFFFF),
+                                color = AppColors.mediaControlBorder,
                                 shape = RoundedCornerShape(Dimensions.CornerRadiusPill)
                             )
                             .padding(
@@ -159,12 +161,12 @@ fun VideoSlidePage(
                             Icon(
                                 painter = painterResource(R.drawable.ic_video),
                                 contentDescription = null,
-                                tint = Color(0xFF4CC2FF),
+                                tint = AppColors.mediaAccent,
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
                                 text = durationBadge,
-                                color = Color.White,
+                                color = AppColors.mediaTextPrimary,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -185,19 +187,19 @@ fun PlayButtonCircle(
         modifier = modifier
             .size(76.dp)
             .clip(CircleShape)
-            .background(Color(0xD91E1E1E))
+            .background(AppColors.mediaControlSurface)
             .border(
                 width = 2.dp,
-                color = Color(0xFF4CC2FF).copy(alpha = 0.85f),
+                color = AppColors.mediaAccent.copy(alpha = 0.85f),
                 shape = CircleShape
             )
-            .clickable(onClick = onClick),
+            .clickable(role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             painter = painterResource(R.drawable.ic_play),
-            contentDescription = "Play Video",
-            tint = Color.White,
+            contentDescription = stringResource(R.string.play),
+            tint = AppColors.mediaTextPrimary,
             modifier = Modifier
                 .size(36.dp)
                 .offset(x = 2.dp)

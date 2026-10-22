@@ -3,18 +3,25 @@
 
     <!-- Depolama Aygıtları ve Sürücüler -->
     <string name="devices_and_drives">Aygıtlar ve sürücüler</string>
+    <string name="shortcuts">Kısayollar</string>
     <string name="storage_overview_title">Bu Cihaz</string>
     <string name="free_of_total">%2$s alandan %1$s boş</string>
+    <string name="storage_usage_percentage">%%%1$d</string>
+    <string name="drive_summary">%1$s • %3$s alandan %2$s boş</string>
     <string name="type_internal">Yerel Disk</string>
     <string name="type_sdcard">SD Kart</string>
     <string name="type_usb">USB Sürücü</string>
     <string name="refresh_drives">Yenile</string>
+    <string name="action_retry">Tekrar dene</string>
+    <string name="action_dismiss">Kapat</string>
+    <string name="refresh_failed">Depolama yenilenemedi. Tekrar deneyin.</string>
     <string name="theme_toggle">Temayı değiştir</string>
     <string name="no_drives_found">Sürücü bulunamadı</string>
 
     <!-- Dosya Gezgini -->
     <string name="folder_empty">Bu klasör boş</string>
     <string name="items_count">%1$d öge</string>
+    <string name="folder_contents">Dosyalar ve klasörler</string>
     <string name="item_count_single">1 öge</string>
     <string name="permission_title">Depolama Erişimi Gerekli</string>
     <string name="permission_message">Bu cihazdaki dosya ve klasörlere göz atmak için lütfen Ayarlar\'dan Tüm Dosyalara Erişim iznini verin.</string>
@@ -25,6 +32,15 @@
     <string name="image_load_failed">Resim yüklenemedi</string>
     <string name="video_viewer_title">Video Oynatıcı</string>
     <string name="video_load_failed">Video oynatılamadı</string>
+    <string name="previous_video">Önceki video</string>
+    <string name="next_video">Sonraki video</string>
+    <string name="rewind_ten_seconds">10 saniye geri sar</string>
+    <string name="forward_ten_seconds">10 saniye ileri sar</string>
+    <string name="play">Oynat</string>
+    <string name="pause">Duraklat</string>
+    <string name="previous_item">Önceki öğe</string>
+    <string name="next_item">Sonraki öğe</string>
+    <string name="media_type_video">Video</string>
     <string name="close_viewer">Kapat</string>
     <string name="action_copy">Kopyala</string>
     <string name="action_cut">Kes</string>
@@ -44,7 +60,9 @@
     <string name="properties_modified">Değiştirilme</string>
     <string name="action_share">Paylaş</string>
     <string name="recycle_bin">Geri Dönüşüm Kutusu</string>
+    <string name="recycle_bin_description">Silinen ögeleri görüntüleyin ve geri yükleyin.</string>
     <string name="recycle_bin_empty">Geri Dönüşüm Kutusu boş</string>
+    <string name="recycle_bin_item_summary">%1$d öge • %2$s</string>
     <string name="action_restore">Geri Yükle</string>
     <string name="action_empty_recycle_bin">Kutuyu Boşalt</string>
     <string name="dialog_empty_recycle_bin_confirm">Geri Dönüşüm Kutusundaki tüm ögeleri kalıcı olarak silmek istediğinizden emin misiniz?</string>

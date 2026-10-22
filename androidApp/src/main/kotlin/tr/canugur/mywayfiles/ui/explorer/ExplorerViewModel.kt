@@ -42,6 +42,7 @@ class ExplorerViewModel(
     private var activeClipboard: Clipboard? = null
     private var showHiddenFiles: Boolean = explorerPreferences.showHiddenFiles
     private var sortOption: SortOption = explorerPreferences.sortOption
+    private var directoryRequestId: Long = 0L
 
     init {
         loadDirectory(rootPath)
@@ -84,6 +85,7 @@ class ExplorerViewModel(
                 activeClipboard = null
                 updateStateClipboard()
             }
+            is ExplorerUiEvent.ClearOperationError -> clearOperationError()
             is ExplorerUiEvent.Paste -> handlePaste()
             is ExplorerUiEvent.Rename -> handleRename(event.item, event.newName)
             is ExplorerUiEvent.MoveToTrash -> handleMoveToTrash(event.item)
@@ -113,65 +115,93 @@ class ExplorerViewModel(
     private fun handlePaste() {
         val clip = activeClipboard ?: return
         viewModelScope.launch {
-            var allSucceeded = true
-            for (item in clip.items) {
-                val result = if (clip.isCut) {
+            val results = clip.items.map { item ->
+                if (clip.isCut) {
                     fileRepository.move(item.path, activePath)
                 } else {
                     fileRepository.copy(item.path, activePath)
                 }
-                if (result.isFailure) allSucceeded = false
             }
-            if (allSucceeded && clip.isCut) {
+            if (results.all { it.isSuccess } && clip.isCut) {
                 activeClipboard = null
             }
-            loadDirectory(activePath, isRefreshing = true)
+            finishMutation(results, "Unable to paste the selected items")
         }
     }
 
     private fun handleRename(item: FileItem, newName: String) {
         viewModelScope.launch {
-            fileRepository.rename(item.path, newName)
-            loadDirectory(activePath, isRefreshing = true)
+            finishMutation(
+                listOf(fileRepository.rename(item.path, newName)),
+                "Unable to rename ${item.name}"
+            )
         }
     }
 
     private fun handleMoveToTrash(item: FileItem) {
         viewModelScope.launch {
-            recycleBinRepository.moveToTrash(item)
-            loadDirectory(activePath, isRefreshing = true)
+            finishMutation(
+                listOf(recycleBinRepository.moveToTrash(item)),
+                "Unable to move ${item.name} to Recycle Bin"
+            )
         }
     }
 
     private fun handleBatchMoveToTrash(items: List<FileItem>) {
         viewModelScope.launch {
-            for (item in items) {
+            val results = items.map { item ->
                 recycleBinRepository.moveToTrash(item)
             }
-            loadDirectory(activePath, isRefreshing = true)
+            finishMutation(results, "Unable to move all selected items to Recycle Bin")
         }
     }
 
     private fun handleDelete(item: FileItem) {
         viewModelScope.launch {
-            fileRepository.delete(item.path)
-            loadDirectory(activePath, isRefreshing = true)
+            finishMutation(
+                listOf(fileRepository.delete(item.path)),
+                "Unable to delete ${item.name}"
+            )
         }
     }
 
     private fun handleBatchDelete(items: List<FileItem>) {
         viewModelScope.launch {
-            for (item in items) {
+            val results = items.map { item ->
                 fileRepository.delete(item.path)
             }
-            loadDirectory(activePath, isRefreshing = true)
+            finishMutation(results, "Unable to delete all selected items")
         }
     }
 
     private fun handleCreateFolder(name: String) {
         viewModelScope.launch {
-            fileRepository.createFolder(activePath, name)
-            loadDirectory(activePath, isRefreshing = true)
+            finishMutation(
+                listOf(fileRepository.createFolder(activePath, name)),
+                "Unable to create folder $name"
+            )
+        }
+    }
+
+    private fun finishMutation(results: List<Result<Unit>>, fallbackError: String) {
+        val failedCount = results.count { it.isFailure }
+        val succeededCount = results.size - failedCount
+        val detail = results.firstNotNullOfOrNull { result ->
+            result.exceptionOrNull()?.localizedMessage
+        }?.takeIf { it.isNotBlank() } ?: if (results.any { it.isFailure }) fallbackError else null
+        val failureMessage = when {
+            failedCount == 0 -> null
+            succeededCount > 0 -> "$succeededCount of ${results.size} items completed. $detail"
+            else -> detail
+        }
+        loadDirectory(activePath, isRefreshing = true, operationError = failureMessage)
+    }
+
+    private fun clearOperationError() {
+        when (val state = _uiState.value) {
+            is ExplorerUiState.Success -> _uiState.value = state.copy(operationError = null)
+            is ExplorerUiState.Empty -> _uiState.value = state.copy(operationError = null)
+            else -> Unit
         }
     }
 
@@ -204,9 +234,15 @@ class ExplorerViewModel(
         return false
     }
 
-    fun loadDirectory(path: String, isRefreshing: Boolean = false) {
+    fun loadDirectory(
+        path: String,
+        isRefreshing: Boolean = false,
+        operationError: String? = null
+    ) {
+        val requestId = ++directoryRequestId
         viewModelScope.launch {
             if (!fileRepository.hasStoragePermission()) {
+                if (requestId != directoryRequestId) return@launch
                 _uiState.value = ExplorerUiState.PermissionRequired
                 return@launch
             }
@@ -216,6 +252,7 @@ class ExplorerViewModel(
 
             // Fast SWR Path: Instantly render cached directory contents if available (0ms cold wait)
             val cached = fileRepository.getCachedContents(path, showHiddenFiles)
+            if (requestId != directoryRequestId) return@launch
             if (cached != null) {
                 val sortedCached = sortItems(cached, sortOption)
                 _uiState.value = if (sortedCached.isEmpty()) {
@@ -224,7 +261,8 @@ class ExplorerViewModel(
                         breadcrumbs = breadcrumbs,
                         clipboard = activeClipboard,
                         showHiddenFiles = showHiddenFiles,
-                        sortOption = sortOption
+                        sortOption = sortOption,
+                        operationError = operationError
                     )
                 } else {
                     ExplorerUiState.Success(
@@ -234,11 +272,15 @@ class ExplorerViewModel(
                         isRefreshing = isRefreshing,
                         clipboard = activeClipboard,
                         showHiddenFiles = showHiddenFiles,
-                        sortOption = sortOption
+                        sortOption = sortOption,
+                        operationError = operationError
                     )
                 }
-            } else if (!isRefreshing && _uiState.value !is ExplorerUiState.Success) {
-                _uiState.value = ExplorerUiState.Loading
+            } else if (!isRefreshing) {
+                val currentState = _uiState.value
+                if (currentState !is ExplorerUiState.Success || currentState.currentPath != path) {
+                    _uiState.value = ExplorerUiState.Loading
+                }
             }
 
             getDirectoryContentsUseCase(
@@ -248,13 +290,15 @@ class ExplorerViewModel(
                 forceRefresh = isRefreshing
             ).fold(
                 onSuccess = { items ->
+                    if (requestId != directoryRequestId) return@fold
                     _uiState.value = if (items.isEmpty()) {
                         ExplorerUiState.Empty(
                             currentPath = path,
                             breadcrumbs = breadcrumbs,
                             clipboard = activeClipboard,
                             showHiddenFiles = showHiddenFiles,
-                            sortOption = sortOption
+                            sortOption = sortOption,
+                            operationError = operationError
                         )
                     } else {
                         ExplorerUiState.Success(
@@ -264,13 +308,23 @@ class ExplorerViewModel(
                             isRefreshing = false,
                             clipboard = activeClipboard,
                             showHiddenFiles = showHiddenFiles,
-                            sortOption = sortOption
+                            sortOption = sortOption,
+                            operationError = operationError
                         )
                     }
                     prefetchSubdirectories(items)
                 },
                 onFailure = { error ->
-                    if (_uiState.value !is ExplorerUiState.Success) {
+                    if (requestId != directoryRequestId) return@fold
+                    val currentState = _uiState.value
+                    if (currentState is ExplorerUiState.Success && currentState.currentPath == path) {
+                        _uiState.value = currentState.copy(
+                            isRefreshing = false,
+                            operationError = operationError
+                                ?: error.localizedMessage
+                                ?: "Failed to refresh this folder"
+                        )
+                    } else {
                         _uiState.value = ExplorerUiState.Error(
                             message = error.localizedMessage ?: "Failed to read directory",
                             currentPath = path,
@@ -345,7 +399,7 @@ class ExplorerViewModel(
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 val appContext = context.applicationContext
                 val dataSource = AndroidFileLocalDataSource(appContext)
-                val directoryCache = DirectoryCache(appContext)
+                val directoryCache = DirectoryCache.getInstance(appContext)
                 val repository = FileRepositoryImpl(dataSource, directoryCache)
                 val recycleBinRepository = RecycleBinRepositoryImpl.getInstance(appContext)
                 val useCase = GetDirectoryContentsUseCase(repository)

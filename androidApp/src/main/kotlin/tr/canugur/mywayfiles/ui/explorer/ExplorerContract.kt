@@ -28,7 +28,8 @@ sealed interface ExplorerUiState {
         val isRefreshing: Boolean = false,
         val clipboard: Clipboard? = null,
         val showHiddenFiles: Boolean = false,
-        val sortOption: SortOption = SortOption.NAME_ASC
+        val sortOption: SortOption = SortOption.NAME_ASC,
+        val operationError: String? = null
     ) : ExplorerUiState
 
     data class Empty(
@@ -36,7 +37,8 @@ sealed interface ExplorerUiState {
         val breadcrumbs: List<Breadcrumb>,
         val clipboard: Clipboard? = null,
         val showHiddenFiles: Boolean = false,
-        val sortOption: SortOption = SortOption.NAME_ASC
+        val sortOption: SortOption = SortOption.NAME_ASC,
+        val operationError: String? = null
     ) : ExplorerUiState
 
     data class Error(
@@ -58,6 +60,7 @@ sealed interface ExplorerUiEvent {
     data class BatchCut(val items: List<FileItem>) : ExplorerUiEvent
     data object Paste : ExplorerUiEvent
     data object ClearClipboard : ExplorerUiEvent
+    data object ClearOperationError : ExplorerUiEvent
     data class Rename(val item: FileItem, val newName: String) : ExplorerUiEvent
     data class MoveToTrash(val item: FileItem) : ExplorerUiEvent
     data class Delete(val item: FileItem) : ExplorerUiEvent

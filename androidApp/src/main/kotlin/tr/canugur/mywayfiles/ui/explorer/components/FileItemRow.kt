@@ -14,9 +14,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.sp
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.core.util.ByteFormatter
 import tr.canugur.mywayfiles.core.util.DateTimeFormatter
@@ -44,20 +46,14 @@ fun FileItemRow(
     onProperties: (FileItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(Dimensions.CornerRadiusDefault)
-    val cardBackground = if (isSelected) AppColors.brandAccentSubtle else AppColors.cardSurface
-    val cardBorder = if (isSelected) AppColors.brandAccent else AppColors.cardStroke
+    val shape = RoundedCornerShape(Dimensions.CornerRadiusMedium)
+    val rowBackground = if (isSelected) AppColors.brandAccentSubtle else androidx.compose.ui.graphics.Color.Transparent
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(cardBackground)
-            .border(
-                width = Dimensions.CardBorderWidth,
-                color = cardBorder,
-                shape = shape
-            )
+            .background(rowBackground)
             .combinedClickable(
                 onClick = {
                     if (isSelectionMode) {
@@ -72,11 +68,15 @@ fun FileItemRow(
                     } else {
                         onLongClick?.invoke(item)
                     }
-                }
+                },
+                role = Role.Button
             )
+            .semantics {
+                if (isSelectionMode) selected = isSelected
+            }
             .padding(
-                horizontal = Dimensions.SpacingMedium,
-                vertical = Dimensions.SpacingSmall
+                horizontal = Dimensions.SpacingSmall,
+                vertical = Dimensions.SpacingMedium
             )
             .alpha(if (item.isHidden) 0.62f else 1f),
         verticalAlignment = Alignment.CenterVertically
@@ -119,7 +119,7 @@ fun FileItemRow(
         ) {
             Text(
                 text = item.name,
-                fontSize = 13.sp,
+                style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
                 color = AppColors.textPrimary,
                 maxLines = 1,
@@ -154,36 +154,10 @@ fun FileItemRow(
             if (metadataText.isNotEmpty()) {
                 Text(
                     text = metadataText,
-                    fontSize = 11.sp,
+                    style = MaterialTheme.typography.bodySmall,
                     color = AppColors.textMuted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-
-        // Extension Badge for files
-        if (!item.isDirectory && item.extension.isNotEmpty()) {
-            Spacer(modifier = Modifier.width(Dimensions.SpacingSmall))
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
-                    .background(AppColors.cardSurfaceSubtle)
-                    .border(
-                        width = Dimensions.CardBorderWidth,
-                        color = AppColors.cardStroke,
-                        shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
-                    )
-                    .padding(
-                        horizontal = Dimensions.SpacingExtraSmall,
-                        vertical = Dimensions.SpacingMicro
-                    )
-            ) {
-                Text(
-                    text = item.extension.uppercase(),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = AppColors.textSecondary
                 )
             }
         }
@@ -199,7 +173,7 @@ fun FileItemRow(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_more_vert),
-                        contentDescription = null,
+                        contentDescription = stringResource(R.string.options_menu),
                         tint = AppColors.textSecondary,
                         modifier = Modifier.size(Dimensions.IconSizeMedium)
                     )

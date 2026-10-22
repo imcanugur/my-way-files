@@ -2,7 +2,7 @@ package tr.canugur.mywayfiles.ui.home
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -10,12 +10,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.domain.model.StorageDrive
+import tr.canugur.mywayfiles.ui.common.RefreshErrorBanner
+import tr.canugur.mywayfiles.ui.common.RetryErrorState
 import tr.canugur.mywayfiles.ui.home.components.EmptyDrivesView
 import tr.canugur.mywayfiles.ui.home.components.HomeTopBar
 import tr.canugur.mywayfiles.ui.home.components.OverallStorageCard
@@ -70,6 +70,7 @@ fun HomeScreenContent(
         topBar = {
             HomeTopBar(
                 isDarkTheme = isDarkTheme,
+                isRefreshing = (state as? HomeUiState.Success)?.isRefreshing == true,
                 onToggleTheme = onToggleTheme,
                 onRefreshClick = { onEvent(HomeUiEvent.Refresh) }
             )
@@ -111,10 +112,9 @@ fun HomeScreenContent(
                         .padding(Dimensions.SpacingLarge),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = state.message,
-                        color = AppColors.statusCritical,
-                        fontSize = 13.sp
+                    RetryErrorState(
+                        message = state.message,
+                        onRetry = { onEvent(HomeUiEvent.Refresh) }
                     )
                 }
             }
@@ -125,57 +125,75 @@ fun HomeScreenContent(
                         .fillMaxSize()
                         .padding(innerPadding),
                     contentPadding = PaddingValues(
-                        horizontal = Dimensions.SpacingDefault,
-                        vertical = Dimensions.SpacingMedium
+                        horizontal = Dimensions.SpacingLarge,
+                        vertical = Dimensions.SpacingDefault
                     ),
-                    verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingMedium)
                 ) {
-                    // Overall Storage Device Header
+                    if (state.hasRefreshError) {
+                        item(key = "refresh-error") {
+                            RefreshErrorBanner(
+                                onRetry = { onEvent(HomeUiEvent.Refresh) }
+                            )
+                        }
+                    }
+
                     item {
                         OverallStorageCard(summary = state.summary)
                     }
 
-                    // Recycle Bin Quick Access Card
-                    item {
-                        RecycleBinCard(onClick = onRecycleBinClick)
-                    }
-
-                    // Section Header: "Devices and drives"
                     item {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(
-                                    top = Dimensions.SpacingSmall,
-                                    bottom = Dimensions.SpacingExtraSmall
-                                ),
+                                .padding(top = Dimensions.SpacingHuge, bottom = Dimensions.SpacingSmall),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
                                 text = stringResource(R.string.devices_and_drives),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.titleMedium,
                                 color = AppColors.textPrimary
                             )
                             Text(
-                                text = "(${state.drives.size})",
-                                fontSize = 12.sp,
+                                text = state.drives.size.toString(),
+                                style = MaterialTheme.typography.bodySmall,
                                 color = AppColors.textMuted
                             )
                         }
                     }
 
-                    // Drives List
-                    items(state.drives, key = { it.id }) { drive ->
+                    itemsIndexed(state.drives, key = { _, drive -> drive.id }) { index, drive ->
                         StorageDriveCard(
                             drive = drive,
-                            onClick = { onDriveClick(drive) }
+                            onClick = { onDriveClick(drive) },
+                            modifier = Modifier.padding(vertical = Dimensions.SpacingExtraSmall)
                         )
+                        if (index < state.drives.lastIndex) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = Dimensions.IconContainerSize + Dimensions.SpacingHuge),
+                                color = AppColors.divider
+                            )
+                        }
                     }
 
                     item {
-                        Spacer(modifier = Modifier.height(Dimensions.SpacingExtraLarge))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = Dimensions.SpacingHuge, bottom = Dimensions.SpacingSmall),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = stringResource(R.string.shortcuts),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = AppColors.textPrimary
+                            )
+                        }
+                        RecycleBinCard(onClick = onRecycleBinClick)
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(Dimensions.SpacingHuge))
                     }
                 }
             }

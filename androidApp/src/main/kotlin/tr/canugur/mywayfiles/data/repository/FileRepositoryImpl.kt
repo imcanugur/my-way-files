@@ -1,13 +1,14 @@
 package tr.canugur.mywayfiles.data.repository
 
 import tr.canugur.mywayfiles.data.cache.DirectoryCache
+import tr.canugur.mywayfiles.data.cache.DirectoryContentsCache
 import tr.canugur.mywayfiles.data.datasource.FileLocalDataSource
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.domain.repository.FileRepository
 
 class FileRepositoryImpl(
     private val localDataSource: FileLocalDataSource,
-    private val directoryCache: DirectoryCache? = null
+    private val directoryCache: DirectoryContentsCache? = null
 ) : FileRepository {
 
     override suspend fun getCachedContents(path: String, showHidden: Boolean): List<FileItem>? {
@@ -19,24 +20,12 @@ class FileRepositoryImpl(
         showHidden: Boolean,
         forceRefresh: Boolean
     ): Result<List<FileItem>> {
-        if (!forceRefresh) {
-            // 1. RAM hit: 0 ms instant return
-            val inMemory = directoryCache?.getMemory(path, showHidden)
-            if (inMemory != null) {
-                return Result.success(inMemory)
-            }
-
-            // 2. Persistent SQLite hit: 1 ms return
-            val cached = directoryCache?.get(path, showHidden)
-            if (cached != null) {
-                return Result.success(cached)
-            }
-        }
-
-        // 3. Disk enumeration: always read all files and populate cache
+        // The filesystem is authoritative. Cache is only a provisional render source for the UI;
+        // every repository query reconciles it with current accessible storage.
+        val generation = directoryCache?.beginRead(path)
         val result = localDataSource.listFiles(path, showHidden = true)
         return result.map { allItems ->
-            directoryCache?.put(path, allItems)
+            if (generation != null) directoryCache?.put(path, allItems, generation)
             if (showHidden) allItems else allItems.filter { !it.isHidden }
         }
     }

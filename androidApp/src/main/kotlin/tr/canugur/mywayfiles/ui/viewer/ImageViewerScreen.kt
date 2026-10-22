@@ -16,11 +16,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tr.canugur.mywayfiles.R
@@ -29,6 +28,7 @@ import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.ui.explorer.components.PropertiesDialog
 import tr.canugur.mywayfiles.ui.theme.Dimensions
+import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.viewer.components.InteractiveImagePage
 import tr.canugur.mywayfiles.ui.viewer.components.VideoSlidePage
 import tr.canugur.mywayfiles.ui.viewer.components.ViewerBottomBar
@@ -91,7 +91,7 @@ fun ImageViewerScreen(
     }
 
     Surface(
-        color = Color(0xFF0A0A0A),
+        color = AppColors.mediaCanvas,
         modifier = modifier.fillMaxSize()
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -134,14 +134,14 @@ fun ImageViewerScreen(
                     modifier = Modifier
                         .align(Alignment.CenterStart)
                         .padding(start = Dimensions.SpacingMedium)
-                        .size(44.dp)
+                        .size(Dimensions.ActionButtonSize)
                         .clip(CircleShape)
-                        .background(Color(0x99202020))
+                        .background(AppColors.mediaControlSurface)
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_arrow_back),
-                        contentDescription = "Previous",
-                        tint = Color.White,
+                        contentDescription = stringResource(R.string.previous_item),
+                        tint = AppColors.mediaTextPrimary,
                         modifier = Modifier.size(Dimensions.IconSizeMedium)
                     )
                 }
@@ -158,14 +158,14 @@ fun ImageViewerScreen(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(end = Dimensions.SpacingMedium)
-                        .size(44.dp)
+                        .size(Dimensions.ActionButtonSize)
                         .clip(CircleShape)
-                        .background(Color(0x99202020))
+                        .background(AppColors.mediaControlSurface)
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_arrow_back),
-                        contentDescription = "Next",
-                        tint = Color.White,
+                        contentDescription = stringResource(R.string.next_item),
+                        tint = AppColors.mediaTextPrimary,
                         modifier = Modifier
                             .size(Dimensions.IconSizeMedium)
                             .graphicsLayer(rotationZ = 180f)

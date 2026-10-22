@@ -1,86 +1,66 @@
 package tr.canugur.mywayfiles.ui.home.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextOverflow
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 
-/**
- * Desktop-grade Quick Access card navigating to the Recycle Bin.
- */
+/** A single, quiet shortcut to restore deleted items. */
 @Composable
-fun RecycleBinCard(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val shape = RoundedCornerShape(Dimensions.CornerRadiusMedium)
-
+fun RecycleBinCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(shape)
-            .background(AppColors.cardSurface)
-            .border(width = Dimensions.CardBorderWidth, color = AppColors.cardStroke, shape = shape)
-            .clickable { onClick() }
-            .padding(horizontal = Dimensions.SpacingDefault, vertical = Dimensions.SpacingMedium),
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(vertical = Dimensions.SpacingMedium, horizontal = Dimensions.SpacingSmall),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(Dimensions.IconContainerSize)
-                .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
-                .background(AppColors.cardSurfaceSubtle)
-                .border(
-                    width = Dimensions.CardBorderWidth,
-                    color = AppColors.cardStroke,
-                    shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.ic_recycle_bin),
-                contentDescription = null,
-                tint = AppColors.brandAccent,
-                modifier = Modifier.size(Dimensions.IconSizeDefault)
-            )
+        Surface(shape = CircleShape, color = AppColors.cardSurfaceSubtle, modifier = Modifier.size(Dimensions.IconContainerSize)) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_recycle_bin),
+                    contentDescription = null,
+                    tint = AppColors.brandAccent,
+                    modifier = Modifier.size(Dimensions.IconSizeDefault)
+                )
+            }
         }
-
-        Spacer(modifier = Modifier.width(Dimensions.SpacingMedium))
-
+        Spacer(Modifier.width(Dimensions.SpacingDefault))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = stringResource(R.string.recycle_bin),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = AppColors.textPrimary
+                style = MaterialTheme.typography.titleSmall,
+                color = AppColors.textPrimary,
+                fontWeight = FontWeight.Medium
             )
-            Spacer(modifier = Modifier.height(Dimensions.SpacingMicro))
             Text(
-                text = stringResource(R.string.recycle_bin),
-                fontSize = 12.sp,
-                color = AppColors.textMuted
+                text = stringResource(R.string.recycle_bin_description),
+                style = MaterialTheme.typography.bodySmall,
+                color = AppColors.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
-
-        Text(
-            text = ">",
-            fontSize = 14.sp,
-            color = AppColors.textMuted,
-            fontWeight = FontWeight.Bold
+        Icon(
+            painter = painterResource(R.drawable.ic_arrow_back),
+            contentDescription = null,
+            tint = AppColors.textMuted,
+            modifier = Modifier.size(Dimensions.IconSizeMedium).graphicsLayer(rotationZ = 180f)
         )
     }
 }

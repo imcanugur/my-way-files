@@ -70,3 +70,18 @@ android {
         compose = true
     }
 }
+
+// Stale cached Kotlin/Dex outputs omitted changed classes (including ThemeKt), causing
+// unresolved symbols during tests and NoClassDefFoundError in the installed debug APK.
+// Recompile app sources and rebuild Dex/APK outputs instead of restoring those artifacts.
+tasks.configureEach {
+    val appCompilationOrPackaging =
+        (name.startsWith("compile") && name.contains("Kotlin")) ||
+            name.startsWith("dexBuilder") ||
+            name.startsWith("mergeProjectDex") ||
+            name == "packageDebug" ||
+            name == "packageRelease"
+    if (appCompilationOrPackaging) {
+        outputs.cacheIf("Prevent stale Kotlin/Dex artifacts from being restored") { false }
+    }
+}

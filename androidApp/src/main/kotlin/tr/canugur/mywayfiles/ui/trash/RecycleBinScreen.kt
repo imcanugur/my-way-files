@@ -3,7 +3,8 @@ package tr.canugur.mywayfiles.ui.trash
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
@@ -14,11 +15,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.domain.model.TrashedItem
+import tr.canugur.mywayfiles.ui.common.RetryErrorState
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 import tr.canugur.mywayfiles.ui.trash.components.EmptyTrashConfirmDialog
@@ -93,17 +95,31 @@ fun RecycleBinScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_recycle_bin),
-                        contentDescription = null,
-                        tint = AppColors.textMuted,
-                        modifier = Modifier.size(Dimensions.IconSizeLarge)
-                    )
-                    Spacer(modifier = Modifier.height(Dimensions.SpacingMedium))
+                    androidx.compose.material3.Surface(
+                        shape = CircleShape,
+                        color = AppColors.brandAccentSubtle,
+                        modifier = Modifier.size(88.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_recycle_bin),
+                                contentDescription = null,
+                                tint = AppColors.brandAccent,
+                                modifier = Modifier.size(Dimensions.IconSizeLarge)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(Dimensions.SpacingLarge))
                     Text(
                         text = stringResource(R.string.recycle_bin_empty),
-                        fontSize = 14.sp,
-                        color = AppColors.textMuted
+                        style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                        color = AppColors.textPrimary
+                    )
+                    Spacer(modifier = Modifier.height(Dimensions.SpacingSmall))
+                    Text(
+                        text = stringResource(R.string.recycle_bin_description),
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                        color = AppColors.textSecondary
                     )
                 }
             }
@@ -115,10 +131,9 @@ fun RecycleBinScreen(
                         .padding(innerPadding),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = s.message,
-                        color = AppColors.statusCritical,
-                        fontSize = 13.sp
+                    RetryErrorState(
+                        message = s.message,
+                        onRetry = { viewModel.onEvent(RecycleBinUiEvent.Refresh) }
                     )
                 }
             }
@@ -129,18 +144,28 @@ fun RecycleBinScreen(
                         .fillMaxSize()
                         .padding(innerPadding),
                     contentPadding = PaddingValues(
-                        horizontal = Dimensions.SpacingDefault,
-                        vertical = Dimensions.SpacingMedium
+                        horizontal = Dimensions.SpacingLarge,
+                        vertical = Dimensions.SpacingSmall
                     ),
-                    verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall)
                 ) {
-                    items(s.items, key = { it.id }) { item ->
+                    item(key = "recycle-bin-description") {
+                        Text(
+                            text = stringResource(R.string.recycle_bin_description),
+                            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                            color = AppColors.textSecondary,
+                            modifier = Modifier.padding(vertical = Dimensions.SpacingDefault)
+                        )
+                    }
+                    itemsIndexed(s.items, key = { _, item -> item.id }) { index, item ->
                         TrashedItemRow(
                             item = item,
                             onClick = { itemToPreview = item },
                             onRestore = { viewModel.onEvent(RecycleBinUiEvent.Restore(item)) },
                             onDeletePermanently = { itemToDeletePermanently = item }
                         )
+                        if (index < s.items.lastIndex) {
+                            androidx.compose.material3.HorizontalDivider(color = AppColors.divider)
+                        }
                     }
                 }
             }

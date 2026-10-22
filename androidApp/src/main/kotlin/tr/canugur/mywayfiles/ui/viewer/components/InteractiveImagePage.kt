@@ -13,7 +13,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -25,6 +24,7 @@ import tr.canugur.mywayfiles.core.image.BitmapDecoder
 import tr.canugur.mywayfiles.core.image.DecodedBitmapResult
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.ui.theme.Dimensions
+import tr.canugur.mywayfiles.ui.theme.AppColors
 
 private sealed interface ImagePageState {
     data object Loading : ImagePageState
@@ -73,7 +73,7 @@ fun InteractiveImagePage(
         when (val s = state) {
             is ImagePageState.Loading -> {
                 CircularProgressIndicator(
-                    color = Color(0xFF4CC2FF),
+                    color = AppColors.mediaAccent,
                     strokeWidth = Dimensions.SpacingMicro
                 )
             }
@@ -85,7 +85,7 @@ fun InteractiveImagePage(
                 ) {
                     Text(
                         text = stringResource(R.string.image_load_failed),
-                        color = Color(0xFFFF99A4),
+                        color = AppColors.mediaErrorMuted,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
                     )

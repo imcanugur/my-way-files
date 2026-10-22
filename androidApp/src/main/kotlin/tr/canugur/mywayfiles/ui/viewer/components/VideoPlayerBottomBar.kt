@@ -9,9 +9,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -19,6 +19,7 @@ import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.core.util.DurationFormatter
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.ui.theme.Dimensions
+import tr.canugur.mywayfiles.ui.theme.AppColors
 
 /**
  * Bottom-docked media player control panel containing scrubber timeline, playback controls,
@@ -48,7 +49,7 @@ fun VideoPlayerBottomBar(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        color = Color(0xEE141414),
+        color = AppColors.mediaControlSurfaceStrong,
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
@@ -69,7 +70,7 @@ fun VideoPlayerBottomBar(
             ) {
                 Text(
                     text = DurationFormatter.format(displayPos),
-                    color = Color.White,
+                    color = AppColors.mediaTextPrimary,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -82,9 +83,9 @@ fun VideoPlayerBottomBar(
                     onValueChange = onScrubChange,
                     onValueChangeFinished = onScrubFinished,
                     colors = SliderDefaults.colors(
-                        thumbColor = Color(0xFF4CC2FF),
-                        activeTrackColor = Color(0xFF4CC2FF),
-                        inactiveTrackColor = Color(0xFF404040)
+                        thumbColor = AppColors.mediaAccent,
+                        activeTrackColor = AppColors.mediaAccent,
+                        inactiveTrackColor = AppColors.mediaProgressTrack
                     ),
                     modifier = Modifier
                         .weight(1f)
@@ -93,7 +94,7 @@ fun VideoPlayerBottomBar(
 
                 Text(
                     text = DurationFormatter.format(durationMs),
-                    color = Color(0xFFB0B0B0),
+                    color = AppColors.mediaTextSecondary,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -111,79 +112,79 @@ fun VideoPlayerBottomBar(
                 IconButton(
                     onClick = onSkipPrevious,
                     enabled = canSkipPrevious,
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.size(Dimensions.ActionButtonSize)
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_skip_previous),
-                        contentDescription = "Previous Video",
-                        tint = if (canSkipPrevious) Color.White else Color(0x40FFFFFF),
+                        contentDescription = stringResource(R.string.previous_video),
+                        tint = if (canSkipPrevious) AppColors.mediaTextPrimary else AppColors.mediaTextDisabled,
                         modifier = Modifier.size(24.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(Dimensions.SpacingMedium))
+                Spacer(modifier = Modifier.width(Dimensions.SpacingSmall))
 
                 // 10s Rewind
                 IconButton(
                     onClick = onRewind10s,
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.size(Dimensions.ActionButtonSize)
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_fast_rewind),
-                        contentDescription = "Rewind 10s",
-                        tint = Color.White,
+                        contentDescription = stringResource(R.string.rewind_ten_seconds),
+                        tint = AppColors.mediaTextPrimary,
                         modifier = Modifier.size(24.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(Dimensions.SpacingMedium))
+                Spacer(modifier = Modifier.width(Dimensions.SpacingSmall))
 
                 // Prominent Play / Pause Button
                 Box(
                     modifier = Modifier
                         .size(54.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF4CC2FF))
-                        .clickable { onPlayPauseToggle() },
+                        .background(AppColors.mediaAccent)
+                        .clickable(role = Role.Button) { onPlayPauseToggle() },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         painter = painterResource(
                             if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
                         ),
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        tint = Color.Black,
+                        contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
+                        tint = AppColors.mediaAccentContent,
                         modifier = Modifier.size(28.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(Dimensions.SpacingMedium))
+                Spacer(modifier = Modifier.width(Dimensions.SpacingSmall))
 
                 // 10s Fast Forward
                 IconButton(
                     onClick = onForward10s,
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.size(Dimensions.ActionButtonSize)
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_fast_forward),
-                        contentDescription = "Forward 10s",
-                        tint = Color.White,
+                        contentDescription = stringResource(R.string.forward_ten_seconds),
+                        tint = AppColors.mediaTextPrimary,
                         modifier = Modifier.size(24.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(Dimensions.SpacingMedium))
+                Spacer(modifier = Modifier.width(Dimensions.SpacingSmall))
 
                 // Next Video
                 IconButton(
                     onClick = onSkipNext,
                     enabled = canSkipNext,
-                    modifier = Modifier.size(44.dp)
+                    modifier = Modifier.size(Dimensions.ActionButtonSize)
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_skip_next),
-                        contentDescription = "Next Video",
-                        tint = if (canSkipNext) Color.White else Color(0x40FFFFFF),
+                        contentDescription = stringResource(R.string.next_video),
+                        tint = if (canSkipNext) AppColors.mediaTextPrimary else AppColors.mediaTextDisabled,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -200,28 +201,28 @@ fun VideoPlayerBottomBar(
                 ViewerActionItem(
                     iconRes = R.drawable.ic_share,
                     label = stringResource(R.string.action_share),
-                    tint = Color.White,
+                    tint = AppColors.mediaTextPrimary,
                     onClick = { onShare(item) }
                 )
 
                 ViewerActionItem(
                     iconRes = R.drawable.ic_copy,
                     label = stringResource(R.string.action_copy),
-                    tint = Color.White,
+                    tint = AppColors.mediaTextPrimary,
                     onClick = { onCopy(item) }
                 )
 
                 ViewerActionItem(
                     iconRes = R.drawable.ic_info,
                     label = stringResource(R.string.action_properties),
-                    tint = Color.White,
+                    tint = AppColors.mediaTextPrimary,
                     onClick = { onProperties(item) }
                 )
 
                 ViewerActionItem(
                     iconRes = R.drawable.ic_delete,
                     label = stringResource(R.string.action_delete),
-                    tint = Color(0xFFFF6B6B),
+                    tint = AppColors.mediaError,
                     onClick = { onDelete(item) }
                 )
             }

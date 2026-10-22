@@ -12,7 +12,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -23,6 +22,7 @@ import tr.canugur.mywayfiles.ui.explorer.components.PropertiesDialog
 import tr.canugur.mywayfiles.ui.viewer.components.VideoErrorCard
 import tr.canugur.mywayfiles.ui.viewer.components.VideoPlayerBottomBar
 import tr.canugur.mywayfiles.ui.viewer.components.ViewerTopBar
+import tr.canugur.mywayfiles.ui.theme.AppColors
 import java.io.File
 
 /**
@@ -92,7 +92,7 @@ fun VideoViewerScreen(
     }
 
     Surface(
-        color = Color.Black,
+        color = AppColors.mediaCanvas,
         modifier = modifier
             .fillMaxSize()
             .pointerInput(Unit) {

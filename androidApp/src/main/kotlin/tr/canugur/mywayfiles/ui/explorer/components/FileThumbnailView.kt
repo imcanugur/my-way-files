@@ -75,13 +75,13 @@ fun FileThumbnailView(
                         modifier = Modifier
                             .size(18.dp)
                             .clip(RoundedCornerShape(9.dp))
-                            .background(androidx.compose.ui.graphics.Color(0x99000000)),
+                            .background(AppColors.mediaControlSurface),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             painter = painterResource(id = R.drawable.ic_play),
                             contentDescription = null,
-                            tint = androidx.compose.ui.graphics.Color.White,
+                            tint = AppColors.mediaTextPrimary,
                             modifier = Modifier.size(10.dp)
                         )
                     }

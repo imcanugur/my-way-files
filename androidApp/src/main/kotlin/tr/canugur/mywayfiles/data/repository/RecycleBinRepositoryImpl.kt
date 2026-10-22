@@ -9,6 +9,7 @@ import org.json.JSONObject
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.domain.model.TrashedItem
 import tr.canugur.mywayfiles.domain.repository.RecycleBinRepository
+import tr.canugur.mywayfiles.data.cache.DirectoryCache
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -21,6 +22,8 @@ import java.util.UUID
 class RecycleBinRepositoryImpl private constructor(
     private val context: Context
 ) : RecycleBinRepository {
+
+    private val directoryCache = DirectoryCache.getInstance(context)
 
     private val trashRoot: File
         get() {
@@ -83,7 +86,7 @@ class RecycleBinRepositoryImpl private constructor(
     }
 
     override suspend fun moveToTrash(item: FileItem): Result<Unit> = withContext(Dispatchers.IO) {
-        synchronized(this@RecycleBinRepositoryImpl) {
+        val result = synchronized(this@RecycleBinRepositoryImpl) {
             try {
                 val source = File(item.path)
                 if (!source.exists()) {
@@ -96,11 +99,22 @@ class RecycleBinRepositoryImpl private constructor(
                 var moved = source.renameTo(trashFile)
                 if (!moved) {
                     if (source.isDirectory) {
-                        source.copyRecursively(trashFile, overwrite = true)
-                        source.deleteRecursively()
+                        source.copyRecursively(trashFile, overwrite = false)
+                        if (!trashFile.exists()) return@withContext Result.failure(IOException("Trash copy was incomplete"))
+                        if (!source.deleteRecursively()) {
+                            trashFile.deleteRecursively()
+                            return@withContext Result.failure(IOException("Copied ${item.name}, but could not remove the original"))
+                        }
                     } else {
-                        source.copyTo(trashFile, overwrite = true)
-                        source.delete()
+                        source.copyTo(trashFile, overwrite = false)
+                        if (!trashFile.isFile || trashFile.length() != source.length()) {
+                            trashFile.delete()
+                            return@withContext Result.failure(IOException("Trash copy was incomplete"))
+                        }
+                        if (!source.delete()) {
+                            trashFile.delete()
+                            return@withContext Result.failure(IOException("Copied ${item.name}, but could not remove the original"))
+                        }
                     }
                     moved = trashFile.exists()
                 }
@@ -122,16 +136,17 @@ class RecycleBinRepositoryImpl private constructor(
                 val list = readManifest().toMutableList()
                 list.add(trashedItem)
                 writeManifest(list)
-
                 Result.success(Unit)
             } catch (e: Exception) {
                 Result.failure(e)
             }
         }
+        if (result.isSuccess) directoryCache.invalidate(item.path)
+        result
     }
 
     override suspend fun restore(trashedItem: TrashedItem): Result<Unit> = withContext(Dispatchers.IO) {
-        synchronized(this@RecycleBinRepositoryImpl) {
+        val result = synchronized(this@RecycleBinRepositoryImpl) {
             try {
                 val trashFile = File(trashedItem.trashPath)
                 if (!trashFile.exists()) {
@@ -154,11 +169,22 @@ class RecycleBinRepositoryImpl private constructor(
                 var restored = trashFile.renameTo(dest)
                 if (!restored) {
                     if (trashFile.isDirectory) {
-                        trashFile.copyRecursively(dest, overwrite = true)
-                        trashFile.deleteRecursively()
+                        trashFile.copyRecursively(dest, overwrite = false)
+                        if (!dest.exists()) return@withContext Result.failure(IOException("Restore copy was incomplete"))
+                        if (!trashFile.deleteRecursively()) {
+                            dest.deleteRecursively()
+                            return@withContext Result.failure(IOException("Restored ${trashedItem.name}, but could not remove the trash copy"))
+                        }
                     } else {
-                        trashFile.copyTo(dest, overwrite = true)
-                        trashFile.delete()
+                        trashFile.copyTo(dest, overwrite = false)
+                        if (!dest.isFile || dest.length() != trashFile.length()) {
+                            dest.delete()
+                            return@withContext Result.failure(IOException("Restore copy was incomplete"))
+                        }
+                        if (!trashFile.delete()) {
+                            dest.delete()
+                            return@withContext Result.failure(IOException("Restored ${trashedItem.name}, but could not remove the trash copy"))
+                        }
                     }
                     restored = dest.exists()
                 }
@@ -169,12 +195,13 @@ class RecycleBinRepositoryImpl private constructor(
 
                 val list = readManifest().filterNot { it.id == trashedItem.id }
                 writeManifest(list)
-
                 Result.success(Unit)
             } catch (e: Exception) {
                 Result.failure(e)
             }
         }
+        if (result.isSuccess) directoryCache.invalidate(trashedItem.originalPath)
+        result
     }
 
     override suspend fun deletePermanently(trashedItem: TrashedItem): Result<Unit> = withContext(Dispatchers.IO) {
@@ -182,7 +209,8 @@ class RecycleBinRepositoryImpl private constructor(
             try {
                 val trashFile = File(trashedItem.trashPath)
                 if (trashFile.exists()) {
-                    if (trashFile.isDirectory) trashFile.deleteRecursively() else trashFile.delete()
+                    val deleted = if (trashFile.isDirectory) trashFile.deleteRecursively() else trashFile.delete()
+                    if (!deleted || trashFile.exists()) return@withContext Result.failure(IOException("Unable to permanently delete ${trashedItem.name}"))
                 }
 
                 val list = readManifest().filterNot { it.id == trashedItem.id }
@@ -199,14 +227,17 @@ class RecycleBinRepositoryImpl private constructor(
         synchronized(this@RecycleBinRepositoryImpl) {
             try {
                 val list = readManifest()
+                val failures = mutableListOf<TrashedItem>()
                 for (item in list) {
                     val f = File(item.trashPath)
                     if (f.exists()) {
-                        if (f.isDirectory) f.deleteRecursively() else f.delete()
+                        val deleted = if (f.isDirectory) f.deleteRecursively() else f.delete()
+                        if (!deleted || f.exists()) failures.add(item)
                     }
                 }
-                writeManifest(emptyList())
-                Result.success(Unit)
+                writeManifest(failures)
+                if (failures.isEmpty()) Result.success(Unit)
+                else Result.failure(IOException("Unable to permanently delete ${failures.size} item(s)"))
             } catch (e: Exception) {
                 Result.failure(e)
             }
@@ -247,7 +278,8 @@ class RecycleBinRepositoryImpl private constructor(
                         )
                     }
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                throw IOException("Unable to read recycle bin metadata", e)
             }
         }
         return results
@@ -267,7 +299,25 @@ class RecycleBinRepositoryImpl private constructor(
             }
             array.put(obj)
         }
-        manifestFile.writeText(array.toString(2))
+        val content = array.toString(2)
+        allTrashRoots.forEach { root ->
+            if (!root.exists() && !root.mkdirs()) throw IOException("Unable to access the recycle bin")
+            val destination = File(root, "manifest.json")
+            val temporary = File(root, "manifest.json.tmp")
+            val backup = File(root, "manifest.json.bak")
+            temporary.writeText(content)
+            backup.delete()
+            if (destination.exists() && !destination.renameTo(backup)) {
+                temporary.delete()
+                throw IOException("Unable to update the recycle bin index")
+            }
+            if (!temporary.renameTo(destination)) {
+                temporary.delete()
+                if (backup.exists()) backup.renameTo(destination)
+                throw IOException("Unable to save the recycle bin index")
+            }
+            backup.delete()
+        }
     }
 
     companion object {

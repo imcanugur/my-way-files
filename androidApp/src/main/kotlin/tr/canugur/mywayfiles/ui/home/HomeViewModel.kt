@@ -66,18 +66,20 @@ class HomeViewModel(
         try {
             val drives = getStorageDrivesUseCase()
             if (drives.isEmpty()) {
-                if (_uiState.value !is HomeUiState.Success) {
-                    _uiState.value = HomeUiState.Empty
-                }
+                _uiState.value = HomeUiState.Empty
             } else {
                 _uiState.value = HomeUiState.Success(
                     summary = StorageSummary.from(drives),
                     drives = drives,
-                    isRefreshing = false
+                    isRefreshing = false,
+                    hasRefreshError = false
                 )
             }
         } catch (e: Exception) {
-            if (_uiState.value !is HomeUiState.Success) {
+            val currentState = _uiState.value
+            if (currentState is HomeUiState.Success) {
+                _uiState.value = currentState.copy(isRefreshing = false, hasRefreshError = true)
+            } else {
                 _uiState.value = HomeUiState.Error(e.message ?: "Failed to read storage drives")
             }
         }

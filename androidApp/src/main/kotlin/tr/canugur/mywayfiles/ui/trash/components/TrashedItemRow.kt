@@ -1,12 +1,11 @@
 package tr.canugur.mywayfiles.ui.trash.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -15,9 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.sp
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.core.util.ByteFormatter
 import tr.canugur.mywayfiles.core.util.DateTimeFormatter
@@ -37,18 +36,12 @@ fun TrashedItemRow(
     modifier: Modifier = Modifier
 ) {
     val shape = RoundedCornerShape(Dimensions.CornerRadiusDefault)
-    val extension = remember(item.name) {
-        item.name.substringAfterLast('.', "").lowercase()
-    }
-
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(AppColors.cardSurface)
-            .border(width = Dimensions.CardBorderWidth, color = AppColors.cardStroke, shape = shape)
-            .clickable { onClick() }
-            .padding(horizontal = Dimensions.SpacingMedium, vertical = Dimensions.SpacingSmall),
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = Dimensions.SpacingSmall, vertical = Dimensions.SpacingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // High-performance cached thumbnail or folder/file icon
@@ -59,7 +52,7 @@ fun TrashedItemRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = item.name,
-                fontSize = 13.sp,
+                style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
                 color = AppColors.textPrimary,
                 maxLines = 1,
@@ -70,7 +63,7 @@ fun TrashedItemRow(
 
             Text(
                 text = "${stringResource(R.string.original_location)}: ${item.originalPath}",
-                fontSize = 11.sp,
+                style = MaterialTheme.typography.bodySmall,
                 color = AppColors.textMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -78,37 +71,11 @@ fun TrashedItemRow(
 
             Text(
                 text = "${ByteFormatter.format(item.sizeBytes)} • ${DateTimeFormatter.format(item.deletedAtMs)}",
-                fontSize = 10.sp,
+                style = MaterialTheme.typography.bodySmall,
                 color = AppColors.textMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-        }
-
-        // Extension Badge
-        if (!item.isDirectory && extension.isNotEmpty()) {
-            Spacer(modifier = Modifier.width(Dimensions.SpacingSmall))
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
-                    .background(AppColors.cardSurfaceSubtle)
-                    .border(
-                        width = Dimensions.CardBorderWidth,
-                        color = AppColors.cardStroke,
-                        shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
-                    )
-                    .padding(
-                        horizontal = Dimensions.SpacingExtraSmall,
-                        vertical = Dimensions.SpacingMicro
-                    )
-            ) {
-                Text(
-                    text = extension.uppercase(),
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = AppColors.textSecondary
-                )
-            }
         }
 
         Spacer(modifier = Modifier.width(Dimensions.SpacingSmall))

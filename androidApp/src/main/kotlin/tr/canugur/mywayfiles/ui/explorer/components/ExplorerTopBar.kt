@@ -1,21 +1,27 @@
 package tr.canugur.mywayfiles.ui.explorer.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
@@ -25,10 +31,7 @@ import tr.canugur.mywayfiles.ui.explorer.Breadcrumb
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 
-/**
- * Universal Explorer Top Bar supporting both standard browsing navigation and
- * multi-item selection mode with overflow options menu.
- */
+/** Mobile-first file browser app bar with lightweight location breadcrumbs. */
 @Composable
 fun ExplorerTopBar(
     breadcrumbs: List<Breadcrumb>,
@@ -55,26 +58,18 @@ fun ExplorerTopBar(
 ) {
     val scrollState = rememberScrollState()
     var optionsMenuExpanded by remember { mutableStateOf(false) }
+    val parentBreadcrumbs = breadcrumbs.dropLast(1)
 
-    LaunchedEffect(breadcrumbs.size) {
-        scrollState.animateScrollTo(scrollState.maxValue)
-    }
+    LaunchedEffect(breadcrumbs.size) { scrollState.animateScrollTo(scrollState.maxValue) }
 
     Surface(
-        color = AppColors.cardSurface,
-        modifier = modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .border(width = Dimensions.CardBorderWidth, color = AppColors.cardStroke)
+        color = AppColors.canvasBackground,
+        modifier = modifier.fillMaxWidth().statusBarsPadding()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(
-                    horizontal = Dimensions.SpacingDefault,
-                    vertical = Dimensions.SpacingSmall
-                ),
-            verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall)
+                .padding(horizontal = Dimensions.SpacingSmall, vertical = Dimensions.SpacingExtraSmall)
         ) {
             if (isSelectionMode) {
                 ExplorerSelectionTopBar(
@@ -87,162 +82,91 @@ fun ExplorerTopBar(
                     onBatchDelete = onBatchDelete
                 )
             } else {
-                // Normal Navigation Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    // Back Button + Current Folder Name
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onBackClick, modifier = Modifier.size(Dimensions.ActionButtonSize)) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_arrow_back),
+                            contentDescription = stringResource(R.string.navigate_up),
+                            tint = AppColors.textPrimary
+                        )
+                    }
+                    Text(
+                        text = breadcrumbs.lastOrNull()?.title.orEmpty(),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = AppColors.textPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .size(Dimensions.ActionButtonSize)
+                            .toggleable(value = isDarkTheme, role = Role.Switch) { onToggleTheme() },
+                        contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(Dimensions.ActionButtonSize)
-                                .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
-                                .background(AppColors.cardSurfaceSubtle)
-                                .border(
-                                    width = Dimensions.CardBorderWidth,
-                                    color = AppColors.cardStroke,
-                                    shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
-                                )
-                                .clickable { onBackClick() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_arrow_back),
-                                contentDescription = stringResource(R.string.navigate_up),
-                                tint = AppColors.textPrimary,
-                                modifier = Modifier.size(Dimensions.IconSizeMedium)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(Dimensions.SpacingSmall))
-
-                        val activeTitle = breadcrumbs.lastOrNull()?.title ?: ""
-                        Text(
-                            text = activeTitle,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = AppColors.textPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                        Icon(
+                            painter = painterResource(if (isDarkTheme) R.drawable.ic_mode_light else R.drawable.ic_mode_dark),
+                            contentDescription = stringResource(R.string.theme_toggle),
+                            tint = AppColors.textSecondary,
+                            modifier = Modifier.size(Dimensions.IconSizeMedium)
                         )
                     }
 
-                    // Actions: Theme Switcher & Options Overflow Menu (replacing standalone new folder)
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(Dimensions.ActionButtonSize)
-                                .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
-                                .background(AppColors.cardSurfaceSubtle)
-                                .border(
-                                    width = Dimensions.CardBorderWidth,
-                                    color = AppColors.cardStroke,
-                                    shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
-                                )
-                                .clickable { onToggleTheme() },
-                            contentAlignment = Alignment.Center
+                    Box {
+                        IconButton(
+                            onClick = { optionsMenuExpanded = true },
+                            modifier = Modifier.size(Dimensions.ActionButtonSize)
                         ) {
-                            val themeIcon = if (isDarkTheme) R.drawable.ic_mode_light else R.drawable.ic_mode_dark
                             Icon(
-                                painter = painterResource(themeIcon),
-                                contentDescription = stringResource(R.string.theme_toggle),
-                                tint = AppColors.textSecondary,
-                                modifier = Modifier.size(Dimensions.IconSizeMedium)
+                                painter = painterResource(R.drawable.ic_more_vert),
+                                contentDescription = stringResource(R.string.options_menu),
+                                tint = AppColors.textPrimary
                             )
                         }
-
-                        Box {
-                            Box(
-                                modifier = Modifier
-                                    .size(Dimensions.ActionButtonSize)
-                                    .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
-                                    .background(AppColors.cardSurfaceSubtle)
-                                    .border(
-                                        width = Dimensions.CardBorderWidth,
-                                        color = AppColors.cardStroke,
-                                        shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
-                                    )
-                                    .clickable { optionsMenuExpanded = true },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_more_vert),
-                                    contentDescription = stringResource(R.string.options_menu),
-                                    tint = AppColors.textPrimary,
-                                    modifier = Modifier.size(Dimensions.IconSizeMedium)
-                                )
-                            }
-
-                            ExplorerOptionsMenu(
-                                expanded = optionsMenuExpanded,
-                                showHiddenFiles = showHiddenFiles,
-                                currentSortOption = sortOption,
-                                onDismissRequest = { optionsMenuExpanded = false },
-                                onCreateFolderClick = onCreateFolderClick,
-                                onEnterSelectionMode = onEnterSelectionMode,
-                                onToggleHiddenFiles = onToggleHiddenFiles,
-                                onSortOptionSelected = onSortOptionSelected,
-                                onRefreshClick = onRefreshClick
-                            )
-                        }
+                        ExplorerOptionsMenu(
+                            expanded = optionsMenuExpanded,
+                            showHiddenFiles = showHiddenFiles,
+                            currentSortOption = sortOption,
+                            onDismissRequest = { optionsMenuExpanded = false },
+                            onCreateFolderClick = onCreateFolderClick,
+                            onEnterSelectionMode = onEnterSelectionMode,
+                            onToggleHiddenFiles = onToggleHiddenFiles,
+                            onSortOptionSelected = onSortOptionSelected,
+                            onRefreshClick = onRefreshClick
+                        )
                     }
                 }
             }
 
-            // Desktop-style Address Bar (Breadcrumbs)
-            val addressBarShape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(addressBarShape)
-                    .background(AppColors.cardSurfaceSubtle)
-                    .border(
-                        width = Dimensions.CardBorderWidth,
-                        color = AppColors.cardStroke,
-                        shape = addressBarShape
-                    )
-                    .padding(
-                        horizontal = Dimensions.SpacingSmall,
-                        vertical = Dimensions.SpacingExtraSmall
-                    )
-            ) {
+            if (parentBreadcrumbs.isNotEmpty() && !isSelectionMode) {
                 Row(
-                    modifier = Modifier.horizontalScroll(scrollState),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(scrollState)
+                        .padding(start = Dimensions.ActionButtonSize, end = Dimensions.SpacingSmall),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    breadcrumbs.forEachIndexed { index, crumb ->
-                        val isLast = index == breadcrumbs.lastIndex
-
+                    parentBreadcrumbs.forEachIndexed { index, crumb ->
+                        if (index > 0) {
+                            Text(
+                                text = "›",
+                                color = AppColors.textMuted,
+                                modifier = Modifier.padding(horizontal = Dimensions.SpacingExtraSmall)
+                            )
+                        }
                         Text(
                             text = crumb.title,
                             fontSize = 12.sp,
-                            fontWeight = if (isLast) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (isLast) AppColors.brandAccent else AppColors.textSecondary,
+                            fontWeight = FontWeight.Medium,
+                            color = AppColors.textSecondary,
+                            maxLines = 1,
                             modifier = Modifier
-                                .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
-                                .clickable(enabled = !isLast) { onBreadcrumbClick(crumb.path) }
-                                .padding(
-                                    horizontal = Dimensions.SpacingExtraSmall,
-                                    vertical = Dimensions.SpacingMicro
-                                )
+                                .heightIn(min = Dimensions.ActionButtonSize)
+                                .wrapContentHeight(Alignment.CenterVertically)
+                                .clickable(role = Role.Button) { onBreadcrumbClick(crumb.path) }
+                                .padding(horizontal = Dimensions.SpacingExtraSmall)
                         )
-
-                        if (!isLast) {
-                            Text(
-                                text = ">",
-                                fontSize = 11.sp,
-                                color = AppColors.textMuted,
-                                modifier = Modifier.padding(horizontal = Dimensions.SpacingMicro)
-                            )
-                        }
                     }
                 }
             }

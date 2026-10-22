@@ -13,11 +13,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.ui.theme.Dimensions
+import tr.canugur.mywayfiles.ui.theme.AppColors
 
 /**
  * Reusable quick-action bottom toolbar for media viewers (Share, Copy, Properties, Delete).
@@ -32,10 +34,12 @@ fun ViewerBottomBar(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        color = Color(0xEE181818),
+        color = AppColors.mediaControlSurfaceStrong,
+        shape = RoundedCornerShape(Dimensions.CornerRadiusLarge),
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
+            .padding(horizontal = Dimensions.SpacingDefault, vertical = Dimensions.SpacingSmall)
     ) {
         Row(
             modifier = Modifier
@@ -50,28 +54,28 @@ fun ViewerBottomBar(
             ViewerActionItem(
                 iconRes = R.drawable.ic_share,
                 label = stringResource(R.string.action_share),
-                tint = Color.White,
+                tint = AppColors.mediaTextPrimary,
                 onClick = { onShare(item) }
             )
 
             ViewerActionItem(
                 iconRes = R.drawable.ic_copy,
                 label = stringResource(R.string.action_copy),
-                tint = Color.White,
+                tint = AppColors.mediaTextPrimary,
                 onClick = { onCopy(item) }
             )
 
             ViewerActionItem(
                 iconRes = R.drawable.ic_info,
                 label = stringResource(R.string.action_properties),
-                tint = Color.White,
+                tint = AppColors.mediaTextPrimary,
                 onClick = { onProperties(item) }
             )
 
             ViewerActionItem(
                 iconRes = R.drawable.ic_delete,
                 label = stringResource(R.string.action_delete),
-                tint = Color(0xFFFF6B6B),
+                tint = AppColors.mediaError,
                 onClick = { onDelete(item) }
             )
         }
@@ -90,7 +94,8 @@ fun ViewerActionItem(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
-            .clickable { onClick() }
+            .heightIn(min = Dimensions.ActionButtonSize)
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(
                 horizontal = Dimensions.SpacingMedium,
                 vertical = Dimensions.SpacingExtraSmall

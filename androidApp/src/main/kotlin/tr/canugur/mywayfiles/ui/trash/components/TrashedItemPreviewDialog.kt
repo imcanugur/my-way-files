@@ -10,7 +10,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -116,13 +115,13 @@ fun TrashedItemPreviewDialog(
                                         modifier = Modifier
                                             .size(44.dp)
                                             .clip(RoundedCornerShape(22.dp))
-                                            .background(Color(0x99000000)),
+                                            .background(AppColors.mediaControlSurface),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
                                             painter = painterResource(id = R.drawable.ic_play),
                                             contentDescription = null,
-                                            tint = Color.White,
+                                            tint = AppColors.mediaTextPrimary,
                                             modifier = Modifier.size(24.dp)
                                         )
                                     }

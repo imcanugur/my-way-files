@@ -3,18 +3,25 @@
 
     <!-- Storage Devices & Drives -->
     <string name="devices_and_drives">Devices and drives</string>
+    <string name="shortcuts">Shortcuts</string>
     <string name="storage_overview_title">This Device</string>
     <string name="free_of_total">%1$s free of %2$s</string>
+    <string name="storage_usage_percentage">%1$d%%</string>
+    <string name="drive_summary">%1$s • %2$s free of %3$s</string>
     <string name="type_internal">Local Disk</string>
     <string name="type_sdcard">SD Card</string>
     <string name="type_usb">USB Drive</string>
     <string name="refresh_drives">Refresh</string>
+    <string name="action_retry">Try again</string>
+    <string name="action_dismiss">Dismiss</string>
+    <string name="refresh_failed">Storage could not be refreshed. Try again.</string>
     <string name="theme_toggle">Toggle theme</string>
     <string name="no_drives_found">No drives found</string>
 
     <!-- File Explorer -->
     <string name="folder_empty">This folder is empty</string>
     <string name="items_count">%1$d items</string>
+    <string name="folder_contents">Files and folders</string>
     <string name="item_count_single">1 item</string>
     <string name="permission_title">Storage Access Required</string>
     <string name="permission_message">To browse files and folders on this device, please grant All Files Access in Settings.</string>
@@ -25,6 +32,15 @@
     <string name="image_load_failed">Unable to load image</string>
     <string name="video_viewer_title">Video Player</string>
     <string name="video_load_failed">Unable to play video</string>
+    <string name="previous_video">Previous video</string>
+    <string name="next_video">Next video</string>
+    <string name="rewind_ten_seconds">Rewind 10 seconds</string>
+    <string name="forward_ten_seconds">Forward 10 seconds</string>
+    <string name="play">Play</string>
+    <string name="pause">Pause</string>
+    <string name="previous_item">Previous item</string>
+    <string name="next_item">Next item</string>
+    <string name="media_type_video">Video</string>
     <string name="close_viewer">Close</string>
     <string name="action_copy">Copy</string>
     <string name="action_cut">Cut</string>
@@ -44,7 +60,9 @@
     <string name="properties_modified">Modified</string>
     <string name="action_share">Share</string>
     <string name="recycle_bin">Recycle Bin</string>
+    <string name="recycle_bin_description">View and restore deleted items.</string>
     <string name="recycle_bin_empty">Recycle Bin is empty</string>
+    <string name="recycle_bin_item_summary">%1$d items • %2$s</string>
     <string name="action_restore">Restore</string>
     <string name="action_empty_recycle_bin">Empty Recycle Bin</string>
     <string name="dialog_empty_recycle_bin_confirm">Are you sure you want to permanently delete all items in the Recycle Bin?</string>

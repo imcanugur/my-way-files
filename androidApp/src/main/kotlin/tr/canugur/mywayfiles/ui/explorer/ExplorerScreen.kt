@@ -8,7 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
@@ -18,7 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -26,6 +26,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.domain.model.SortOption
+import tr.canugur.mywayfiles.ui.common.RetryErrorState
+import tr.canugur.mywayfiles.ui.common.OperationErrorBanner
 import tr.canugur.mywayfiles.ui.explorer.components.*
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
@@ -169,6 +171,9 @@ fun ExplorerScreen(
                     if (idx >= 0) {
                         activeMediaIndex = idx
                     }
+                } else {
+                    // Unsupported file types have no inline viewer; expose their available details instead.
+                    itemForProperties = item
                 }
             },
             onLongClick = { item ->
@@ -362,13 +367,29 @@ fun ExplorerScreenContent(
                 }
 
                 is ExplorerUiState.Empty -> {
-                    Box(
+                    Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(innerPadding),
-                        contentAlignment = Alignment.Center
+                            .padding(innerPadding)
                     ) {
-                        EmptyFolderView()
+                        state.operationError?.let { message ->
+                            OperationErrorBanner(
+                                message = message,
+                                onDismiss = { onEvent(ExplorerUiEvent.ClearOperationError) },
+                                modifier = Modifier.padding(
+                                    horizontal = Dimensions.SpacingDefault,
+                                    vertical = Dimensions.SpacingSmall
+                                )
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            EmptyFolderView()
+                        }
                     }
                 }
 
@@ -380,10 +401,9 @@ fun ExplorerScreenContent(
                             .padding(Dimensions.SpacingLarge),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = state.message,
-                            color = AppColors.statusCritical,
-                            fontSize = 13.sp
+                        RetryErrorState(
+                            message = state.message,
+                            onRetry = { onEvent(ExplorerUiEvent.Refresh) }
                         )
                     }
                 }
@@ -394,12 +414,40 @@ fun ExplorerScreenContent(
                             .fillMaxSize()
                             .padding(innerPadding),
                         contentPadding = PaddingValues(
-                            horizontal = Dimensions.SpacingDefault,
-                            vertical = Dimensions.SpacingMedium
+                            horizontal = Dimensions.SpacingLarge,
+                            vertical = Dimensions.SpacingSmall
                         ),
-                        verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall)
                     ) {
-                        items(state.items, key = { it.id }) { item ->
+                        state.operationError?.let { message ->
+                            item(key = "operation-error") {
+                                OperationErrorBanner(
+                                    message = message,
+                                    onDismiss = { onEvent(ExplorerUiEvent.ClearOperationError) }
+                                )
+                            }
+                        }
+
+                        item(key = "folder-content-heading") {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = Dimensions.SpacingDefault, bottom = Dimensions.SpacingSmall),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = stringResource(tr.canugur.mywayfiles.R.string.folder_contents),
+                                    style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
+                                    color = AppColors.textPrimary
+                                )
+                                Text(
+                                    text = stringResource(tr.canugur.mywayfiles.R.string.items_count, state.items.size),
+                                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                                    color = AppColors.textSecondary
+                                )
+                            }
+                        }
+                        itemsIndexed(state.items, key = { _, item -> item.id }) { index, item ->
                             FileItemRow(
                                 item = item,
                                 isSelectionMode = isSelectionMode,
@@ -413,6 +461,9 @@ fun ExplorerScreenContent(
                                 onDelete = onDelete,
                                 onProperties = onProperties
                             )
+                            if (index < state.items.lastIndex) {
+                                androidx.compose.material3.HorizontalDivider(color = AppColors.divider)
+                            }
                         }
 
                         item {
