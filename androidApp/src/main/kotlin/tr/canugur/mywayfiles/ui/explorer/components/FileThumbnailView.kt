@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.core.image.ThumbnailLoader
@@ -29,7 +30,8 @@ import tr.canugur.mywayfiles.ui.theme.Dimensions
 @Composable
 fun FileThumbnailView(
     item: FileItem,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    thumbnailSize: Dp = 36.dp
 ) {
     val isVideo = remember(item.extension, item.isDirectory) {
         FileTypeClassifier.isVideo(item)
@@ -39,6 +41,11 @@ fun FileThumbnailView(
     }
 
     val iconContainerShape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
+    val containerModifier = if (thumbnailSize == 36.dp) {
+        modifier.size(thumbnailSize)
+    } else {
+        modifier.fillMaxSize()
+    }
 
     if (isVisualMedia) {
         var thumbnailBitmap by remember(item.path) {
@@ -54,8 +61,7 @@ fun FileThumbnailView(
         val bitmap = thumbnailBitmap
         if (bitmap != null) {
             Box(
-                modifier = modifier
-                    .size(36.dp)
+                modifier = containerModifier
                     .clip(iconContainerShape)
                     .border(
                         width = Dimensions.CardBorderWidth,
@@ -89,8 +95,7 @@ fun FileThumbnailView(
             }
         } else {
             Box(
-                modifier = modifier
-                    .size(36.dp)
+                modifier = containerModifier
                     .clip(iconContainerShape)
                     .background(AppColors.cardSurfaceSubtle)
                     .border(
@@ -104,7 +109,7 @@ fun FileThumbnailView(
                     painter = painterResource(id = if (isVideo) R.drawable.ic_video else R.drawable.ic_image),
                     contentDescription = null,
                     tint = AppColors.brandAccent,
-                    modifier = Modifier.size(Dimensions.IconSizeMedium)
+                    modifier = Modifier.size(if (thumbnailSize >= 72.dp) 48.dp else Dimensions.IconSizeMedium)
                 )
             }
         }
@@ -113,14 +118,14 @@ fun FileThumbnailView(
         val iconTint = if (item.isDirectory) AppColors.statusWarning else AppColors.textSecondary
 
         Box(
-            modifier = modifier.size(36.dp),
+            modifier = containerModifier,
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 painter = painterResource(id = iconRes),
                 contentDescription = null,
                 tint = iconTint,
-                modifier = Modifier.size(Dimensions.IconSizeDefault)
+                modifier = Modifier.size(if (thumbnailSize >= 72.dp) 48.dp else Dimensions.IconSizeDefault)
             )
         }
     }

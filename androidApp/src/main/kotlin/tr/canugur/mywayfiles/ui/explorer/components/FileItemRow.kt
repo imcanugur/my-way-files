@@ -37,6 +37,7 @@ fun FileItemRow(
     isFavorite: Boolean,
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
+    compact: Boolean = false,
     onClick: (FileItem) -> Unit,
     onLongClick: ((FileItem) -> Unit)? = null,
     onToggleSelect: ((FileItem) -> Unit)? = null,
@@ -77,10 +78,7 @@ fun FileItemRow(
             .semantics {
                 if (isSelectionMode) selected = isSelected
             }
-            .padding(
-                horizontal = Dimensions.SpacingSmall,
-                vertical = Dimensions.SpacingMedium
-            )
+            .padding(horizontal = Dimensions.SpacingSmall, vertical = if (compact) Dimensions.SpacingSmall else Dimensions.SpacingMedium)
             .alpha(if (item.isHidden) 0.62f else 1f),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -129,148 +127,40 @@ fun FileItemRow(
                 overflow = TextOverflow.Ellipsis
             )
 
-            Spacer(modifier = Modifier.height(Dimensions.SpacingMicro))
-
-            val metadataText = buildString {
-                val formattedDate = DateTimeFormatter.format(item.lastModifiedMs)
-                if (item.isDirectory) {
-                    val count = item.childCount
-                    if (count != null) {
-                        append(
-                            if (count == 1) {
-                                stringResource(R.string.item_count_single)
-                            } else {
-                                stringResource(R.string.items_count, count)
-                            }
-                        )
+            if (!compact) {
+                Spacer(modifier = Modifier.height(Dimensions.SpacingMicro))
+                val metadataText = buildString {
+                    val formattedDate = DateTimeFormatter.format(item.lastModifiedMs)
+                    if (!item.isDirectory) {
+                        append(ByteFormatter.format(item.sizeBytes))
                         if (formattedDate.isNotEmpty()) append(" • ")
                     }
-                } else {
-                    append(ByteFormatter.format(item.sizeBytes))
-                    if (formattedDate.isNotEmpty()) append(" • ")
+                    if (formattedDate.isNotEmpty()) append(formattedDate)
                 }
-                if (formattedDate.isNotEmpty()) {
-                    append(formattedDate)
+                if (metadataText.isNotEmpty()) {
+                    Text(
+                        text = metadataText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppColors.textMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
-            }
-
-            if (metadataText.isNotEmpty()) {
-                Text(
-                    text = metadataText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = AppColors.textMuted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
             }
         }
 
-        // Context Menu (3-dots) when not in Selection Mode
         if (!isSelectionMode) {
-            Box {
-                var menuExpanded by remember { mutableStateOf(false) }
-
-                IconButton(
-                    onClick = { menuExpanded = true },
-                    modifier = Modifier.size(Dimensions.ActionButtonSize)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_more_vert),
-                        contentDescription = stringResource(R.string.options_menu),
-                        tint = AppColors.textSecondary,
-                        modifier = Modifier.size(Dimensions.IconSizeMedium)
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false },
-                    modifier = Modifier.background(AppColors.cardSurface)
-                ) {
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = stringResource(if (isFavorite) R.string.remove_favorite else R.string.add_favorite),
-                                color = AppColors.textPrimary
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                painterResource(R.drawable.ic_favorite),
-                                contentDescription = null,
-                                tint = if (isFavorite) AppColors.brandAccent else AppColors.textSecondary,
-                                modifier = Modifier.size(Dimensions.IconSizeMedium)
-                            )
-                        },
-                        onClick = {
-                            menuExpanded = false
-                            onToggleFavorite(item)
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(text = stringResource(R.string.action_copy), color = AppColors.textPrimary) },
-                        leadingIcon = {
-                            Icon(painterResource(R.drawable.ic_copy), null, tint = AppColors.textSecondary, modifier = Modifier.size(Dimensions.IconSizeMedium))
-                        },
-                        onClick = {
-                            menuExpanded = false
-                            onCopy(item)
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(text = stringResource(R.string.action_cut), color = AppColors.textPrimary) },
-                        leadingIcon = {
-                            Icon(painterResource(R.drawable.ic_cut), null, tint = AppColors.textSecondary, modifier = Modifier.size(Dimensions.IconSizeMedium))
-                        },
-                        onClick = {
-                            menuExpanded = false
-                            onCut(item)
-                        }
-                    )
-                    if (!item.isDirectory) {
-                        DropdownMenuItem(
-                            text = { Text(text = stringResource(R.string.action_share), color = AppColors.textPrimary) },
-                            leadingIcon = {
-                                Icon(painterResource(R.drawable.ic_share), null, tint = AppColors.textSecondary, modifier = Modifier.size(Dimensions.IconSizeMedium))
-                            },
-                            onClick = {
-                                menuExpanded = false
-                                onShare(item)
-                            }
-                        )
-                    }
-                    DropdownMenuItem(
-                        text = { Text(text = stringResource(R.string.action_rename), color = AppColors.textPrimary) },
-                        leadingIcon = {
-                            Icon(painterResource(R.drawable.ic_edit_rename), null, tint = AppColors.textSecondary, modifier = Modifier.size(Dimensions.IconSizeMedium))
-                        },
-                        onClick = {
-                            menuExpanded = false
-                            onRename(item)
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(text = stringResource(R.string.action_delete), color = AppColors.statusCritical) },
-                        leadingIcon = {
-                            Icon(painterResource(R.drawable.ic_delete), null, tint = AppColors.statusCritical, modifier = Modifier.size(Dimensions.IconSizeMedium))
-                        },
-                        onClick = {
-                            menuExpanded = false
-                            onDelete(item)
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(text = stringResource(R.string.action_properties), color = AppColors.textPrimary) },
-                        leadingIcon = {
-                            Icon(painterResource(R.drawable.ic_info), null, tint = AppColors.textSecondary, modifier = Modifier.size(Dimensions.IconSizeMedium))
-                        },
-                        onClick = {
-                            menuExpanded = false
-                            onProperties(item)
-                        }
-                    )
-                }
-            }
+            FileItemActionsMenu(
+                item = item,
+                isFavorite = isFavorite,
+                onCopy = onCopy,
+                onCut = onCut,
+                onShare = onShare,
+                onRename = onRename,
+                onDelete = onDelete,
+                onProperties = onProperties,
+                onToggleFavorite = onToggleFavorite
+            )
         }
     }
 }

@@ -32,6 +32,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.data.preferences.SavedLocationStore
+import tr.canugur.mywayfiles.domain.model.FileViewMode
+import tr.canugur.mywayfiles.domain.model.GridTileSize
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 
@@ -42,6 +44,10 @@ fun AppSettingsScreen(
     onDarkThemeChange: (Boolean) -> Unit,
     showHiddenFiles: Boolean,
     onShowHiddenFilesChange: (Boolean) -> Unit,
+    viewMode: FileViewMode,
+    onViewModeChange: (FileViewMode) -> Unit,
+    gridTileSize: GridTileSize,
+    onGridTileSizeChange: (GridTileSize) -> Unit,
     recentFolderLimit: Int,
     onRecentFolderLimitChange: (Int) -> Unit,
     confirmBeforeMovingToTrash: Boolean,
@@ -53,6 +59,8 @@ fun AppSettingsScreen(
     modifier: Modifier = Modifier
 ) {
     var recentLimitMenuExpanded by remember { mutableStateOf(false) }
+    var viewModeMenuExpanded by remember { mutableStateOf(false) }
+    var gridSizeMenuExpanded by remember { mutableStateOf(false) }
     BackHandler(enabled = !isDrawerOpen, onBack = onNavigateBack)
 
     Scaffold(
@@ -99,6 +107,60 @@ fun AppSettingsScreen(
                 )
             }
             item { SettingsSectionTitle(stringResource(R.string.settings_browsing)) }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_default_view)) },
+                    supportingContent = { Text(stringResource(R.string.settings_default_view_description)) },
+                    trailingContent = {
+                        Box {
+                            TextButton(onClick = { viewModeMenuExpanded = true }) {
+                                Text(stringResource(viewMode.labelResource()))
+                            }
+                            DropdownMenu(
+                                expanded = viewModeMenuExpanded,
+                                onDismissRequest = { viewModeMenuExpanded = false }
+                            ) {
+                                FileViewMode.values().forEach { mode ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(mode.labelResource())) },
+                                        onClick = {
+                                            viewModeMenuExpanded = false
+                                            onViewModeChange(mode)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_grid_size)) },
+                    supportingContent = { Text(stringResource(R.string.settings_grid_size_description)) },
+                    trailingContent = {
+                        Box {
+                            TextButton(onClick = { gridSizeMenuExpanded = true }) {
+                                Text(stringResource(gridTileSize.labelResource()))
+                            }
+                            DropdownMenu(
+                                expanded = gridSizeMenuExpanded,
+                                onDismissRequest = { gridSizeMenuExpanded = false }
+                            ) {
+                                GridTileSize.values().forEach { size ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(size.labelResource())) },
+                                        onClick = {
+                                            gridSizeMenuExpanded = false
+                                            onGridTileSizeChange(size)
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                )
+            }
             item {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_recent_folders)) },
@@ -170,6 +232,18 @@ fun AppSettingsScreen(
             }
         }
     }
+}
+
+private fun FileViewMode.labelResource(): Int = when (this) {
+    FileViewMode.LIST -> R.string.view_list
+    FileViewMode.COMPACT -> R.string.view_compact
+    FileViewMode.GRID -> R.string.view_grid
+}
+
+private fun GridTileSize.labelResource(): Int = when (this) {
+    GridTileSize.SMALL -> R.string.settings_grid_size_small
+    GridTileSize.MEDIUM -> R.string.settings_grid_size_medium
+    GridTileSize.LARGE -> R.string.settings_grid_size_large
 }
 
 @Composable

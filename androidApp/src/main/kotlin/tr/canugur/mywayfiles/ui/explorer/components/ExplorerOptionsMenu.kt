@@ -129,7 +129,7 @@ fun ExplorerOptionsMenu(
                 }
             )
         } else {
-            // Sort Submenu
+            // Sort submenu.
             DropdownMenuItem(
                 text = { Text(text = stringResource(R.string.sort_name_ascending), color = AppColors.textPrimary) },
                 leadingIcon = {

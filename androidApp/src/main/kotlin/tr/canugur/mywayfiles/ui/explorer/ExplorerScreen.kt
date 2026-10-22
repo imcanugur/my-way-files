@@ -18,6 +18,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Scaffold
@@ -42,6 +47,7 @@ import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.core.util.FileShareHelper
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.domain.model.FileItem
+import tr.canugur.mywayfiles.domain.model.FileViewMode
 import tr.canugur.mywayfiles.domain.model.SortOption
 import tr.canugur.mywayfiles.data.preferences.SavedLocation
 import tr.canugur.mywayfiles.ui.common.RetryErrorState
@@ -65,6 +71,8 @@ fun ExplorerScreen(
     startInSearch: Boolean = false,
     showHiddenFilesSetting: Boolean,
     confirmBeforeMovingToTrash: Boolean,
+    viewMode: FileViewMode,
+    gridTileSize: Int,
     onNavigateBack: () -> Unit,
     onOpenDrawer: () -> Unit,
     onDirectoryVisited: (String, String, String, String) -> Unit,
@@ -296,6 +304,8 @@ fun ExplorerScreen(
                 requestBatchMoveToTrash(items)
             },
             onSortOptionSelected = { viewModel.onEvent(ExplorerUiEvent.ChangeSortOption(it)) },
+            viewMode = viewMode,
+            gridTileSize = gridTileSize,
             onItemClick = { item ->
                 if (isSelectionMode) {
                     selectedPaths = if (item.path in selectedPaths) {
@@ -462,6 +472,8 @@ fun ExplorerScreenContent(
     onBatchCut: () -> Unit,
     onBatchDelete: () -> Unit,
     onSortOptionSelected: (SortOption) -> Unit,
+    viewMode: FileViewMode,
+    gridTileSize: Int,
     onItemClick: (FileItem) -> Unit,
     onLongClick: (FileItem) -> Unit,
     onToggleSelect: (FileItem) -> Unit,
@@ -478,6 +490,8 @@ fun ExplorerScreenContent(
     val context = LocalContext.current
     val density = LocalDensity.current
     val contentOffsetPx = with(density) { MotionTokens.NAVIGATION_OFFSET_DP.dp.roundToPx() }
+    val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
     var lastVisibleDirectoryState by remember { mutableStateOf<ExplorerUiState?>(null) }
     LaunchedEffect(state) {
         if (state is ExplorerUiState.Success || state is ExplorerUiState.Empty) {
@@ -678,78 +692,124 @@ fun ExplorerScreenContent(
                             }
                         }
 
-                        else -> LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding),
-                        contentPadding = PaddingValues(
-                            horizontal = Dimensions.SpacingLarge,
-                            vertical = Dimensions.SpacingSmall
-                        ),
-                    ) {
-                        if (isSearchActive && isSearchLoading && currentItems.isNotEmpty()) {
-                            item(key = "search-progress") {
-                                LinearProgressIndicator(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    color = AppColors.brandAccent
-                                )
+                        else -> {
+                            if (viewMode == FileViewMode.GRID) {
+                                LazyVerticalGrid(
+                                    columns = GridCells.Adaptive(minSize = gridTileSize.dp),
+                                    state = gridState,
+                                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                                    contentPadding = PaddingValues(
+                                        horizontal = Dimensions.SpacingLarge,
+                                        vertical = Dimensions.SpacingSmall
+                                    ),
+                                    horizontalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall),
+                                    verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall)
+                                ) {
+                                    if (isSearchActive && isSearchLoading && currentItems.isNotEmpty()) {
+                                        item(key = "search-progress", span = { GridItemSpan(maxLineSpan) }) {
+                                            LinearProgressIndicator(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                color = AppColors.brandAccent
+                                            )
+                                        }
+                                    }
+                                    state.operationError?.let { message ->
+                                        item(key = "operation-error", span = { GridItemSpan(maxLineSpan) }) {
+                                            OperationErrorBanner(
+                                                message = message,
+                                                onDismiss = { onEvent(ExplorerUiEvent.ClearOperationError) }
+                                            )
+                                        }
+                                    }
+                                    item(key = "folder-content-heading", span = { GridItemSpan(maxLineSpan) }) {
+                                        FolderContentsHeading(state.items.size)
+                                    }
+                                    items(
+                                        items = state.items,
+                                        key = { it.id },
+                                        contentType = { if (it.isDirectory) "folder-tile" else "file-tile" }
+                                    ) { item ->
+                                        FileGridTile(
+                                            item = item,
+                                            isFavorite = item.path in favoritePaths,
+                                            isSelectionMode = isSelectionMode,
+                                            isSelected = item.path in selectedPaths,
+                                            onClick = onItemClick,
+                                            onLongClick = onLongClick,
+                                            onToggleSelect = onToggleSelect,
+                                            onCopy = onCopy,
+                                            onCut = onCut,
+                                            onShare = { FileShareHelper.shareFile(context, it.path) },
+                                            onRename = onRename,
+                                            onDelete = onDelete,
+                                            onProperties = onProperties,
+                                            onToggleFavorite = onToggleFavorite
+                                        )
+                                    }
+                                    item(key = "bottom-space", span = { GridItemSpan(maxLineSpan) }) {
+                                        Spacer(modifier = Modifier.height(Dimensions.SpacingHuge))
+                                    }
+                                }
+                            } else {
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                                    contentPadding = PaddingValues(
+                                        horizontal = Dimensions.SpacingLarge,
+                                        vertical = Dimensions.SpacingSmall
+                                    )
+                                ) {
+                                    if (isSearchActive && isSearchLoading && currentItems.isNotEmpty()) {
+                                        item(key = "search-progress") {
+                                            LinearProgressIndicator(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                color = AppColors.brandAccent
+                                            )
+                                        }
+                                    }
+                                    state.operationError?.let { message ->
+                                        item(key = "operation-error") {
+                                            OperationErrorBanner(
+                                                message = message,
+                                                onDismiss = { onEvent(ExplorerUiEvent.ClearOperationError) }
+                                            )
+                                        }
+                                    }
+                                    item(key = "folder-content-heading") {
+                                        FolderContentsHeading(state.items.size)
+                                    }
+                                    itemsIndexed(
+                                        items = state.items,
+                                        key = { _, item -> item.id },
+                                        contentType = { _, item -> if (item.isDirectory) "folder-row" else "file-row" }
+                                    ) { index, item ->
+                                        FileItemRow(
+                                            item = item,
+                                            isFavorite = item.path in favoritePaths,
+                                            isSelectionMode = isSelectionMode,
+                                            isSelected = item.path in selectedPaths,
+                                            compact = viewMode == FileViewMode.COMPACT,
+                                            onClick = onItemClick,
+                                            onLongClick = onLongClick,
+                                            onToggleSelect = onToggleSelect,
+                                            onCopy = onCopy,
+                                            onCut = onCut,
+                                            onShare = { FileShareHelper.shareFile(context, it.path) },
+                                            onRename = onRename,
+                                            onDelete = onDelete,
+                                            onProperties = onProperties,
+                                            onToggleFavorite = onToggleFavorite
+                                        )
+                                        if (index < state.items.lastIndex) {
+                                            androidx.compose.material3.HorizontalDivider(color = AppColors.divider)
+                                        }
+                                    }
+                                    item(key = "bottom-space") {
+                                        Spacer(modifier = Modifier.height(Dimensions.SpacingHuge))
+                                    }
+                                }
                             }
                         }
-                        state.operationError?.let { message ->
-                            item(key = "operation-error") {
-                                OperationErrorBanner(
-                                    message = message,
-                                    onDismiss = { onEvent(ExplorerUiEvent.ClearOperationError) }
-                                )
-                            }
-                        }
-
-                        item(key = "folder-content-heading") {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = Dimensions.SpacingDefault, bottom = Dimensions.SpacingSmall),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = stringResource(tr.canugur.mywayfiles.R.string.folder_contents),
-                                    style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
-                                    color = AppColors.textPrimary
-                                )
-                                Text(
-                                    text = stringResource(tr.canugur.mywayfiles.R.string.items_count, state.items.size),
-                                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                                    color = AppColors.textSecondary
-                                )
-                            }
-                        }
-                        itemsIndexed(state.items, key = { _, item -> item.id }) { index, item ->
-                            FileItemRow(
-                                item = item,
-                                isFavorite = item.path in favoritePaths,
-                                isSelectionMode = isSelectionMode,
-                                isSelected = item.path in selectedPaths,
-                                onClick = { onItemClick(item) },
-                                onLongClick = onLongClick,
-                                onToggleSelect = onToggleSelect,
-                                onCopy = onCopy,
-                                onCut = onCut,
-                                onShare = { FileShareHelper.shareFile(context, it.path) },
-                                onRename = onRename,
-                                onDelete = onDelete,
-                                onProperties = onProperties,
-                                onToggleFavorite = onToggleFavorite
-                            )
-                            if (index < state.items.lastIndex) {
-                                androidx.compose.material3.HorizontalDivider(color = AppColors.divider)
-                            }
-                        }
-
-                        item {
-                            Spacer(modifier = Modifier.height(Dimensions.SpacingHuge))
-                        }
-                    }
                     }
                 }
             }
@@ -772,6 +832,28 @@ fun ExplorerScreenContent(
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
+    }
+}
+
+@Composable
+private fun FolderContentsHeading(itemCount: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = Dimensions.SpacingDefault, bottom = Dimensions.SpacingSmall),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = stringResource(R.string.folder_contents),
+            style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
+            color = AppColors.textPrimary
+        )
+        Text(
+            text = stringResource(R.string.items_count, itemCount),
+            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+            color = AppColors.textSecondary
+        )
     }
 }
 

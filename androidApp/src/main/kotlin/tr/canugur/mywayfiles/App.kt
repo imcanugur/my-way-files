@@ -22,6 +22,7 @@ import tr.canugur.mywayfiles.data.preferences.SavedLocationStore
 import tr.canugur.mywayfiles.data.preferences.AppSettingsStore
 import tr.canugur.mywayfiles.data.preferences.ExplorerPreferences
 import tr.canugur.mywayfiles.domain.model.StorageDrive
+import tr.canugur.mywayfiles.domain.model.GridTileSize
 import tr.canugur.mywayfiles.ui.navigation.AppNavigationDrawer
 import tr.canugur.mywayfiles.ui.navigation.AppSettingsScreen
 import tr.canugur.mywayfiles.ui.explorer.ExplorerScreen
@@ -63,6 +64,8 @@ fun App() {
     var showHiddenFiles by remember(explorerPreferences) {
         mutableStateOf(explorerPreferences.showHiddenFiles)
     }
+    var explorerViewMode by remember(explorerPreferences) { mutableStateOf(explorerPreferences.viewMode) }
+    var gridTileSize by remember(explorerPreferences) { mutableStateOf(explorerPreferences.gridTileSize) }
     var currentDestination by remember { mutableStateOf<NavigationDestination>(NavigationDestination.Home) }
     var destinationBeforeSettings by remember { mutableStateOf<NavigationDestination>(NavigationDestination.Home) }
     val drawerState = rememberDrawerState(initialValue = androidx.compose.material3.DrawerValue.Closed)
@@ -215,6 +218,8 @@ fun App() {
                         startInSearch = destination.startInSearch,
                         showHiddenFilesSetting = showHiddenFiles,
                         confirmBeforeMovingToTrash = confirmBeforeMovingToTrash,
+                        viewMode = explorerViewMode,
+                        gridTileSize = gridTileSize.minWidthDp,
                         onNavigateBack = { currentDestination = NavigationDestination.Home },
                         onOpenDrawer = ::openDrawer,
                         onDirectoryVisited = { path, name, storageRoot, storageName ->
@@ -247,6 +252,16 @@ fun App() {
                         onShowHiddenFilesChange = { enabled ->
                             explorerPreferences.showHiddenFiles = enabled
                             showHiddenFiles = enabled
+                        },
+                        viewMode = explorerViewMode,
+                        onViewModeChange = { mode ->
+                            explorerPreferences.viewMode = mode
+                            explorerViewMode = mode
+                        },
+                        gridTileSize = gridTileSize,
+                        onGridTileSizeChange = { size ->
+                            explorerPreferences.gridTileSize = size
+                            gridTileSize = size
                         },
                         recentFolderLimit = recentFolderLimit,
                         confirmBeforeMovingToTrash = confirmBeforeMovingToTrash,

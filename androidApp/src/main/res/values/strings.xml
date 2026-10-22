@@ -94,6 +94,11 @@
     <string name="deselect_all">Deselect All</string>
     <string name="selected_count">%1$d selected</string>
     <string name="sort_by">Sort by</string>
+    <string name="view_mode">View</string>
+    <string name="view_list">List</string>
+    <string name="view_compact">Compact list</string>
+    <string name="view_grid">Grid</string>
+    <string name="folder_label">Folder</string>
     <string name="sort_name">Name</string>
     <string name="sort_date">Date</string>
     <string name="sort_size">Size</string>
@@ -125,6 +130,13 @@
     <string name="settings_appearance">Appearance</string>
     <string name="settings_browsing">Browsing</string>
     <string name="settings_file_operations">File operations</string>
+    <string name="settings_default_view">Default file layout</string>
+    <string name="settings_default_view_description">Choose how files appear when browsing folders</string>
+    <string name="settings_grid_size">Grid tile size</string>
+    <string name="settings_grid_size_description">Adjust how many file previews fit in a row</string>
+    <string name="settings_grid_size_small">Small</string>
+    <string name="settings_grid_size_medium">Medium</string>
+    <string name="settings_grid_size_large">Large</string>
     <string name="settings_dark_theme">Dark theme</string>
     <string name="settings_dark_theme_description">Use a dark appearance throughout the app</string>
     <string name="settings_recent_folders">Recent folders</string>

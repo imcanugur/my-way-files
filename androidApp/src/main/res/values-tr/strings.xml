@@ -86,6 +86,11 @@
     <string name="original_location">Özgün Konum</string>
     <string name="deleted_time">Silinme Tarihi</string>
     <string name="sort_name_ascending">Ad (A’dan Z’ye)</string>
+    <string name="view_mode">Görünüm</string>
+    <string name="view_list">Liste</string>
+    <string name="view_compact">Sıkı liste</string>
+    <string name="view_grid">Izgara</string>
+    <string name="folder_label">Klasör</string>
     <string name="sort_name_descending">Ad (Z’den A’ya)</string>
     <string name="sort_date_newest">Tarih (en yeniden eskiye)</string>
     <string name="sort_date_oldest">Tarih (en eskiden yeniye)</string>
@@ -112,6 +117,13 @@
     <string name="settings_appearance">Görünüm</string>
     <string name="settings_browsing">Gezinme</string>
     <string name="settings_file_operations">Dosya işlemleri</string>
+    <string name="settings_default_view">Varsayılan dosya görünümü</string>
+    <string name="settings_default_view_description">Klasörlerde dosyaların nasıl gösterileceğini seç</string>
+    <string name="settings_grid_size">Izgara kutusu boyutu</string>
+    <string name="settings_grid_size_description">Bir satırda kaç dosya önizlemesi olacağını ayarla</string>
+    <string name="settings_grid_size_small">Küçük</string>
+    <string name="settings_grid_size_medium">Orta</string>
+    <string name="settings_grid_size_large">Büyük</string>
     <string name="settings_dark_theme">Koyu tema</string>
     <string name="settings_dark_theme_description">Uygulamanın koyu görünümünü kullan</string>
     <string name="settings_recent_folders">Son klasörler</string>
