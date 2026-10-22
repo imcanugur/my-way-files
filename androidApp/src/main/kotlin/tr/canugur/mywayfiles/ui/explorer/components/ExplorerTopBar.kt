@@ -67,6 +67,8 @@ fun ExplorerTopBar(
     canShareSelected: Boolean,
     onBatchCut: () -> Unit,
     onBatchDelete: () -> Unit,
+    onBatchMoveToFolder: () -> Unit,
+    canMoveSelected: Boolean,
     onSortOptionSelected: (SortOption) -> Unit,
     onRefreshClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -119,6 +121,8 @@ fun ExplorerTopBar(
                 canShareSelected = canShareSelected,
                 onBatchCut = onBatchCut,
                 onBatchDelete = onBatchDelete,
+                onBatchMoveToFolder = onBatchMoveToFolder,
+                canMoveSelected = canMoveSelected,
                 modifier = Modifier.fillMaxWidth()
             )
         }

@@ -300,6 +300,25 @@ class ExplorerViewModel(
 
     fun currentDirectoryPath(): String = activePath
 
+    suspend fun listMoveTargets(path: String): Result<List<FileItem>> =
+        fileRepository.getDirectoryContents(path, showHidden = showHiddenFiles, forceRefresh = true)
+            .map { items -> items.filter(FileItem::isDirectory).sortedBy { it.name.lowercase(Locale.ROOT) } }
+
+    suspend fun createMoveTargetFolder(parentPath: String, name: String): Result<Unit> =
+        fileRepository.createFolder(parentPath, name)
+
+    suspend fun moveItemsToFolder(items: List<FileItem>, targetPath: String): List<Result<Unit>> {
+        val results = items.map { item ->
+            val alreadyAtTarget = runCatching {
+                File(item.path).parentFile?.canonicalPath == File(targetPath).canonicalPath
+            }.getOrDefault(false)
+            if (alreadyAtTarget) Result.success(Unit)
+            else fileRepository.move(item.path, targetPath)
+        }
+        finishMutation(results, "Unable to move the selected media")
+        return results
+    }
+
     fun navigateUp(): Boolean {
         if (!canNavigateUp()) return false
         val parent = File(activePath).parentFile ?: return false

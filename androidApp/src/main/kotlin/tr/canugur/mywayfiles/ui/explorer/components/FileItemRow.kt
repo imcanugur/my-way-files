@@ -22,6 +22,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.core.util.ByteFormatter
 import tr.canugur.mywayfiles.core.util.DateTimeFormatter
+import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
@@ -43,6 +44,7 @@ fun FileItemRow(
     onToggleSelect: ((FileItem) -> Unit)? = null,
     onCopy: (FileItem) -> Unit,
     onCut: (FileItem) -> Unit,
+    onMoveToFolder: (FileItem) -> Unit,
     onShare: (FileItem) -> Unit,
     onRename: (FileItem) -> Unit,
     onDelete: (FileItem) -> Unit,
@@ -150,11 +152,25 @@ fun FileItemRow(
         }
 
         if (!isSelectionMode) {
+            if (FileTypeClassifier.isImage(item) || FileTypeClassifier.isVideo(item)) {
+                IconButton(
+                    onClick = { onMoveToFolder(item) },
+                    modifier = Modifier.size(Dimensions.ActionButtonSize)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_folder),
+                        contentDescription = stringResource(R.string.action_move_to_folder),
+                        tint = AppColors.brandAccent,
+                        modifier = Modifier.size(Dimensions.IconSizeMedium)
+                    )
+                }
+            }
             FileItemActionsMenu(
                 item = item,
                 isFavorite = isFavorite,
                 onCopy = onCopy,
                 onCut = onCut,
+                onMoveToFolder = onMoveToFolder,
                 onShare = onShare,
                 onRename = onRename,
                 onDelete = onDelete,

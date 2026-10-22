@@ -27,6 +27,7 @@ import tr.canugur.mywayfiles.ui.navigation.AppNavigationDrawer
 import tr.canugur.mywayfiles.ui.navigation.AppSettingsScreen
 import tr.canugur.mywayfiles.ui.explorer.ExplorerScreen
 import tr.canugur.mywayfiles.ui.explorer.FileClipboardStore
+import tr.canugur.mywayfiles.ui.explorer.components.MoveTargetRoot
 import tr.canugur.mywayfiles.ui.home.HomeScreen
 import tr.canugur.mywayfiles.ui.theme.MyWayFilesTheme
 import tr.canugur.mywayfiles.ui.theme.MotionTokens
@@ -74,6 +75,7 @@ fun App() {
     val fileClipboardStore = remember { FileClipboardStore() }
     var storageDrives by remember { mutableStateOf(emptyList<StorageDrive>()) }
     var recentFolders by remember { mutableStateOf(locationStore.recentFolders()) }
+    var recentMoveTargets by remember { mutableStateOf(locationStore.recentMoveTargets()) }
     var recentFolderLimit by remember { mutableStateOf(locationStore.recentFolderLimit) }
     var favorites by remember { mutableStateOf(locationStore.favorites()) }
     val navigationOffsetPx = with(LocalDensity.current) {
@@ -220,6 +222,8 @@ fun App() {
                         confirmBeforeMovingToTrash = confirmBeforeMovingToTrash,
                         viewMode = explorerViewMode,
                         gridTileSize = gridTileSize.minWidthDp,
+                        moveTargetRoots = storageDrives.map { MoveTargetRoot(it.name, it.path) },
+                        recentMoveTargets = recentMoveTargets,
                         onNavigateBack = { currentDestination = NavigationDestination.Home },
                         onOpenDrawer = ::openDrawer,
                         onDirectoryVisited = { path, name, storageRoot, storageName ->
@@ -228,6 +232,23 @@ fun App() {
                         },
                         onToggleFavorite = { location ->
                             locationStore.toggleFavorite(location.path, location.name, location.isDirectory)
+                            favorites = locationStore.favorites()
+                        },
+                        onItemsMoved = { movedItems, targetPath ->
+                            movedItems.forEach { (item, newPath) ->
+                                locationStore.updateFavoritePath(item.path, newPath, item.name)
+                            }
+                            if (movedItems.isNotEmpty()) {
+                                driveForPath(targetPath)?.let { drive ->
+                                    locationStore.recordMoveTarget(
+                                        targetPath,
+                                        File(targetPath).name,
+                                        drive.path,
+                                        drive.name
+                                    )
+                                    recentMoveTargets = locationStore.recentMoveTargets()
+                                }
+                            }
                             favorites = locationStore.favorites()
                         },
                         clipboardStore = fileClipboardStore

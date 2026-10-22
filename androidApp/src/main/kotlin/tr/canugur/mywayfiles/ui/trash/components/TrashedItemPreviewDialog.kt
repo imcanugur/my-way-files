@@ -4,6 +4,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,6 +29,7 @@ import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.domain.model.TrashedItem
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
+import tr.canugur.mywayfiles.ui.common.AppModalBottomSheet
 
 /**
  * Inspection dialog for trashed files featuring visual preview, metadata details, and direct restore/deletion actions.
@@ -49,24 +52,21 @@ fun TrashedItemPreviewDialog(
         !item.isDirectory && FileTypeClassifier.isVideo(extension)
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = AppColors.cardSurface,
-        title = {
+    AppModalBottomSheet(onDismissRequest = onDismiss, modifier = modifier) {
+        Column(
+            modifier = Modifier.fillMaxWidth().heightIn(max = 640.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Dimensions.SpacingLarge)
+                .padding(bottom = Dimensions.SpacingLarge),
+            verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingMedium)
+        ) {
             Text(
                 text = item.name,
                 color = AppColors.textPrimary,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-        },
-        text = {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall)
-            ) {
                 if (isImage || isVideo) {
                     var previewBitmap by remember(item.trashPath) {
                         mutableStateOf<ImageBitmap?>(null)
@@ -184,11 +184,9 @@ fun TrashedItemPreviewDialog(
                         )
                     }
                 }
-            }
-        },
-        confirmButton = {
             Button(
                 onClick = onRestore,
+                modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = AppColors.brandAccent,
                     contentColor = AppColors.cardSurface
@@ -203,25 +201,14 @@ fun TrashedItemPreviewDialog(
                 Spacer(modifier = Modifier.width(Dimensions.SpacingExtraSmall))
                 Text(text = stringResource(R.string.action_restore), fontSize = 12.sp)
             }
-        },
-        dismissButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(Dimensions.SpacingMicro)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 TextButton(onClick = onDeletePermanently) {
-                    Text(
-                        text = stringResource(R.string.action_delete_permanently),
-                        color = AppColors.statusCritical,
-                        fontSize = 12.sp
-                    )
+                    Text(stringResource(R.string.action_delete_permanently), color = AppColors.statusCritical)
                 }
                 TextButton(onClick = onDismiss) {
-                    Text(
-                        text = stringResource(R.string.close_viewer),
-                        color = AppColors.textSecondary,
-                        fontSize = 12.sp
-                    )
+                    Text(stringResource(R.string.close_viewer), color = AppColors.textSecondary)
                 }
             }
-        },
-        modifier = modifier
-    )
+        }
+    }
 }

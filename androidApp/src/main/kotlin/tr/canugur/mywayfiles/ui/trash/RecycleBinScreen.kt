@@ -22,10 +22,11 @@ import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.domain.model.TrashedItem
 import tr.canugur.mywayfiles.ui.common.RetryErrorState
 import tr.canugur.mywayfiles.ui.common.OperationErrorBanner
+import tr.canugur.mywayfiles.ui.common.AppModalBottomSheet
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
-import tr.canugur.mywayfiles.ui.trash.components.EmptyTrashConfirmDialog
-import tr.canugur.mywayfiles.ui.trash.components.PermanentDeleteConfirmDialog
+import tr.canugur.mywayfiles.ui.trash.components.EmptyTrashConfirmationSheet
+import tr.canugur.mywayfiles.ui.trash.components.PermanentDeleteConfirmationSheet
 import tr.canugur.mywayfiles.ui.trash.components.RecycleBinTopBar
 import tr.canugur.mywayfiles.ui.trash.components.TrashedItemPreviewDialog
 import tr.canugur.mywayfiles.ui.trash.components.TrashedItemRow
@@ -230,7 +231,7 @@ fun RecycleBinScreen(
 
         // Confirmation & Inspection Dialogs
         if (showEmptyTrashConfirm) {
-            EmptyTrashConfirmDialog(
+            EmptyTrashConfirmationSheet(
                 onConfirm = {
                     viewModel.onEvent(RecycleBinUiEvent.EmptyTrash)
                     showEmptyTrashConfirm = false
@@ -240,29 +241,36 @@ fun RecycleBinScreen(
         }
 
         if (showSelectedDeleteConfirm) {
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { showSelectedDeleteConfirm = false },
-                title = { Text(stringResource(R.string.action_delete_permanently)) },
-                text = { Text(stringResource(R.string.dialog_batch_permanent_delete_confirm, selectedItems.size)) },
-                confirmButton = {
-                    androidx.compose.material3.TextButton(onClick = {
-                        viewModel.onEvent(RecycleBinUiEvent.DeleteSelectedPermanently(selectedItems))
-                        selectedIds = emptySet()
-                        showSelectedDeleteConfirm = false
-                    }) { Text(stringResource(R.string.action_delete_permanently), color = AppColors.statusCritical) }
-                },
-                dismissButton = {
-                    androidx.compose.material3.TextButton(onClick = { showSelectedDeleteConfirm = false }) {
-                        Text(stringResource(R.string.action_cancel))
+            AppModalBottomSheet(onDismissRequest = { showSelectedDeleteConfirm = false }) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = Dimensions.SpacingLarge)
+                        .padding(bottom = Dimensions.SpacingLarge),
+                    verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingMedium)
+                ) {
+                    Text(
+                        stringResource(R.string.action_delete_permanently),
+                        style = androidx.compose.material3.MaterialTheme.typography.titleLarge
+                    )
+                    Text(stringResource(R.string.dialog_batch_permanent_delete_confirm, selectedItems.size))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        androidx.compose.material3.TextButton(onClick = { showSelectedDeleteConfirm = false }) {
+                            Text(stringResource(R.string.action_cancel))
+                        }
+                        androidx.compose.material3.TextButton(onClick = {
+                            viewModel.onEvent(RecycleBinUiEvent.DeleteSelectedPermanently(selectedItems))
+                            selectedIds = emptySet()
+                            showSelectedDeleteConfirm = false
+                        }) {
+                            Text(stringResource(R.string.action_delete_permanently), color = AppColors.statusCritical)
+                        }
                     }
-                },
-                containerColor = AppColors.cardSurface
-            )
+                }
+            }
         }
 
         val permItem = itemToDeletePermanently
         if (permItem != null) {
-            PermanentDeleteConfirmDialog(
+            PermanentDeleteConfirmationSheet(
                 item = permItem,
                 onConfirm = {
                     viewModel.onEvent(RecycleBinUiEvent.DeletePermanently(permItem))

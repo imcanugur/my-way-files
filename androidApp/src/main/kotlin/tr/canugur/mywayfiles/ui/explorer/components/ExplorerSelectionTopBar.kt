@@ -36,6 +36,8 @@ fun ExplorerSelectionTopBar(
     onBatchShare: () -> Unit,
     canShareSelected: Boolean,
     onBatchCut: () -> Unit,
+    onBatchMoveToFolder: () -> Unit,
+    canMoveSelected: Boolean,
     onBatchDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -73,6 +75,15 @@ fun ExplorerSelectionTopBar(
                 }
             }
             if (!compactToolbar && selectedCount > 0) {
+                if (canMoveSelected) {
+                    IconButton(onClick = onBatchMoveToFolder) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_folder),
+                            contentDescription = stringResource(R.string.action_move_to_folder),
+                            tint = AppColors.textSecondary
+                        )
+                    }
+                }
                 IconButton(onClick = onBatchCopy) {
                     Icon(
                         painter = painterResource(R.drawable.ic_copy),
@@ -131,6 +142,13 @@ fun ExplorerSelectionTopBar(
                             )
                         }
                         if (compactToolbar) {
+                            if (canMoveSelected) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_move_to_folder)) },
+                                    leadingIcon = { Icon(painter = painterResource(R.drawable.ic_folder), contentDescription = null) },
+                                    onClick = { actionsExpanded = false; onBatchMoveToFolder() }
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.action_copy)) },
                                 leadingIcon = {

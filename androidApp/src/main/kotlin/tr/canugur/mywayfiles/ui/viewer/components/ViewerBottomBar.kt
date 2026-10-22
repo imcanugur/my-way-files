@@ -29,6 +29,7 @@ fun ViewerBottomBar(
     item: FileItem,
     onShare: (FileItem) -> Unit,
     onCopy: (FileItem) -> Unit,
+    onMoveToFolder: (FileItem) -> Unit,
     onProperties: (FileItem) -> Unit,
     onDelete: (FileItem) -> Unit,
     modifier: Modifier = Modifier
@@ -63,6 +64,13 @@ fun ViewerBottomBar(
                 label = stringResource(R.string.action_copy),
                 tint = AppColors.mediaTextPrimary,
                 onClick = { onCopy(item) }
+            )
+
+            ViewerActionItem(
+                iconRes = R.drawable.ic_folder,
+                label = stringResource(R.string.action_move),
+                tint = AppColors.mediaTextPrimary,
+                onClick = { onMoveToFolder(item) }
             )
 
             ViewerActionItem(

@@ -52,11 +52,14 @@ import tr.canugur.mywayfiles.domain.model.SortOption
 import tr.canugur.mywayfiles.data.preferences.SavedLocation
 import tr.canugur.mywayfiles.ui.common.RetryErrorState
 import tr.canugur.mywayfiles.ui.common.OperationErrorBanner
+import tr.canugur.mywayfiles.ui.common.AppModalBottomSheet
 import tr.canugur.mywayfiles.ui.explorer.components.*
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 import tr.canugur.mywayfiles.ui.theme.MotionTokens
 import tr.canugur.mywayfiles.ui.viewer.ImageViewerScreen
+import tr.canugur.mywayfiles.ui.explorer.components.MoveTargetRoot
+import tr.canugur.mywayfiles.ui.explorer.components.MoveToFolderDialog
 
 /**
  * Stateful entry point for the Directory and File Explorer screen.
@@ -73,10 +76,13 @@ fun ExplorerScreen(
     confirmBeforeMovingToTrash: Boolean,
     viewMode: FileViewMode,
     gridTileSize: Int,
+    moveTargetRoots: List<MoveTargetRoot>,
+    recentMoveTargets: List<SavedLocation>,
     onNavigateBack: () -> Unit,
     onOpenDrawer: () -> Unit,
     onDirectoryVisited: (String, String, String, String) -> Unit,
     onToggleFavorite: (SavedLocation) -> Unit,
+    onItemsMoved: (List<Pair<FileItem, String>>, String) -> Unit,
     clipboardStore: FileClipboardStore,
     modifier: Modifier = Modifier
 ) {
@@ -176,6 +182,7 @@ fun ExplorerScreen(
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var itemToMoveToTrash by remember { mutableStateOf<FileItem?>(null) }
     var itemsToMoveToTrash by remember { mutableStateOf<List<FileItem>?>(null) }
+    var itemsToMoveToFolder by remember { mutableStateOf<List<FileItem>?>(null) }
 
     fun requestMoveToTrash(item: FileItem) {
         if (confirmBeforeMovingToTrash) itemToMoveToTrash = item
@@ -303,6 +310,11 @@ fun ExplorerScreen(
                 val items = currentItems.filter { it.path in selectedPaths }
                 requestBatchMoveToTrash(items)
             },
+            onBatchMoveToFolder = {
+                itemsToMoveToFolder = currentItems.filter {
+                    it.path in selectedPaths && (FileTypeClassifier.isImage(it) || FileTypeClassifier.isVideo(it))
+                }
+            },
             onSortOptionSelected = { viewModel.onEvent(ExplorerUiEvent.ChangeSortOption(it)) },
             viewMode = viewMode,
             gridTileSize = gridTileSize,
@@ -341,6 +353,7 @@ fun ExplorerScreen(
             onCut = { viewModel.onEvent(ExplorerUiEvent.Cut(it)) },
             onRename = { itemToRename = it },
             onDelete = ::requestMoveToTrash,
+            onMoveToFolder = { itemsToMoveToFolder = listOf(it) },
             onProperties = { itemForProperties = it },
             onPaste = { viewModel.onEvent(ExplorerUiEvent.Paste) },
             onClearClipboard = { viewModel.onEvent(ExplorerUiEvent.ClearClipboard) },
@@ -370,6 +383,7 @@ fun ExplorerScreen(
                         requestMoveToTrash(item)
                     },
                     onCopy = { viewModel.onEvent(ExplorerUiEvent.Copy(it)) },
+                    onMoveToFolder = { itemsToMoveToFolder = listOf(it) },
                     onDismiss = {
                         activeMediaIndex = null
                     }
@@ -402,6 +416,37 @@ fun ExplorerScreen(
             )
         }
 
+        val movingItems = itemsToMoveToFolder
+        if (movingItems != null) {
+            MoveToFolderDialog(
+                itemsToMove = movingItems,
+                roots = moveTargetRoots,
+                recentTargets = recentMoveTargets,
+                initialRootPath = rootPath,
+                onLoadFolders = viewModel::listMoveTargets,
+                onCreateFolder = viewModel::createMoveTargetFolder,
+                onMove = { items, targetPath ->
+                    val results = viewModel.moveItemsToFolder(items, targetPath)
+                    if (isSearchActive && searchQuery.isNotBlank()) viewModel.search(searchQuery)
+                    onItemsMoved(
+                        items.zip(results).filter { it.second.isSuccess }
+                            .map { (item, _) -> item to File(targetPath, item.name).path },
+                        targetPath
+                    )
+                    val movedPaths = items.zip(results).filter { it.second.isSuccess }.map { it.first.path }.toSet()
+                    if (movedPaths.isNotEmpty()) selectedPaths = selectedPaths - movedPaths
+                    if (results.isNotEmpty() && results.all { it.isSuccess }) {
+                        isSelectionMode = false
+                        selectedPaths = emptySet()
+                    }
+                    results
+                },
+                onDismiss = {
+                    itemsToMoveToFolder = null
+                }
+            )
+        }
+
         val trashItem = itemToMoveToTrash
         if (trashItem != null) {
             DeleteConfirmDialog(
@@ -417,25 +462,29 @@ fun ExplorerScreen(
 
         val trashItems = itemsToMoveToTrash
         if (trashItems != null) {
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { itemsToMoveToTrash = null },
-                title = { Text(stringResource(R.string.dialog_move_to_trash_title)) },
-                text = { Text(stringResource(R.string.batch_delete_confirm, trashItems.size)) },
-                confirmButton = {
-                    androidx.compose.material3.TextButton(onClick = {
-                        viewModel.onEvent(ExplorerUiEvent.BatchMoveToTrash(trashItems))
-                        itemsToMoveToTrash = null
-                        isSelectionMode = false
-                        selectedPaths = emptySet()
-                    }) { Text(stringResource(R.string.action_move_to_trash), color = AppColors.statusCritical) }
-                },
-                dismissButton = {
-                    androidx.compose.material3.TextButton(onClick = { itemsToMoveToTrash = null }) {
-                        Text(stringResource(R.string.action_cancel))
+            AppModalBottomSheet(onDismissRequest = { itemsToMoveToTrash = null }) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = Dimensions.SpacingLarge)
+                        .padding(bottom = Dimensions.SpacingLarge),
+                    verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingMedium)
+                ) {
+                    Text(stringResource(R.string.dialog_move_to_trash_title), style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
+                    Text(stringResource(R.string.batch_delete_confirm, trashItems.size))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        androidx.compose.material3.TextButton(onClick = { itemsToMoveToTrash = null }) {
+                            Text(stringResource(R.string.action_cancel))
+                        }
+                        androidx.compose.material3.TextButton(onClick = {
+                            viewModel.onEvent(ExplorerUiEvent.BatchMoveToTrash(trashItems))
+                            itemsToMoveToTrash = null
+                            isSelectionMode = false
+                            selectedPaths = emptySet()
+                        }) {
+                            Text(stringResource(R.string.action_move_to_trash), color = AppColors.statusCritical)
+                        }
                     }
-                },
-                containerColor = AppColors.cardSurface
-            )
+                }
+            }
         }
     }
 }
@@ -471,6 +520,7 @@ fun ExplorerScreenContent(
     onBatchShare: () -> Unit,
     onBatchCut: () -> Unit,
     onBatchDelete: () -> Unit,
+    onBatchMoveToFolder: () -> Unit,
     onSortOptionSelected: (SortOption) -> Unit,
     viewMode: FileViewMode,
     gridTileSize: Int,
@@ -481,6 +531,7 @@ fun ExplorerScreenContent(
     onCut: (FileItem) -> Unit,
     onRename: (FileItem) -> Unit,
     onDelete: (FileItem) -> Unit,
+    onMoveToFolder: (FileItem) -> Unit,
     onProperties: (FileItem) -> Unit,
     onPaste: () -> Unit,
     onClearClipboard: () -> Unit,
@@ -552,6 +603,12 @@ fun ExplorerScreenContent(
                     canShareSelected = selectedPaths.size == 1 && currentItems.any {
                         it.path in selectedPaths && !it.isDirectory
                     },
+                    canMoveSelected = currentItems.filter { it.path in selectedPaths }.let { selected ->
+                        selected.isNotEmpty() && selected.all {
+                            FileTypeClassifier.isImage(it) || FileTypeClassifier.isVideo(it)
+                        }
+                    },
+                    onBatchMoveToFolder = onBatchMoveToFolder,
                     onBatchCut = onBatchCut,
                     onBatchDelete = onBatchDelete,
                     onSortOptionSelected = onSortOptionSelected,
@@ -742,6 +799,7 @@ fun ExplorerScreenContent(
                                             onShare = { FileShareHelper.shareFile(context, it.path) },
                                             onRename = onRename,
                                             onDelete = onDelete,
+                                            onMoveToFolder = onMoveToFolder,
                                             onProperties = onProperties,
                                             onToggleFavorite = onToggleFavorite
                                         )
@@ -797,6 +855,7 @@ fun ExplorerScreenContent(
                                             onShare = { FileShareHelper.shareFile(context, it.path) },
                                             onRename = onRename,
                                             onDelete = onDelete,
+                                            onMoveToFolder = onMoveToFolder,
                                             onProperties = onProperties,
                                             onToggleFavorite = onToggleFavorite
                                         )

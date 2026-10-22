@@ -39,6 +39,7 @@ fun VideoViewerScreen(
     initialIndex: Int,
     onDelete: (FileItem) -> Unit,
     onCopy: (FileItem) -> Unit,
+    onMoveToFolder: (FileItem) -> Unit,
     onDismiss: () -> Unit,
     onIndexChanged: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -325,6 +326,7 @@ fun VideoViewerScreen(
                         item = currentItem,
                         onShare = { FileShareHelper.shareFile(context, it.path) },
                         onCopy = onCopy,
+                        onMoveToFolder = onMoveToFolder,
                         onProperties = { showProperties = true },
                         onDelete = {
                             videoViewRef?.stopPlayback()

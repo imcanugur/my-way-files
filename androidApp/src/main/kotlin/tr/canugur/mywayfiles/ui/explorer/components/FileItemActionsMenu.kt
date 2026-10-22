@@ -18,6 +18,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.domain.model.FileItem
+import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 
@@ -28,6 +29,7 @@ fun FileItemActionsMenu(
     isFavorite: Boolean,
     onCopy: (FileItem) -> Unit,
     onCut: (FileItem) -> Unit,
+    onMoveToFolder: (FileItem) -> Unit,
     onShare: (FileItem) -> Unit,
     onRename: (FileItem) -> Unit,
     onDelete: (FileItem) -> Unit,
@@ -58,6 +60,12 @@ fun FileItemActionsMenu(
             )
             ActionItem(R.string.action_copy, R.drawable.ic_copy) { onCopy(item); expanded = false }
             ActionItem(R.string.action_cut, R.drawable.ic_cut) { onCut(item); expanded = false }
+            if (FileTypeClassifier.isImage(item) || FileTypeClassifier.isVideo(item)) {
+                ActionItem(R.string.action_move_to_folder, R.drawable.ic_folder) {
+                    onMoveToFolder(item)
+                    expanded = false
+                }
+            }
             if (!item.isDirectory) {
                 ActionItem(R.string.action_share, R.drawable.ic_share) { onShare(item); expanded = false }
             }

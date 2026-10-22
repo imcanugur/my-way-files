@@ -17,6 +17,7 @@ import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.domain.model.StorageDrive
 import tr.canugur.mywayfiles.ui.common.RefreshErrorBanner
 import tr.canugur.mywayfiles.ui.common.RetryErrorState
+import tr.canugur.mywayfiles.ui.common.AppModalBottomSheet
 import tr.canugur.mywayfiles.ui.home.components.EmptyDrivesView
 import tr.canugur.mywayfiles.ui.home.components.HomeTopBar
 import tr.canugur.mywayfiles.ui.home.components.OverallStorageCard
@@ -219,10 +220,13 @@ fun HomeScreenContent(
     }
 
     if (showSearchLocationPicker) {
-        AlertDialog(
-            onDismissRequest = { showSearchLocationPicker = false },
-            title = { Text(stringResource(R.string.search_files)) },
-            text = {
+        AppModalBottomSheet(onDismissRequest = { showSearchLocationPicker = false }) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = Dimensions.SpacingLarge)
+                    .padding(bottom = Dimensions.SpacingLarge),
+                verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingMedium)
+            ) {
+                Text(stringResource(R.string.search_files), style = MaterialTheme.typography.titleLarge)
                 val drives = (state as? HomeUiState.Success)?.drives.orEmpty()
                 if (drives.isEmpty()) {
                     Text(stringResource(R.string.no_drives_found))
@@ -244,13 +248,12 @@ fun HomeScreenContent(
                         }
                     }
                 }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showSearchLocationPicker = false }) {
-                    Text(stringResource(R.string.action_cancel))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { showSearchLocationPicker = false }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
                 }
             }
-        )
+        }
     }
 }

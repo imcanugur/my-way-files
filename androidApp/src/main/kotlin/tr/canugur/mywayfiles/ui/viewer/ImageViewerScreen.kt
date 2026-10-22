@@ -44,6 +44,7 @@ fun ImageViewerScreen(
     initialIndex: Int,
     onDelete: (FileItem) -> Unit,
     onCopy: (FileItem) -> Unit,
+    onMoveToFolder: (FileItem) -> Unit,
     onDismiss: () -> Unit,
     initialPlayVideo: Boolean = false,
     modifier: Modifier = Modifier
@@ -199,6 +200,7 @@ fun ImageViewerScreen(
                     item = currentItem,
                     onShare = { FileShareHelper.shareFile(context, it.path) },
                     onCopy = onCopy,
+                    onMoveToFolder = onMoveToFolder,
                     onProperties = { showProperties = true },
                     onDelete = onDelete
                 )
@@ -217,6 +219,7 @@ fun ImageViewerScreen(
                         onDelete(deleted)
                     },
                     onCopy = onCopy,
+                    onMoveToFolder = onMoveToFolder,
                     onIndexChanged = { newIdx ->
                         val currentPlayed = allVideos.getOrNull(newIdx)
                         if (currentPlayed != null) {

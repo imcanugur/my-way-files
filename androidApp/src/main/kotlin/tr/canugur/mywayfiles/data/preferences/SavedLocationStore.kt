@@ -41,6 +41,24 @@ class SavedLocationStore(context: Context) {
     }
 
     @Synchronized
+    fun recentMoveTargets(): List<SavedLocation> = prune(KEY_MOVE_TARGETS, directoriesOnly = true)
+
+    @Synchronized
+    fun recordMoveTarget(path: String, name: String, storageRoot: String, storageName: String) {
+        val directory = File(path)
+        if (!directory.isDirectory) return
+        val canonicalPath = runCatching { directory.canonicalPath }.getOrDefault(directory.absolutePath)
+        val canonicalRoot = runCatching { File(storageRoot).canonicalPath }.getOrDefault(storageRoot)
+        val existing = read(KEY_MOVE_TARGETS).filterNot { location ->
+            runCatching { File(location.path).canonicalPath }.getOrDefault(location.path) == canonicalPath
+        }
+        write(
+            KEY_MOVE_TARGETS,
+            (listOf(SavedLocation(canonicalPath, name, true, canonicalRoot, storageName)) + existing).take(MAX_MOVE_TARGETS)
+        )
+    }
+
+    @Synchronized
     fun setRecentFolderLimit(limit: Int) {
         val supportedLimit = RECENT_FOLDER_LIMITS.minBy { kotlin.math.abs(it - limit) }
         prefs.edit().putInt(KEY_RECENT_FOLDER_LIMIT, supportedLimit).apply()
@@ -70,6 +88,16 @@ class SavedLocationStore(context: Context) {
     @Synchronized
     fun removeFavorite(path: String) {
         write(KEY_FAVORITES, read(KEY_FAVORITES).filterNot { it.path == path })
+    }
+
+    @Synchronized
+    fun updateFavoritePath(oldPath: String, newPath: String, newName: String) {
+        val current = read(KEY_FAVORITES)
+        if (current.none { it.path == oldPath }) return
+        val updated = current.map { location ->
+            if (location.path == oldPath) location.copy(path = newPath, name = newName) else location
+        }.distinctBy { it.path }
+        write(KEY_FAVORITES, updated)
     }
 
     private fun prune(key: String, directoriesOnly: Boolean): List<SavedLocation> {
@@ -156,9 +184,11 @@ class SavedLocationStore(context: Context) {
         private const val KEY_RECENTS = "recent_folders"
         private const val KEY_FAVORITES = "favorite_locations"
         private const val KEY_RECENT_FOLDER_LIMIT = "recent_folder_limit"
+        private const val KEY_MOVE_TARGETS = "recent_move_targets"
         private const val DEFAULT_RECENT_FOLDER_LIMIT = 3
         private const val MAX_RECENTS_PER_STORAGE = 5
         private const val MAX_RECENTS_TOTAL = 50
+        private const val MAX_MOVE_TARGETS = 5
         val RECENT_FOLDER_LIMITS = listOf(1, 3, 5)
         private const val MAX_FAVORITES = 100
     }
