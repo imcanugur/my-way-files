@@ -44,6 +44,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import java.io.File
 import tr.canugur.mywayfiles.core.util.FileTypeClassifier
+import tr.canugur.mywayfiles.core.constants.SearchTiming
 import tr.canugur.mywayfiles.core.util.FileShareHelper
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.domain.model.FileItem
@@ -135,7 +136,7 @@ fun ExplorerScreen(
     // so every state emission would compare a potentially large list and restart filesystem search.
     LaunchedEffect(isSearchActive, searchQuery, currentPath, showHiddenFiles) {
         if (isSearchActive && searchQuery.isNotBlank()) {
-            delay(250)
+            delay(SearchTiming.QUERY_DEBOUNCE_MS)
             viewModel.search(searchQuery)
         } else {
             viewModel.clearSearch()

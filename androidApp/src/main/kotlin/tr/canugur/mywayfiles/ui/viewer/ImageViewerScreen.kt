@@ -23,6 +23,7 @@ import androidx.compose.ui.res.stringResource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tr.canugur.mywayfiles.R
+import tr.canugur.mywayfiles.core.constants.MediaViewerTiming
 import tr.canugur.mywayfiles.core.util.FileShareHelper
 import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.domain.model.FileItem
@@ -75,7 +76,7 @@ fun ImageViewerScreen(
     // Auto-hide top and bottom bars after 3.5 seconds of inactivity
     LaunchedEffect(autoHideControls, controlsVisible, pagerState.currentPage, isCurrentZoomed) {
         if (autoHideControls && controlsVisible && !isCurrentZoomed && playingVideoItem == null) {
-            delay(3500)
+            delay(MediaViewerTiming.CONTROL_AUTO_HIDE_DELAY_MS)
             controlsVisible = false
         }
     }

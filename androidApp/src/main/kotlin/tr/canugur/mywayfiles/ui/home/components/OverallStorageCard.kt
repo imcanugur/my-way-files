@@ -27,7 +27,7 @@ import tr.canugur.mywayfiles.domain.model.StorageSummary
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 import tr.canugur.mywayfiles.ui.theme.MotionTokens
-import tr.canugur.mywayfiles.ui.theme.StorageThresholds
+import tr.canugur.mywayfiles.domain.policy.StorageThresholds
 
 /** Storage at a glance, using the real totals supplied by the storage repository. */
 @Composable

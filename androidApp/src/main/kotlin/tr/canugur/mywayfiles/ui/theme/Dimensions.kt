@@ -47,4 +47,7 @@ object Dimensions {
 
     /** Keep modal navigation from obscuring nearly the entire viewport on compact phones. */
     val NavigationDrawerMaxWidth: Dp = 320.dp
+
+    /** Maximum height for the destination list in the move-to-folder sheet. */
+    val MoveFolderListMaxHeight: Dp = 250.dp
 }

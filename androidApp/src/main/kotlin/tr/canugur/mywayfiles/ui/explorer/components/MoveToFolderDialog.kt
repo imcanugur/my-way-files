@@ -33,7 +33,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 import tr.canugur.mywayfiles.R
@@ -227,7 +226,7 @@ fun MoveToFolderDialog(
                         resultMessage.orEmpty(),
                         color = if (resultIsError) AppColors.statusCritical else AppColors.textPrimary
                     )
-                    else -> LazyColumn(modifier = Modifier.heightIn(max = 250.dp)) {
+                    else -> LazyColumn(modifier = Modifier.heightIn(max = Dimensions.MoveFolderListMaxHeight)) {
                         if (availableRecentTargets.isNotEmpty()) {
                             item(key = "recent_targets_header") {
                                 Text(

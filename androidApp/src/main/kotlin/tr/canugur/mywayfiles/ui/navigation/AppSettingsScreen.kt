@@ -1,6 +1,12 @@
 package tr.canugur.mywayfiles.ui.navigation
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -40,7 +47,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import kotlin.math.roundToInt
 import tr.canugur.mywayfiles.R
-import tr.canugur.mywayfiles.data.preferences.SavedLocationStore
+import tr.canugur.mywayfiles.core.constants.ProjectLinks
+import tr.canugur.mywayfiles.data.preferences.SavedLocationLimits
 import tr.canugur.mywayfiles.domain.model.FileViewMode
 import tr.canugur.mywayfiles.domain.model.GridTileSize
 import tr.canugur.mywayfiles.ui.theme.AppColors
@@ -71,6 +79,13 @@ fun AppSettingsScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val appVersion = remember(context) {
+        runCatching {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull().orEmpty()
+    }
     var viewModeMenuExpanded by remember { mutableStateOf(false) }
     var gridSizeMenuExpanded by remember { mutableStateOf(false) }
     BackHandler(enabled = !isDrawerOpen, onBack = onNavigateBack)
@@ -178,11 +193,11 @@ fun AppSettingsScreen(
                     title = stringResource(R.string.settings_recent_folders),
                     description = stringResource(
                         R.string.settings_recent_folders_description,
-                        SavedLocationStore.MAX_RECENTS_PER_STORAGE
+                        SavedLocationLimits.MAX_RECENT_FOLDERS_PER_STORAGE
                     ),
                     value = recentFolderLimit,
-                    valueRange = 1f..SavedLocationStore.MAX_RECENTS_PER_STORAGE.toFloat(),
-                    steps = SavedLocationStore.MAX_RECENTS_PER_STORAGE - 2,
+                    valueRange = 1f..SavedLocationLimits.MAX_RECENT_FOLDERS_PER_STORAGE.toFloat(),
+                    steps = SavedLocationLimits.MAX_RECENT_FOLDERS_PER_STORAGE - 2,
                     onValueChange = onRecentFolderLimitChange
                 )
             }
@@ -191,11 +206,11 @@ fun AppSettingsScreen(
                     title = stringResource(R.string.settings_recent_move_targets),
                     description = stringResource(
                         R.string.settings_recent_move_targets_description,
-                        SavedLocationStore.MAX_MOVE_TARGETS
+                        SavedLocationLimits.MAX_RECENT_MOVE_TARGETS
                     ),
                     value = recentMoveTargetLimit,
-                    valueRange = 0f..SavedLocationStore.MAX_MOVE_TARGETS.toFloat(),
-                    steps = SavedLocationStore.MAX_MOVE_TARGETS - 1,
+                    valueRange = 0f..SavedLocationLimits.MAX_RECENT_MOVE_TARGETS.toFloat(),
+                    steps = SavedLocationLimits.MAX_RECENT_MOVE_TARGETS - 1,
                     onValueChange = onRecentMoveTargetLimitChange
                 )
             }
@@ -260,7 +275,111 @@ fun AppSettingsScreen(
                     }
                 )
             }
+            item {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = Dimensions.SpacingLarge),
+                    color = AppColors.divider
+                )
+            }
+            item { SettingsSectionTitle(stringResource(R.string.settings_about)) }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.app_name)) },
+                    supportingContent = { Text(stringResource(R.string.about_app_description)) },
+                    leadingContent = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_info),
+                            contentDescription = null,
+                            tint = AppColors.brandAccent
+                        )
+                    },
+                    trailingContent = {
+                        Text(
+                            stringResource(R.string.about_version, appVersion),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = AppColors.textSecondary
+                        )
+                    }
+                )
+            }
+            item {
+                AboutLinkRow(
+                    title = stringResource(R.string.about_repository),
+                    description = stringResource(R.string.about_repository_description),
+                    icon = R.drawable.ic_file_generic,
+                    onClick = { openExternalLink(context, ProjectLinks.REPOSITORY) }
+                )
+            }
+            item {
+                AboutLinkRow(
+                    title = stringResource(R.string.about_sponsor),
+                    description = stringResource(R.string.about_sponsor_description),
+                    icon = R.drawable.ic_favorite,
+                    onClick = { openExternalLink(context, ProjectLinks.SPONSORS) }
+                )
+            }
+            item {
+                AboutLinkRow(
+                    title = stringResource(R.string.about_report_issue),
+                    description = stringResource(R.string.about_report_issue_description),
+                    icon = R.drawable.ic_info,
+                    onClick = { openExternalLink(context, ProjectLinks.ISSUES) }
+                )
+            }
+            item {
+                AboutLinkRow(
+                    title = stringResource(R.string.about_readme),
+                    description = stringResource(R.string.about_readme_description),
+                    icon = R.drawable.ic_file_generic,
+                    onClick = { openExternalLink(context, ProjectLinks.README) }
+                )
+            }
+            item {
+                AboutLinkRow(
+                    title = stringResource(R.string.about_license),
+                    description = stringResource(R.string.about_license_description),
+                    icon = R.drawable.ic_info,
+                    onClick = { openExternalLink(context, ProjectLinks.LICENSE) }
+                )
+            }
+            item {
+                AboutLinkRow(
+                    title = stringResource(R.string.about_developer),
+                    description = stringResource(R.string.about_developer_description),
+                    icon = R.drawable.ic_home,
+                    onClick = { openExternalLink(context, ProjectLinks.DEVELOPER_PROFILE) }
+                )
+            }
         }
+    }
+}
+
+@Composable
+private fun AboutLinkRow(
+    title: String,
+    description: String,
+    icon: Int,
+    onClick: () -> Unit
+) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = { Text(description) },
+        leadingContent = {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = null,
+                tint = AppColors.textSecondary
+            )
+        },
+        modifier = Modifier.clickable(role = Role.Button, onClick = onClick)
+    )
+}
+
+private fun openExternalLink(context: Context, url: String) {
+    try {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    } catch (_: ActivityNotFoundException) {
+        Toast.makeText(context, R.string.about_link_open_failed, Toast.LENGTH_SHORT).show()
     }
 }
 

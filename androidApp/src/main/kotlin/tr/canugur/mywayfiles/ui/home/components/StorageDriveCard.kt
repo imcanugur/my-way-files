@@ -37,7 +37,7 @@ import tr.canugur.mywayfiles.domain.model.StorageDriveType
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 import tr.canugur.mywayfiles.ui.theme.MotionTokens
-import tr.canugur.mywayfiles.ui.theme.StorageThresholds
+import tr.canugur.mywayfiles.domain.policy.StorageThresholds
 
 /** Compact, content-first drive row; one row is one navigation target. */
 @Composable

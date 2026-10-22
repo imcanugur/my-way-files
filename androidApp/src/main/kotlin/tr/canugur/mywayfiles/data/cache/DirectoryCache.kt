@@ -23,7 +23,7 @@ class DirectoryCache(context: Context) : DirectoryContentsCache {
 
     // Bound cache by file records, not directory count: one huge directory must not retain
     // thousands of FileItem objects as if it cost the same as an empty directory.
-    private val memoryCache = object : LruCache<String, List<FileItem>>(4_000) {
+    private val memoryCache = object : LruCache<String, List<FileItem>>(MEMORY_CACHE_MAX_FILE_RECORDS) {
         override fun sizeOf(key: String, value: List<FileItem>): Int = value.size.coerceAtLeast(1)
     }
     private val mutex = Mutex()
@@ -121,6 +121,7 @@ class DirectoryCache(context: Context) : DirectoryContentsCache {
     }
 
     companion object {
+        private const val MEMORY_CACHE_MAX_FILE_RECORDS = 4_000
         @Volatile private var instance: DirectoryCache? = null
         fun getInstance(context: Context): DirectoryCache = instance ?: synchronized(this) {
             instance ?: DirectoryCache(context.applicationContext).also { instance = it }

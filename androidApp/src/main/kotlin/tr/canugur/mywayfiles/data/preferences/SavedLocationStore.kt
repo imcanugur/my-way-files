@@ -10,8 +10,8 @@ class SavedLocationStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     val recentFolderLimit: Int
-        get() = prefs.getInt(KEY_RECENT_FOLDER_LIMIT, DEFAULT_RECENT_FOLDER_LIMIT)
-            .coerceIn(1, MAX_RECENTS_PER_STORAGE)
+        get() = prefs.getInt(KEY_RECENT_FOLDER_LIMIT, SavedLocationLimits.DEFAULT_RECENT_FOLDERS_PER_STORAGE)
+            .coerceIn(1, SavedLocationLimits.MAX_RECENT_FOLDERS_PER_STORAGE)
 
     @Synchronized
     fun recordVisit(path: String, name: String, isDirectory: Boolean, storageRoot: String, storageName: String) {
@@ -44,8 +44,8 @@ class SavedLocationStore(context: Context) {
         .take(recentMoveTargetLimit)
 
     val recentMoveTargetLimit: Int
-        get() = prefs.getInt(KEY_MOVE_TARGET_LIMIT, DEFAULT_MOVE_TARGET_LIMIT)
-            .coerceIn(0, MAX_MOVE_TARGETS)
+        get() = prefs.getInt(KEY_MOVE_TARGET_LIMIT, SavedLocationLimits.DEFAULT_RECENT_MOVE_TARGETS)
+            .coerceIn(0, SavedLocationLimits.MAX_RECENT_MOVE_TARGETS)
 
     @Synchronized
     fun recordMoveTarget(path: String, name: String, storageRoot: String, storageName: String) {
@@ -65,14 +65,14 @@ class SavedLocationStore(context: Context) {
 
     @Synchronized
     fun setRecentMoveTargetLimit(limit: Int) {
-        val boundedLimit = limit.coerceIn(0, MAX_MOVE_TARGETS)
+        val boundedLimit = limit.coerceIn(0, SavedLocationLimits.MAX_RECENT_MOVE_TARGETS)
         prefs.edit().putInt(KEY_MOVE_TARGET_LIMIT, boundedLimit).apply()
         write(KEY_MOVE_TARGETS, read(KEY_MOVE_TARGETS).take(boundedLimit))
     }
 
     @Synchronized
     fun setRecentFolderLimit(limit: Int) {
-        val boundedLimit = limit.coerceIn(1, MAX_RECENTS_PER_STORAGE)
+        val boundedLimit = limit.coerceIn(1, SavedLocationLimits.MAX_RECENT_FOLDERS_PER_STORAGE)
         prefs.edit().putInt(KEY_RECENT_FOLDER_LIMIT, boundedLimit).apply()
         write(KEY_RECENTS, limitRecentFoldersPerStorage(read(KEY_RECENTS), boundedLimit))
     }
@@ -168,7 +168,7 @@ class SavedLocationStore(context: Context) {
                 countsByStorage[storageRoot] = count + 1
                 true
             }
-        }.take(MAX_RECENTS_TOTAL)
+        }.take(SavedLocationLimits.MAX_RECENT_FOLDERS_TOTAL)
     }
 
     /** Keep recent entries as distinct destinations, not every ancestor of the current path. */
@@ -199,11 +199,6 @@ class SavedLocationStore(context: Context) {
         private const val KEY_RECENT_FOLDER_LIMIT = "recent_folder_limit"
         private const val KEY_MOVE_TARGETS = "recent_move_targets"
         private const val KEY_MOVE_TARGET_LIMIT = "recent_move_target_limit"
-        private const val DEFAULT_RECENT_FOLDER_LIMIT = 3
-        const val MAX_RECENTS_PER_STORAGE = 50
-        private const val MAX_RECENTS_TOTAL = 50
-        const val MAX_MOVE_TARGETS = 50
-        private const val DEFAULT_MOVE_TARGET_LIMIT = 5
         private const val MAX_FAVORITES = 100
     }
 }

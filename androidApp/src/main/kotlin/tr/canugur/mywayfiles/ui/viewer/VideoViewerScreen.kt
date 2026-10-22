@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
 import tr.canugur.mywayfiles.R
+import tr.canugur.mywayfiles.core.constants.MediaViewerTiming
 import tr.canugur.mywayfiles.core.util.FileShareHelper
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.ui.explorer.components.PropertiesDialog
@@ -77,7 +78,7 @@ fun VideoViewerScreen(
     // Auto-hide controls timer (3.5 seconds)
     LaunchedEffect(autoHideControls, controlsVisible, isPlaying, isUserScrubbing) {
         if (autoHideControls && controlsVisible && isPlaying && !isUserScrubbing) {
-            delay(3500)
+            delay(MediaViewerTiming.CONTROL_AUTO_HIDE_DELAY_MS)
             controlsVisible = false
         }
     }
@@ -93,7 +94,7 @@ fun VideoViewerScreen(
                     }
                 } catch (_: Exception) {}
             }
-            delay(250)
+            delay(MediaViewerTiming.PLAYBACK_PROGRESS_INTERVAL_MS)
         }
     }
 
@@ -298,14 +299,14 @@ fun VideoViewerScreen(
                         },
                         onRewind10s = {
                             videoViewRef?.let { vv ->
-                                val target = (vv.currentPosition - 10000).coerceAtLeast(0)
+                                val target = (vv.currentPosition - MediaViewerTiming.SEEK_STEP_MS).coerceAtLeast(0)
                                 vv.seekTo(target)
                                 currentPositionMs = target
                             }
                         },
                         onForward10s = {
                             videoViewRef?.let { vv ->
-                                val target = (vv.currentPosition + 10000).coerceAtMost(durationMs)
+                                val target = (vv.currentPosition + MediaViewerTiming.SEEK_STEP_MS).coerceAtMost(durationMs)
                                 vv.seekTo(target)
                                 currentPositionMs = target
                             }
