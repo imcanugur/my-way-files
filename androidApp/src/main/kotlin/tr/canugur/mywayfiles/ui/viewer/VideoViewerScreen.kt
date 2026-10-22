@@ -16,13 +16,17 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import kotlinx.coroutines.delay
+import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.core.util.FileShareHelper
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.ui.explorer.components.PropertiesDialog
 import tr.canugur.mywayfiles.ui.viewer.components.VideoErrorCard
-import tr.canugur.mywayfiles.ui.viewer.components.VideoPlayerBottomBar
+import tr.canugur.mywayfiles.ui.viewer.components.VideoPlaybackControls
+import tr.canugur.mywayfiles.ui.viewer.components.VideoPlaybackMode
+import tr.canugur.mywayfiles.ui.viewer.components.ViewerBottomBar
 import tr.canugur.mywayfiles.ui.viewer.components.ViewerTopBar
 import tr.canugur.mywayfiles.ui.theme.AppColors
+import tr.canugur.mywayfiles.ui.theme.Dimensions
 import java.io.File
 
 /**
@@ -56,9 +60,13 @@ fun VideoViewerScreen(
 
     var videoViewRef by remember { mutableStateOf<VideoView?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
+    var playbackMode by remember { mutableStateOf(VideoPlaybackMode.PLAY_IN_ORDER) }
+    val playbackModeState = rememberUpdatedState(playbackMode)
     var currentPositionMs by remember { mutableIntStateOf(0) }
     var durationMs by remember { mutableIntStateOf(0) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isBuffering by remember { mutableStateOf(true) }
+    var reloadToken by remember { mutableIntStateOf(0) }
     var controlsVisible by remember { mutableStateOf(true) }
     var isUserScrubbing by remember { mutableStateOf(false) }
     var scrubPositionMs by remember { mutableFloatStateOf(0f) }
@@ -105,7 +113,7 @@ fun VideoViewerScreen(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             // Hardware Video Surface: Isolated per video path to eliminate MediaPlayer state corruption
-            key(currentItem.path) {
+            key(currentItem.path, reloadToken) {
                 var localVv by remember { mutableStateOf<VideoView?>(null) }
 
                 DisposableEffect(currentItem.path) {
@@ -126,10 +134,11 @@ fun VideoViewerScreen(
                             )
                             localVv = this
                             videoViewRef = this
+                        isBuffering = true
 
                             val file = File(currentItem.path)
                             if (!file.exists() || !file.canRead()) {
-                                errorMessage = "Dosya bulunamadı veya okunamıyor: ${currentItem.path}"
+                                errorMessage = context.getString(R.string.video_file_unavailable)
                             } else {
                                 errorMessage = null
                                 currentPositionMs = 0
@@ -140,34 +149,52 @@ fun VideoViewerScreen(
                                         durationMs = mp.duration
                                         mp.start()
                                         isPlaying = true
+                                        isBuffering = false
                                         errorMessage = null
                                     } catch (e: Exception) {
-                                        errorMessage = e.localizedMessage ?: "Oynatma başlatılamadı"
+                                        isBuffering = false
+                                        errorMessage = e.localizedMessage ?: context.getString(R.string.video_playback_failed)
                                     }
                                 }
 
                                 // Auto-play next video upon completion posted asynchronously to avoid native deadlock
                                 setOnCompletionListener {
                                     post {
-                                        if (currentIndex < videos.size - 1) {
-                                            currentIndex++
-                                        } else {
-                                            isPlaying = false
-                                            currentPositionMs = durationMs
+                                        when (playbackModeState.value) {
+                                            VideoPlaybackMode.REPEAT_CURRENT -> {
+                                                seekTo(0)
+                                                start()
+                                                currentPositionMs = 0
+                                                isPlaying = true
+                                            }
+                                            VideoPlaybackMode.PLAY_IN_ORDER -> {
+                                                if (currentIndex < videos.size - 1) {
+                                                    currentIndex++
+                                                } else {
+                                                    isPlaying = false
+                                                    currentPositionMs = durationMs
+                                                }
+                                            }
+                                            VideoPlaybackMode.PLAY_ONCE -> {
+                                                isPlaying = false
+                                                currentPositionMs = durationMs
+                                            }
                                         }
                                     }
                                 }
 
                                 setOnErrorListener { _, what, extra ->
-                                    errorMessage = "Video formatı veya codec desteklenmiyor (Hata: $what, Kod: $extra)"
+                                    errorMessage = context.getString(R.string.video_unsupported, what, extra)
                                     isPlaying = false
+                                    isBuffering = false
                                     true
                                 }
 
                                 try {
                                     setVideoPath(file.absolutePath)
                                 } catch (e: Exception) {
-                                    errorMessage = e.localizedMessage ?: "Video yüklenirken hata oluştu"
+                                    isBuffering = false
+                                    errorMessage = e.localizedMessage ?: context.getString(R.string.video_load_failed)
                                 }
                             }
                         }
@@ -186,8 +213,29 @@ fun VideoViewerScreen(
                 VideoErrorCard(
                     item = currentItem,
                     errorMessage = activeError,
+                    onRetry = {
+                        errorMessage = null
+                        isPlaying = false
+                        isBuffering = true
+                        reloadToken++
+                    },
                     onDismiss = onDismiss
                 )
+            }
+
+            if (isBuffering && errorMessage == null) {
+                Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingMedium)
+                ) {
+                    androidx.compose.material3.CircularProgressIndicator(color = AppColors.mediaAccent)
+                    androidx.compose.material3.Text(
+                        text = currentItem.name,
+                        color = AppColors.mediaTextPrimary,
+                        maxLines = 1
+                    )
+                }
             }
 
             // Top Overlay Bar (Autohiding)
@@ -205,81 +253,90 @@ fun VideoViewerScreen(
                 )
             }
 
-            // Bottom Player Control Panel
+            // Keep playback controls separate from the same file-action bar used by the image viewer.
             AnimatedVisibility(
                 visible = controlsVisible,
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier.align(Alignment.BottomCenter)
             ) {
-                VideoPlayerBottomBar(
-                    item = currentItem,
-                    isPlaying = isPlaying,
-                    currentPositionMs = currentPositionMs,
-                    durationMs = durationMs,
-                    isUserScrubbing = isUserScrubbing,
-                    scrubPositionMs = scrubPositionMs,
-                    canSkipPrevious = currentIndex > 0,
-                    canSkipNext = currentIndex < videos.size - 1,
-                    onScrubChange = { ratio ->
-                        isUserScrubbing = true
-                        scrubPositionMs = ratio * durationMs
-                    },
-                    onScrubFinished = {
-                        videoViewRef?.seekTo(scrubPositionMs.toInt())
-                        currentPositionMs = scrubPositionMs.toInt()
-                        isUserScrubbing = false
-                    },
-                    onPlayPauseToggle = {
-                        videoViewRef?.let { vv ->
-                            if (vv.isPlaying) {
-                                vv.pause()
-                                isPlaying = false
-                            } else {
-                                vv.start()
-                                isPlaying = true
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall)
+                ) {
+                    VideoPlaybackControls(
+                        playbackMode = playbackMode,
+                        onPlaybackModeSelected = { playbackMode = it },
+                        isPlaying = isPlaying,
+                        currentPositionMs = currentPositionMs,
+                        durationMs = durationMs,
+                        isUserScrubbing = isUserScrubbing,
+                        scrubPositionMs = scrubPositionMs,
+                        canSkipPrevious = currentIndex > 0,
+                        canSkipNext = currentIndex < videos.size - 1,
+                        onScrubChange = { ratio ->
+                            isUserScrubbing = true
+                            scrubPositionMs = ratio * durationMs
+                        },
+                        onScrubFinished = {
+                            videoViewRef?.seekTo(scrubPositionMs.toInt())
+                            currentPositionMs = scrubPositionMs.toInt()
+                            isUserScrubbing = false
+                        },
+                        onPlayPauseToggle = {
+                            videoViewRef?.let { vv ->
+                                if (vv.isPlaying) {
+                                    vv.pause()
+                                    isPlaying = false
+                                } else {
+                                    vv.start()
+                                    isPlaying = true
+                                }
+                            }
+                        },
+                        onRewind10s = {
+                            videoViewRef?.let { vv ->
+                                val target = (vv.currentPosition - 10000).coerceAtLeast(0)
+                                vv.seekTo(target)
+                                currentPositionMs = target
+                            }
+                        },
+                        onForward10s = {
+                            videoViewRef?.let { vv ->
+                                val target = (vv.currentPosition + 10000).coerceAtMost(durationMs)
+                                vv.seekTo(target)
+                                currentPositionMs = target
+                            }
+                        },
+                        onSkipPrevious = {
+                            if (currentIndex > 0) {
+                                videoViewRef?.stopPlayback()
+                                currentIndex--
+                            }
+                        },
+                        onSkipNext = {
+                            if (currentIndex < videos.size - 1) {
+                                videoViewRef?.stopPlayback()
+                                currentIndex++
                             }
                         }
-                    },
-                    onRewind10s = {
-                        videoViewRef?.let { vv ->
-                            val target = (vv.currentPosition - 10000).coerceAtLeast(0)
-                            vv.seekTo(target)
-                            currentPositionMs = target
-                        }
-                    },
-                    onForward10s = {
-                        videoViewRef?.let { vv ->
-                            val target = (vv.currentPosition + 10000).coerceAtMost(durationMs)
-                            vv.seekTo(target)
-                            currentPositionMs = target
-                        }
-                    },
-                    onSkipPrevious = {
-                        if (currentIndex > 0) {
+                    )
+                    ViewerBottomBar(
+                        item = currentItem,
+                        onShare = { FileShareHelper.shareFile(context, it.path) },
+                        onCopy = onCopy,
+                        onProperties = { showProperties = true },
+                        onDelete = {
                             videoViewRef?.stopPlayback()
-                            currentIndex--
+                            onDelete(it)
+                            if (videos.size <= 1) {
+                                onDismiss()
+                            } else if (currentIndex >= videos.size - 1) {
+                                currentIndex = (videos.size - 2).coerceAtLeast(0)
+                            }
                         }
-                    },
-                    onSkipNext = {
-                        if (currentIndex < videos.size - 1) {
-                            videoViewRef?.stopPlayback()
-                            currentIndex++
-                        }
-                    },
-                    onShare = { FileShareHelper.shareFile(context, it.path) },
-                    onCopy = onCopy,
-                    onProperties = { showProperties = true },
-                    onDelete = {
-                        videoViewRef?.stopPlayback()
-                        onDelete(it)
-                        if (videos.size <= 1) {
-                            onDismiss()
-                        } else if (currentIndex >= videos.size - 1) {
-                            currentIndex = (videos.size - 2).coerceAtLeast(0)
-                        }
-                    }
-                )
+                    )
+                }
             }
 
             // Properties Dialog

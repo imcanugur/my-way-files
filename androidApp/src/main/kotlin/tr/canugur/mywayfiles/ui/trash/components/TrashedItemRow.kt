@@ -1,6 +1,8 @@
 package tr.canugur.mywayfiles.ui.trash.components
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -8,13 +10,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import tr.canugur.mywayfiles.R
@@ -27,10 +30,15 @@ import tr.canugur.mywayfiles.ui.theme.Dimensions
 /**
  * List item row for a deleted file or folder in the Recycle Bin.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TrashedItemRow(
     item: TrashedItem,
+    isSelectionMode: Boolean,
+    isSelected: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onToggleSelection: () -> Unit,
     onRestore: () -> Unit,
     onDeletePermanently: () -> Unit,
     modifier: Modifier = Modifier
@@ -40,10 +48,25 @@ fun TrashedItemRow(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
-            .clickable(role = Role.Button, onClick = onClick)
+            .background(if (isSelected) AppColors.brandAccentSubtle else AppColors.canvasBackground)
+            .combinedClickable(
+                role = Role.Button,
+                onClick = { if (isSelectionMode) onToggleSelection() else onClick() },
+                onLongClick = onLongClick
+            )
+            .semantics { if (isSelectionMode) selected = isSelected }
             .padding(horizontal = Dimensions.SpacingSmall, vertical = Dimensions.SpacingMedium),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        if (isSelectionMode) {
+            androidx.compose.material3.Checkbox(
+                checked = isSelected,
+                onCheckedChange = { onToggleSelection() },
+                modifier = Modifier.size(Dimensions.ActionButtonSize)
+            )
+            Spacer(modifier = Modifier.width(Dimensions.SpacingSmall))
+        }
+
         // High-performance cached thumbnail or folder/file icon
         TrashedItemThumbnailView(item = item)
 
@@ -81,7 +104,7 @@ fun TrashedItemRow(
         Spacer(modifier = Modifier.width(Dimensions.SpacingSmall))
 
         // Actions: Restore & Permanent Delete
-        Row(horizontalArrangement = Arrangement.spacedBy(Dimensions.SpacingMicro)) {
+        if (!isSelectionMode) Row(horizontalArrangement = Arrangement.spacedBy(Dimensions.SpacingMicro)) {
             IconButton(
                 onClick = onRestore,
                 modifier = Modifier.size(Dimensions.ActionButtonSize)

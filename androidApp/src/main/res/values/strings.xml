@@ -92,5 +92,19 @@
     <string name="sort_name">Name</string>
     <string name="sort_date">Date</string>
     <string name="sort_size">Size</string>
+    <string name="sort_name_ascending">Name (A to Z)</string>
+    <string name="sort_name_descending">Name (Z to A)</string>
+    <string name="sort_date_newest">Date (newest first)</string>
+    <string name="sort_date_oldest">Date (oldest first)</string>
+    <string name="sort_size_largest">Size (largest first)</string>
+    <string name="sort_size_smallest">Size (smallest first)</string>
     <string name="batch_delete_confirm">Move %1$d selected items to Recycle Bin?</string>
+    <string name="video_file_unavailable">This video is unavailable or cannot be read.</string>
+    <string name="video_playback_failed">Could not start video playback.</string>
+    <string name="video_unsupported">This video format is not supported (error %1$d, code %2$d).</string>
+    <string name="dialog_batch_permanent_delete_confirm">Permanently delete %1$d selected items? This cannot be undone.</string>
+    <string name="playback_mode">Playback mode</string>
+    <string name="play_in_order">Play in order</string>
+    <string name="repeat_current_video">Repeat this video</string>
+    <string name="play_once">Play once</string>
 </resources>

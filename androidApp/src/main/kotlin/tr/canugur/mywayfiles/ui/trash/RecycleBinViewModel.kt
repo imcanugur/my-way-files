@@ -27,7 +27,9 @@ class RecycleBinViewModel(
         when (event) {
             is RecycleBinUiEvent.Refresh -> loadItems()
             is RecycleBinUiEvent.Restore -> restore(event.item)
+            is RecycleBinUiEvent.RestoreSelected -> restoreSelected(event.items)
             is RecycleBinUiEvent.DeletePermanently -> deletePermanently(event.item)
+            is RecycleBinUiEvent.DeleteSelectedPermanently -> deleteSelectedPermanently(event.items)
             is RecycleBinUiEvent.EmptyTrash -> emptyTrash()
             is RecycleBinUiEvent.ClearOperationError -> clearOperationError()
         }
@@ -79,6 +81,24 @@ class RecycleBinViewModel(
                 onSuccess = { loadItems() },
                 onFailure = { loadItems(it.localizedMessage ?: "Unable to delete item") }
             )
+        }
+    }
+
+    private fun restoreSelected(items: List<TrashedItem>) {
+        viewModelScope.launch {
+            val failures = items.mapNotNull { item ->
+                repository.restore(item).exceptionOrNull()?.let { "${item.name}: ${it.localizedMessage}" }
+            }
+            loadItems(failures.takeIf { it.isNotEmpty() }?.joinToString("\n"))
+        }
+    }
+
+    private fun deleteSelectedPermanently(items: List<TrashedItem>) {
+        viewModelScope.launch {
+            val failures = items.mapNotNull { item ->
+                repository.deletePermanently(item).exceptionOrNull()?.let { "${item.name}: ${it.localizedMessage}" }
+            }
+            loadItems(failures.takeIf { it.isNotEmpty() }?.joinToString("\n"))
         }
     }
 

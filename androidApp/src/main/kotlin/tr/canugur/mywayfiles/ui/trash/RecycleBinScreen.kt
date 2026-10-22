@@ -47,17 +47,24 @@ fun RecycleBinScreen(
     var showEmptyTrashConfirm by remember { mutableStateOf(false) }
     var itemToDeletePermanently by remember { mutableStateOf<TrashedItem?>(null) }
     var itemToPreview by remember { mutableStateOf<TrashedItem?>(null) }
+    var selectedIds by remember { mutableStateOf(setOf<String>()) }
+    var showSelectedDeleteConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.loadItems()
     }
 
     BackHandler {
-        onNavigateBack()
+        if (selectedIds.isNotEmpty()) selectedIds = emptySet() else onNavigateBack()
     }
 
     val successState = state as? RecycleBinUiState.Success
     val hasItems = successState?.items?.isNotEmpty() == true
+    val selectedItems = successState?.items.orEmpty().filter { it.id in selectedIds }
+    LaunchedEffect(successState?.items?.map { it.id }) {
+        val availableIds = successState?.items.orEmpty().map { it.id }.toSet()
+        selectedIds = selectedIds.intersect(availableIds)
+    }
 
     Scaffold(
         containerColor = AppColors.canvasBackground,
@@ -66,8 +73,21 @@ fun RecycleBinScreen(
                 itemCount = successState?.items?.size ?: 0,
                 totalBytes = successState?.totalBytes ?: 0L,
                 hasItems = hasItems,
-                onNavigateBack = onNavigateBack,
-                onEmptyTrashClick = { showEmptyTrashConfirm = true }
+                selectedCount = selectedItems.size,
+                isAllSelected = successState?.items?.let { items ->
+                    items.isNotEmpty() && selectedItems.size == items.size
+                } == true,
+                onNavigateBack = { if (selectedIds.isNotEmpty()) selectedIds = emptySet() else onNavigateBack() },
+                onEmptyTrashClick = { showEmptyTrashConfirm = true },
+                onToggleSelectAll = {
+                    val allItems = successState?.items.orEmpty()
+                    selectedIds = if (selectedItems.size == allItems.size) emptySet() else allItems.map { it.id }.toSet()
+                },
+                onRestoreSelected = {
+                    viewModel.onEvent(RecycleBinUiEvent.RestoreSelected(selectedItems))
+                    selectedIds = emptySet()
+                },
+                onDeleteSelected = { showSelectedDeleteConfirm = true }
             )
         },
         modifier = modifier
@@ -176,7 +196,17 @@ fun RecycleBinScreen(
                     itemsIndexed(s.items, key = { _, item -> item.id }) { index, item ->
                         TrashedItemRow(
                             item = item,
-                            onClick = { itemToPreview = item },
+                            isSelectionMode = selectedIds.isNotEmpty(),
+                            isSelected = item.id in selectedIds,
+                            onClick = {
+                                if (selectedIds.isNotEmpty()) {
+                                    selectedIds = if (item.id in selectedIds) selectedIds - item.id else selectedIds + item.id
+                                } else itemToPreview = item
+                            },
+                            onLongClick = { selectedIds = selectedIds + item.id },
+                            onToggleSelection = {
+                                selectedIds = if (item.id in selectedIds) selectedIds - item.id else selectedIds + item.id
+                            },
                             onRestore = { viewModel.onEvent(RecycleBinUiEvent.Restore(item)) },
                             onDeletePermanently = { itemToDeletePermanently = item }
                         )
@@ -196,6 +226,27 @@ fun RecycleBinScreen(
                     showEmptyTrashConfirm = false
                 },
                 onDismiss = { showEmptyTrashConfirm = false }
+            )
+        }
+
+        if (showSelectedDeleteConfirm) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showSelectedDeleteConfirm = false },
+                title = { Text(stringResource(R.string.action_delete_permanently)) },
+                text = { Text(stringResource(R.string.dialog_batch_permanent_delete_confirm, selectedItems.size)) },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        viewModel.onEvent(RecycleBinUiEvent.DeleteSelectedPermanently(selectedItems))
+                        selectedIds = emptySet()
+                        showSelectedDeleteConfirm = false
+                    }) { Text(stringResource(R.string.action_delete_permanently), color = AppColors.statusCritical) }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { showSelectedDeleteConfirm = false }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                },
+                containerColor = AppColors.cardSurface
             )
         }
 

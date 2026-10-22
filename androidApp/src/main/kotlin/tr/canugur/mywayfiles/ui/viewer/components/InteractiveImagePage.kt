@@ -1,23 +1,23 @@
 package tr.canugur.mywayfiles.ui.viewer.components
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.calculatePan
-import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.core.image.BitmapDecoder
@@ -46,6 +46,10 @@ fun InteractiveImagePage(
     var state by remember(fileItem.path) { mutableStateOf<ImagePageState>(ImagePageState.Loading) }
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
+    var viewportSize by remember { mutableStateOf(IntSize.Zero) }
+    val currentScale by rememberUpdatedState(scale)
+    val currentOffset by rememberUpdatedState(offset)
+    val currentOnZoomScaleChanged by rememberUpdatedState(onZoomScaleChanged)
 
     LaunchedEffect(isCurrentPage) {
         if (!isCurrentPage) {
@@ -93,45 +97,56 @@ fun InteractiveImagePage(
             }
 
             is ImagePageState.Success -> {
+                val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+                    val newScale = (scale * zoomChange).coerceIn(1f, 5f)
+                    scale = newScale
+                    offset = if (newScale <= 1.05f) {
+                        Offset.Zero
+                    } else {
+                        clampImageOffset(
+                            offset + panChange,
+                            newScale,
+                            viewportSize.width.toFloat(),
+                            viewportSize.height.toFloat(),
+                            s.decoded.imageBitmap.width.toFloat(),
+                            s.decoded.imageBitmap.height.toFloat()
+                        )
+                    }
+                    currentOnZoomScaleChanged(newScale)
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .onSizeChanged { viewportSize = it }
                         .pointerInput(fileItem.path) {
                             detectTapGestures(
-                                onDoubleTap = {
-                                    val newScale = if (scale > 1.05f) 1f else 2.5f
+                                onDoubleTap = { tap ->
+                                    val newScale = if (currentScale > 1.05f) 1f else 2.5f
+                                    val center = Offset(size.width / 2f, size.height / 2f)
+                                    val nextOffset = if (newScale == 1f) {
+                                        Offset.Zero
+                                    } else {
+                                        // Keep the tapped image point under the finger while zooming.
+                                        (tap - center) - ((tap - center) - currentOffset) * (newScale / currentScale)
+                                    }
                                     scale = newScale
-                                    offset = Offset.Zero
-                                    onZoomScaleChanged(newScale)
+                                    offset = clampImageOffset(
+                                        nextOffset,
+                                        newScale,
+                                        size.width.toFloat(),
+                                        size.height.toFloat(),
+                                        s.decoded.imageBitmap.width.toFloat(),
+                                        s.decoded.imageBitmap.height.toFloat()
+                                    )
+                                    currentOnZoomScaleChanged(newScale)
                                 },
                                 onTap = { onToggleControls() }
                             )
                         }
-                        .pointerInput(fileItem.path) {
-                            awaitEachGesture {
-                                awaitFirstDown(requireUnconsumed = false)
-                                do {
-                                    val event = awaitPointerEvent()
-                                    val count = event.changes.size
-
-                                    if (count >= 2) {
-                                        val zoom = event.calculateZoom()
-                                        val pan = event.calculatePan()
-                                        val newScale = (scale * zoom).coerceIn(1f, 5f)
-                                        scale = newScale
-                                        onZoomScaleChanged(newScale)
-                                        if (newScale > 1.05f) {
-                                            offset += pan
-                                        }
-                                        event.changes.forEach { it.consume() }
-                                    } else if (scale > 1.05f && count == 1) {
-                                        val pan = event.calculatePan()
-                                        offset += pan
-                                        event.changes.forEach { it.consume() }
-                                    }
-                                } while (event.changes.any { it.pressed })
-                            }
-                        },
+                        .transformable(
+                            state = transformState,
+                            canPan = { scale > 1.05f }
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
@@ -151,4 +166,33 @@ fun InteractiveImagePage(
             }
         }
     }
+}
+
+private fun clampImageOffset(
+    offset: Offset,
+    scale: Float,
+    viewportWidth: Float,
+    viewportHeight: Float,
+    imageWidth: Float,
+    imageHeight: Float
+): Offset {
+    // ContentScale.Fit may leave space around the image. Pan limits must use the
+    // rendered image bounds, otherwise portrait/landscape images drift into empty space.
+    val imageAspectRatio = imageWidth / imageHeight
+    val viewportAspectRatio = viewportWidth / viewportHeight
+    val fittedWidth: Float
+    val fittedHeight: Float
+    if (imageAspectRatio > viewportAspectRatio) {
+        fittedWidth = viewportWidth
+        fittedHeight = viewportWidth / imageAspectRatio
+    } else {
+        fittedHeight = viewportHeight
+        fittedWidth = viewportHeight * imageAspectRatio
+    }
+    val maxX = fittedWidth * (scale - 1f) / 2f
+    val maxY = fittedHeight * (scale - 1f) / 2f
+    return Offset(
+        x = offset.x.coerceIn(-maxX, maxX),
+        y = offset.y.coerceIn(-maxY, maxY)
+    )
 }

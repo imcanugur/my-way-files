@@ -15,7 +15,9 @@ sealed interface RecycleBinUiState {
 
 sealed interface RecycleBinUiEvent {
     data class Restore(val item: TrashedItem) : RecycleBinUiEvent
+    data class RestoreSelected(val items: List<TrashedItem>) : RecycleBinUiEvent
     data class DeletePermanently(val item: TrashedItem) : RecycleBinUiEvent
+    data class DeleteSelectedPermanently(val items: List<TrashedItem>) : RecycleBinUiEvent
     data object EmptyTrash : RecycleBinUiEvent
     data object Refresh : RecycleBinUiEvent
     data object ClearOperationError : RecycleBinUiEvent

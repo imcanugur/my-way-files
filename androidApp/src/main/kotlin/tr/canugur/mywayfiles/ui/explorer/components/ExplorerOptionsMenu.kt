@@ -36,9 +36,12 @@ fun ExplorerOptionsMenu(
     onToggleHiddenFiles: () -> Unit,
     onSortOptionSelected: (SortOption) -> Unit,
     onRefreshClick: () -> Unit,
+    sortOnly: Boolean = false,
+    isDarkTheme: Boolean = false,
+    onToggleTheme: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var showSortSubmenu by remember { mutableStateOf(false) }
+    var showSortSubmenu by remember(expanded, sortOnly) { mutableStateOf(sortOnly) }
 
     DropdownMenu(
         expanded = expanded,
@@ -109,6 +112,22 @@ fun ExplorerOptionsMenu(
             )
 
             DropdownMenuItem(
+                text = { Text(text = stringResource(R.string.theme_toggle), color = AppColors.textPrimary) },
+                leadingIcon = {
+                    Icon(
+                        painter = painterResource(if (isDarkTheme) R.drawable.ic_mode_light else R.drawable.ic_mode_dark),
+                        contentDescription = null,
+                        tint = AppColors.textSecondary,
+                        modifier = Modifier.size(Dimensions.IconSizeMedium)
+                    )
+                },
+                onClick = {
+                    onDismissRequest()
+                    onToggleTheme()
+                }
+            )
+
+            DropdownMenuItem(
                 text = { Text(text = stringResource(R.string.sort_by), color = AppColors.textPrimary) },
                 leadingIcon = {
                     Icon(
@@ -143,7 +162,7 @@ fun ExplorerOptionsMenu(
         } else {
             // Sort Submenu
             DropdownMenuItem(
-                text = { Text(text = "${stringResource(R.string.sort_name)} (A-Z)", color = AppColors.textPrimary) },
+                text = { Text(text = stringResource(R.string.sort_name_ascending), color = AppColors.textPrimary) },
                 leadingIcon = {
                     if (currentSortOption == SortOption.NAME_ASC) {
                         Icon(painterResource(R.drawable.ic_check), null, tint = AppColors.brandAccent, modifier = Modifier.size(Dimensions.IconSizeMedium))
@@ -157,7 +176,7 @@ fun ExplorerOptionsMenu(
             )
 
             DropdownMenuItem(
-                text = { Text(text = "${stringResource(R.string.sort_name)} (Z-A)", color = AppColors.textPrimary) },
+                text = { Text(text = stringResource(R.string.sort_name_descending), color = AppColors.textPrimary) },
                 leadingIcon = {
                     if (currentSortOption == SortOption.NAME_DESC) {
                         Icon(painterResource(R.drawable.ic_check), null, tint = AppColors.brandAccent, modifier = Modifier.size(Dimensions.IconSizeMedium))
@@ -171,7 +190,7 @@ fun ExplorerOptionsMenu(
             )
 
             DropdownMenuItem(
-                text = { Text(text = "${stringResource(R.string.sort_date)} (↓)", color = AppColors.textPrimary) },
+                text = { Text(text = stringResource(R.string.sort_date_newest), color = AppColors.textPrimary) },
                 leadingIcon = {
                     if (currentSortOption == SortOption.DATE_DESC) {
                         Icon(painterResource(R.drawable.ic_check), null, tint = AppColors.brandAccent, modifier = Modifier.size(Dimensions.IconSizeMedium))
@@ -185,7 +204,21 @@ fun ExplorerOptionsMenu(
             )
 
             DropdownMenuItem(
-                text = { Text(text = "${stringResource(R.string.sort_size)} (↓)", color = AppColors.textPrimary) },
+                text = { Text(text = stringResource(R.string.sort_date_oldest), color = AppColors.textPrimary) },
+                leadingIcon = {
+                    if (currentSortOption == SortOption.DATE_ASC) {
+                        Icon(painterResource(R.drawable.ic_check), null, tint = AppColors.brandAccent, modifier = Modifier.size(Dimensions.IconSizeMedium))
+                    }
+                },
+                onClick = {
+                    showSortSubmenu = false
+                    onDismissRequest()
+                    onSortOptionSelected(SortOption.DATE_ASC)
+                }
+            )
+
+            DropdownMenuItem(
+                text = { Text(text = stringResource(R.string.sort_size_largest), color = AppColors.textPrimary) },
                 leadingIcon = {
                     if (currentSortOption == SortOption.SIZE_DESC) {
                         Icon(painterResource(R.drawable.ic_check), null, tint = AppColors.brandAccent, modifier = Modifier.size(Dimensions.IconSizeMedium))
@@ -195,6 +228,20 @@ fun ExplorerOptionsMenu(
                     showSortSubmenu = false
                     onDismissRequest()
                     onSortOptionSelected(SortOption.SIZE_DESC)
+                }
+            )
+
+            DropdownMenuItem(
+                text = { Text(text = stringResource(R.string.sort_size_smallest), color = AppColors.textPrimary) },
+                leadingIcon = {
+                    if (currentSortOption == SortOption.SIZE_ASC) {
+                        Icon(painterResource(R.drawable.ic_check), null, tint = AppColors.brandAccent, modifier = Modifier.size(Dimensions.IconSizeMedium))
+                    }
+                },
+                onClick = {
+                    showSortSubmenu = false
+                    onDismissRequest()
+                    onSortOptionSelected(SortOption.SIZE_ASC)
                 }
             )
         }

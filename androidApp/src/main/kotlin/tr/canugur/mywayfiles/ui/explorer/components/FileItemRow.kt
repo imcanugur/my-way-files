@@ -41,6 +41,7 @@ fun FileItemRow(
     onToggleSelect: ((FileItem) -> Unit)? = null,
     onCopy: (FileItem) -> Unit,
     onCut: (FileItem) -> Unit,
+    onShare: (FileItem) -> Unit,
     onRename: (FileItem) -> Unit,
     onDelete: (FileItem) -> Unit,
     onProperties: (FileItem) -> Unit,
@@ -204,6 +205,18 @@ fun FileItemRow(
                             onCut(item)
                         }
                     )
+                    if (!item.isDirectory) {
+                        DropdownMenuItem(
+                            text = { Text(text = stringResource(R.string.action_share), color = AppColors.textPrimary) },
+                            leadingIcon = {
+                                Icon(painterResource(R.drawable.ic_share), null, tint = AppColors.textSecondary, modifier = Modifier.size(Dimensions.IconSizeMedium))
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onShare(item)
+                            }
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text(text = stringResource(R.string.action_rename), color = AppColors.textPrimary) },
                         leadingIcon = {

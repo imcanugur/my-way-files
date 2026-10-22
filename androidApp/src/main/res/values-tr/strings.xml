@@ -79,4 +79,18 @@
     <string name="dialog_move_to_trash_confirm">\"%1$s\" ögesini Geri Dönüşüm Kutusuna taşımak istiyor musunuz?</string>
     <string name="original_location">Özgün Konum</string>
     <string name="deleted_time">Silinme Tarihi</string>
+    <string name="sort_name_ascending">Ad (A’dan Z’ye)</string>
+    <string name="sort_name_descending">Ad (Z’den A’ya)</string>
+    <string name="sort_date_newest">Tarih (en yeniden eskiye)</string>
+    <string name="sort_date_oldest">Tarih (en eskiden yeniye)</string>
+    <string name="sort_size_largest">Boyut (en büyükten küçüğe)</string>
+    <string name="sort_size_smallest">Boyut (en küçükten büyüğe)</string>
+    <string name="video_file_unavailable">Bu video kullanılamıyor veya okunamıyor.</string>
+    <string name="video_playback_failed">Video oynatma başlatılamadı.</string>
+    <string name="video_unsupported">Bu video biçimi desteklenmiyor (hata %1$d, kod %2$d).</string>
+    <string name="dialog_batch_permanent_delete_confirm">Seçili %1$d öge kalıcı olarak silinsin mi? Bu işlem geri alınamaz.</string>
+    <string name="playback_mode">Oynatma modu</string>
+    <string name="play_in_order">Sırayla oynat</string>
+    <string name="repeat_current_video">Bu videoyu tekrarla</string>
+    <string name="play_once">Bir kez oynat</string>
 </resources>

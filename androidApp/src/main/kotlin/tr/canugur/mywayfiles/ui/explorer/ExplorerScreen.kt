@@ -28,6 +28,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import tr.canugur.mywayfiles.core.util.FileTypeClassifier
+import tr.canugur.mywayfiles.core.util.FileShareHelper
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.domain.model.SortOption
 import tr.canugur.mywayfiles.ui.common.RetryErrorState
@@ -217,6 +218,10 @@ fun ExplorerScreen(
                 isSelectionMode = false
                 selectedPaths = emptySet()
             },
+            onBatchShare = {
+                currentItems.singleOrNull { it.path in selectedPaths && !it.isDirectory }
+                    ?.let { FileShareHelper.shareFile(context, it.path) }
+            },
             onBatchCut = {
                 val items = currentItems.filter { it.path in selectedPaths }
                 viewModel.onEvent(ExplorerUiEvent.BatchCut(items))
@@ -353,6 +358,7 @@ fun ExplorerScreenContent(
     onCloseSelectionMode: () -> Unit,
     onToggleSelectAll: () -> Unit,
     onBatchCopy: () -> Unit,
+    onBatchShare: () -> Unit,
     onBatchCut: () -> Unit,
     onBatchDelete: () -> Unit,
     onToggleHiddenFiles: () -> Unit,
@@ -370,6 +376,7 @@ fun ExplorerScreenContent(
     onEvent: (ExplorerUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val breadcrumbs = when (state) {
         is ExplorerUiState.Success -> state.breadcrumbs
         is ExplorerUiState.Empty -> state.breadcrumbs
@@ -426,6 +433,10 @@ fun ExplorerScreenContent(
                     onCloseSelectionMode = onCloseSelectionMode,
                     onToggleSelectAll = onToggleSelectAll,
                     onBatchCopy = onBatchCopy,
+                    onBatchShare = onBatchShare,
+                    canShareSelected = selectedPaths.size == 1 && currentItems.any {
+                        it.path in selectedPaths && !it.isDirectory
+                    },
                     onBatchCut = onBatchCut,
                     onBatchDelete = onBatchDelete,
                     onToggleHiddenFiles = onToggleHiddenFiles,
@@ -600,6 +611,7 @@ fun ExplorerScreenContent(
                                 onToggleSelect = onToggleSelect,
                                 onCopy = onCopy,
                                 onCut = onCut,
+                                onShare = { FileShareHelper.shareFile(context, it.path) },
                                 onRename = onRename,
                                 onDelete = onDelete,
                                 onProperties = onProperties

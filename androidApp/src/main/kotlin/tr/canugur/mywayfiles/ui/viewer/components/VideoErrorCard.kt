@@ -15,7 +15,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.domain.model.FileItem
@@ -29,13 +28,14 @@ import tr.canugur.mywayfiles.ui.theme.AppColors
 fun VideoErrorCard(
     item: FileItem,
     errorMessage: String,
+    onRetry: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(AppColors.mediaControlSurfaceStrong)
+            .background(AppColors.mediaCanvas.copy(alpha = 0.92f))
             .padding(Dimensions.SpacingLarge),
         contentAlignment = Alignment.Center
     ) {
@@ -60,25 +60,29 @@ fun VideoErrorCard(
                 modifier = Modifier.size(Dimensions.IconSizeLarge)
             )
             Text(
-                text = stringResource(R.string.video_load_failed),
+                text = item.name,
                 color = AppColors.mediaTextPrimary,
                 fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 2
             )
             Text(
                 text = errorMessage,
                 color = AppColors.mediaErrorMuted,
-                fontSize = 12.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.Medium
             )
-            Text(
-                text = item.path,
-                color = AppColors.mediaTextMuted,
-                fontSize = 11.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
             Spacer(modifier = Modifier.height(Dimensions.SpacingSmall))
+            Button(
+                onClick = onRetry,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AppColors.mediaAccent,
+                    contentColor = AppColors.mediaAccentContent
+                ),
+                shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
+            ) {
+                Text(text = stringResource(R.string.action_retry), fontSize = 14.sp)
+            }
             Button(
                 onClick = onDismiss,
                 colors = ButtonDefaults.buttonColors(
@@ -87,7 +91,7 @@ fun VideoErrorCard(
                 ),
                 shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
             ) {
-                Text(text = stringResource(R.string.close_viewer), fontSize = 12.sp)
+                Text(text = stringResource(R.string.close_viewer), fontSize = 14.sp)
             }
         }
     }
