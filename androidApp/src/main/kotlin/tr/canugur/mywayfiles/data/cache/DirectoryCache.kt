@@ -2,6 +2,10 @@ package tr.canugur.mywayfiles.data.cache
 
 import android.content.Context
 import android.util.LruCache
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import tr.canugur.mywayfiles.domain.model.FileItem
@@ -9,17 +13,23 @@ import java.io.File
 
 /**
  * Enterprise multi-tier directory cache:
- * - L1: Instant In-Memory Cache (0 ms, synchronous nanosecond lookup for both hidden and non-hidden states)
- * - L2: SQLite index for provisional rendering; writes and invalidations are serialized
+ * - L1: Bounded in-memory cache sized by file records, for provisional rendering
+ * - L2: SQLite index for provisional rendering; writes and invalidations are serialized off the UI result path
  * - Filesystem queries remain authoritative, with generations preventing stale scan commits
  */
 class DirectoryCache(context: Context) : DirectoryContentsCache {
 
     private val dbHelper = FileSystemCacheDbHelper(context)
 
-    // L1: In-Memory Hot Cache (256 directories in RAM)
-    private val memoryCache = object : LruCache<String, List<FileItem>>(256) {}
+    // Bound cache by file records, not directory count: one huge directory must not retain
+    // thousands of FileItem objects as if it cost the same as an empty directory.
+    private val memoryCache = object : LruCache<String, List<FileItem>>(4_000) {
+        override fun sizeOf(key: String, value: List<FileItem>): Int = value.size.coerceAtLeast(1)
+    }
     private val mutex = Mutex()
+    // The SQLite index only accelerates provisional renders; persistence must not delay a fresh listing.
+    private val persistenceMutex = Mutex()
+    private val persistenceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val generations = mutableMapOf<String, Long>()
 
     private fun memoryKey(path: String, showHidden: Boolean): String = "$path|$showHidden"
@@ -57,33 +67,56 @@ class DirectoryCache(context: Context) : DirectoryContentsCache {
     /**
      * Stores both hidden and non-hidden views in L1 and persists the complete snapshot to SQLite.
      */
-    override suspend fun put(path: String, allItems: List<FileItem>, expectedGeneration: Long) = mutex.withLock {
-        if (generations[path] != expectedGeneration) return@withLock
-        val nonHidden = allItems.filter { !it.isHidden }
-        memoryCache.put(memoryKey(path, true), allItems)
-        memoryCache.put(memoryKey(path, false), nonHidden)
+    override suspend fun put(path: String, allItems: List<FileItem>, expectedGeneration: Long) {
+        // The repository passes a newly scanned list that it does not mutate; retain that
+        // snapshot directly to avoid a second array allocation for very large folders.
+        val snapshot = allItems
+        val accepted = mutex.withLock {
+            if (generations[path] != expectedGeneration) {
+                false
+            } else {
+                memoryCache.put(memoryKey(path, true), snapshot)
+                memoryCache.put(memoryKey(path, false), snapshot.filterNot { it.isHidden })
+                true
+            }
+        }
+        if (!accepted) return
 
-        val dir = File(path)
-        dbHelper.saveDirectory(path, if (dir.exists()) dir.lastModified() else 0L, allItems)
+        // Publish memory state first; SQLite is a disposable provisional cache and may finish later.
+        persistenceScope.launch {
+            persistenceMutex.withLock {
+                val stillCurrent = mutex.withLock { generations[path] == expectedGeneration }
+                if (stillCurrent) {
+                    val directory = File(path)
+                    dbHelper.saveDirectory(
+                        path,
+                        if (directory.exists()) directory.lastModified() else 0L,
+                        snapshot
+                    )
+                }
+            }
+        }
     }
 
-    override suspend fun invalidate(path: String, includeDescendants: Boolean) = mutex.withLock {
-        val normalized = path.trimEnd(File.separatorChar)
-        val paths = buildSet {
-            add(path)
-            if (includeDescendants) {
-                generations.keys.filterTo(this) { it.startsWith("$normalized${File.separator}") }
-                memoryCache.snapshot().keys.map { it.substringBeforeLast('|') }
-                    .filterTo(this) { it.startsWith("$normalized${File.separator}") }
+    override suspend fun invalidate(path: String, includeDescendants: Boolean) = persistenceMutex.withLock {
+        mutex.withLock {
+            val normalized = path.trimEnd(File.separatorChar)
+            val paths = buildSet {
+                add(path)
+                if (includeDescendants) {
+                    generations.keys.filterTo(this) { it.startsWith("$normalized${File.separator}") }
+                    memoryCache.snapshot().keys.map { it.substringBeforeLast('|') }
+                        .filterTo(this) { it.startsWith("$normalized${File.separator}") }
+                }
+                File(path).parent?.let(::add)
             }
-            File(path).parent?.let(::add)
-        }
-        dbHelper.invalidateDirectory(path, includeDescendants)
-        paths.forEach { affected ->
-            generations[affected] = (generations[affected] ?: 0L) + 1L
-            memoryCache.remove(memoryKey(affected, true))
-            memoryCache.remove(memoryKey(affected, false))
-            if (affected != path) dbHelper.invalidateDirectory(affected)
+            dbHelper.invalidateDirectory(path, includeDescendants)
+            paths.forEach { affected ->
+                generations[affected] = (generations[affected] ?: 0L) + 1L
+                memoryCache.remove(memoryKey(affected, true))
+                memoryCache.remove(memoryKey(affected, false))
+                if (affected != path) dbHelper.invalidateDirectory(affected)
+            }
         }
     }
 

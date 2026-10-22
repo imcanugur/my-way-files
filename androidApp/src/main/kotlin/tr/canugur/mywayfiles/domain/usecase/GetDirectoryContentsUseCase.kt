@@ -19,9 +19,16 @@ class GetDirectoryContentsUseCase(
         forceRefresh: Boolean = false
     ): Result<List<FileItem>> {
         return repository.getDirectoryContents(path, showHidden, forceRefresh).map { items ->
+            // Cache normalized names once instead of allocating lowercase strings in each
+            // comparator invocation (O(n log n)) on large directories.
+            val normalizedNames = if (sortOption == SortOption.NAME_ASC || sortOption == SortOption.NAME_DESC) {
+                items.associate { it.id to it.name.lowercase(Locale.ROOT) }
+            } else {
+                emptyMap()
+            }
             val comparator = when (sortOption) {
-                SortOption.NAME_ASC -> compareBy<FileItem> { it.name.lowercase(Locale.ROOT) }
-                SortOption.NAME_DESC -> compareByDescending<FileItem> { it.name.lowercase(Locale.ROOT) }
+                SortOption.NAME_ASC -> compareBy<FileItem> { normalizedNames[it.id] }
+                SortOption.NAME_DESC -> compareByDescending<FileItem> { normalizedNames[it.id] }
                 SortOption.DATE_DESC -> compareByDescending<FileItem> { it.lastModifiedMs }
                 SortOption.DATE_ASC -> compareBy<FileItem> { it.lastModifiedMs }
                 SortOption.SIZE_DESC -> compareByDescending<FileItem> { it.sizeBytes }

@@ -4,10 +4,13 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
+import android.os.Build
 import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import java.io.File
@@ -21,6 +24,8 @@ object ThumbnailLoader {
 
     private val maxMemoryKb = (Runtime.getRuntime().maxMemory() / 1024).toInt()
     private val cacheCapacityKb = (maxMemoryKb / 8).coerceIn(4096, 32768)
+    // Bound simultaneous native image/video decodes on entry-level devices.
+    private val decodeSemaphore = Semaphore(2)
 
     private val memoryCache = object : LruCache<String, ImageBitmap>(cacheCapacityKb) {
         override fun sizeOf(key: String, value: ImageBitmap): Int {
@@ -34,18 +39,53 @@ object ThumbnailLoader {
 
     suspend fun loadThumbnail(path: String): ImageBitmap? = withContext(Dispatchers.IO) {
         memoryCache.get(path)?.let { return@withContext it }
+        decodeSemaphore.withPermit { decodeOnIo(path) }
+    }
 
-        try {
+    private fun decodeOnIo(path: String): ImageBitmap? {
+        memoryCache.get(path)?.let { return it }
+
+        return try {
             val file = File(path)
-            if (!file.exists() || !file.canRead()) return@withContext null
+            if (!file.exists() || !file.canRead()) return null
 
             val ext = file.extension.lowercase()
             if (FileTypeClassifier.isVideo(ext)) {
                 val retriever = android.media.MediaMetadataRetriever()
                 try {
                     retriever.setDataSource(path)
-                    val frame = retriever.getFrameAtTime(1000000, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                        ?: retriever.frameAtTime
+                    val frame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                        val rawWidth = retriever.extractMetadata(
+                            android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH
+                        )?.toIntOrNull() ?: THUMBNAIL_MAX_DIMENSION
+                        val rawHeight = retriever.extractMetadata(
+                            android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT
+                        )?.toIntOrNull() ?: THUMBNAIL_MAX_DIMENSION
+                        val rotation = retriever.extractMetadata(
+                            android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION
+                        )?.toIntOrNull() ?: 0
+                        val (width, height) = if (rotation == 90 || rotation == 270) {
+                            rawHeight to rawWidth
+                        } else {
+                            rawWidth to rawHeight
+                        }
+                        val scale = minOf(
+                            1f,
+                            THUMBNAIL_MAX_DIMENSION / width.toFloat(),
+                            THUMBNAIL_MAX_DIMENSION / height.toFloat()
+                        )
+                        retriever.getScaledFrameAtTime(
+                            1_000_000L,
+                            android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                            (width * scale).toInt().coerceAtLeast(1),
+                            (height * scale).toInt().coerceAtLeast(1)
+                        )
+                    } else {
+                        retriever.getFrameAtTime(
+                            1_000_000L,
+                            android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                        ) ?: retriever.frameAtTime
+                    }
                     if (frame != null) {
                         val maxDim = THUMBNAIL_MAX_DIMENSION
                         val w = frame.width
@@ -61,9 +101,10 @@ object ThumbnailLoader {
                         } else {
                             frame
                         }
+                        if (scaled !== frame) frame.recycle()
                         val imageBitmap = scaled.asImageBitmap()
                         memoryCache.put(path, imageBitmap)
-                        return@withContext imageBitmap
+                        return imageBitmap
                     }
                 } finally {
                     try { retriever.release() } catch (_: Exception) {}
@@ -77,7 +118,7 @@ object ThumbnailLoader {
 
             val rawWidth = boundsOptions.outWidth
             val rawHeight = boundsOptions.outHeight
-            if (rawWidth <= 0 || rawHeight <= 0) return@withContext null
+            if (rawWidth <= 0 || rawHeight <= 0) return null
 
             var sampleSize = 1
             var halfWidth = rawWidth
@@ -93,7 +134,7 @@ object ThumbnailLoader {
                 inPreferredConfig = Bitmap.Config.RGB_565
             }
 
-            val rawBitmap = BitmapFactory.decodeFile(path, decodeOptions) ?: return@withContext null
+            val rawBitmap = BitmapFactory.decodeFile(path, decodeOptions) ?: return null
             val rotatedBitmap = applyExifRotation(path, rawBitmap)
             val imageBitmap = rotatedBitmap.asImageBitmap()
 

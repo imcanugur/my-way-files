@@ -18,9 +18,14 @@ class SearchFilesUseCase(private val repository: FileRepository) {
     }.map { items -> sortItems(items, sortOption) }
 
     private fun sortItems(items: List<FileItem>, sortOption: SortOption): List<FileItem> {
+        val normalizedNames = if (sortOption == SortOption.NAME_ASC || sortOption == SortOption.NAME_DESC) {
+            items.associate { it.id to it.name.lowercase(Locale.ROOT) }
+        } else {
+            emptyMap()
+        }
         val comparator = when (sortOption) {
-            SortOption.NAME_ASC -> compareBy<FileItem> { it.name.lowercase(Locale.ROOT) }
-            SortOption.NAME_DESC -> compareByDescending<FileItem> { it.name.lowercase(Locale.ROOT) }
+            SortOption.NAME_ASC -> compareBy<FileItem> { normalizedNames[it.id] }
+            SortOption.NAME_DESC -> compareByDescending<FileItem> { normalizedNames[it.id] }
             SortOption.DATE_DESC -> compareByDescending<FileItem> { it.lastModifiedMs }
             SortOption.DATE_ASC -> compareBy<FileItem> { it.lastModifiedMs }
             SortOption.SIZE_DESC -> compareByDescending<FileItem> { it.sizeBytes }

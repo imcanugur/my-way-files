@@ -116,7 +116,9 @@ fun ExplorerScreen(
         is ExplorerUiState.Empty -> current.showHiddenFiles
         else -> false
     }
-    LaunchedEffect(isSearchActive, searchQuery, currentPath, showHiddenFiles, state) {
+    // Do not key this effect by the full ExplorerUiState: it contains the entire file list,
+    // so every state emission would compare a potentially large list and restart filesystem search.
+    LaunchedEffect(isSearchActive, searchQuery, currentPath, showHiddenFiles) {
         if (isSearchActive && searchQuery.isNotBlank()) {
             delay(250)
             viewModel.search(searchQuery)
