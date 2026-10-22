@@ -11,9 +11,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -23,6 +26,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.delay
 import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.domain.model.SortOption
@@ -40,6 +44,7 @@ import tr.canugur.mywayfiles.ui.viewer.ImageViewerScreen
 fun ExplorerScreen(
     rootPath: String,
     driveName: String,
+    startInSearch: Boolean = false,
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
     onNavigateBack: () -> Unit,
@@ -55,9 +60,12 @@ fun ExplorerScreen(
         key = rootPath
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val searchState by viewModel.searchState.collectAsStateWithLifecycle()
 
     var isSelectionMode by remember { mutableStateOf(false) }
     var selectedPaths by remember { mutableStateOf(setOf<String>()) }
+    var isSearchActive by rememberSaveable(rootPath) { mutableStateOf(startInSearch) }
+    var searchQuery by rememberSaveable(rootPath) { mutableStateOf("") }
 
     val currentPath = when (val s = state) {
         is ExplorerUiState.Success -> s.currentPath
@@ -69,8 +77,51 @@ fun ExplorerScreen(
         selectedPaths = emptySet()
     }
 
-    val mediaItems = remember(state) {
-        val currentState = state
+    val showHiddenFiles = when (val current = state) {
+        is ExplorerUiState.Success -> current.showHiddenFiles
+        is ExplorerUiState.Empty -> current.showHiddenFiles
+        else -> false
+    }
+    LaunchedEffect(isSearchActive, searchQuery, currentPath, showHiddenFiles, state) {
+        if (isSearchActive && searchQuery.isNotBlank()) {
+            delay(250)
+            viewModel.search(searchQuery)
+        } else {
+            viewModel.clearSearch()
+        }
+    }
+
+    fun closeSearch() {
+        isSearchActive = false
+        searchQuery = ""
+        viewModel.clearSearch()
+    }
+
+    val displayedItems = when {
+        isSearchActive && searchQuery.isNotBlank() -> searchState.results
+        state is ExplorerUiState.Success -> (state as ExplorerUiState.Success).items
+        else -> emptyList()
+    }
+    val displayedState = when {
+        isSearchActive && searchQuery.isNotBlank() && state is ExplorerUiState.Success ->
+            (state as ExplorerUiState.Success).copy(items = displayedItems)
+        isSearchActive && searchQuery.isNotBlank() && state is ExplorerUiState.Empty -> {
+            val emptyState = state as ExplorerUiState.Empty
+            ExplorerUiState.Success(
+                currentPath = emptyState.currentPath,
+                breadcrumbs = emptyState.breadcrumbs,
+                items = displayedItems,
+                clipboard = emptyState.clipboard,
+                showHiddenFiles = emptyState.showHiddenFiles,
+                sortOption = emptyState.sortOption,
+                operationError = emptyState.operationError
+            )
+        }
+        else -> state
+    }
+
+    val mediaItems = remember(displayedState) {
+        val currentState = displayedState
         if (currentState is ExplorerUiState.Success) {
             currentState.items.filter { FileTypeClassifier.isImage(it) || FileTypeClassifier.isVideo(it) }
         } else emptyList()
@@ -97,32 +148,55 @@ fun ExplorerScreen(
         if (isSelectionMode) {
             isSelectionMode = false
             selectedPaths = emptySet()
+        } else if (isSearchActive) {
+            closeSearch()
         } else if (!viewModel.navigateUp()) {
             onNavigateBack()
         }
     }
 
-    val currentItems = when (val s = state) {
+    val currentItems = when (val s = displayedState) {
         is ExplorerUiState.Success -> s.items
         else -> emptyList()
     }
 
     Box(modifier = modifier.fillMaxSize()) {
         ExplorerScreenContent(
-            state = state,
+            state = displayedState,
             fallbackDriveName = driveName,
             fallbackRootPath = rootPath,
             isDarkTheme = isDarkTheme,
             isSelectionMode = isSelectionMode,
             selectedPaths = selectedPaths,
+            isSearchActive = isSearchActive,
+            searchQuery = searchQuery,
+            isSearchLoading = searchState.isSearching,
+            searchError = searchState.error,
             onToggleTheme = onToggleTheme,
             onBackClick = {
                 if (isSelectionMode) {
                     isSelectionMode = false
                     selectedPaths = emptySet()
+                } else if (isSearchActive) {
+                    closeSearch()
                 } else if (!viewModel.navigateUp()) {
                     onNavigateBack()
                 }
+            },
+            onOpenSearch = {
+                searchQuery = ""
+                viewModel.clearSearch()
+                isSearchActive = true
+            },
+            onSearchQueryChange = { query ->
+                searchQuery = query
+                viewModel.clearSearch()
+            },
+            onCloseSearch = ::closeSearch,
+            onSearchRetry = { viewModel.search(searchQuery) },
+            onRefresh = {
+                if (isSearchActive && searchQuery.isNotBlank()) viewModel.search(searchQuery)
+                else viewModel.onEvent(ExplorerUiEvent.Refresh)
             },
             onCreateFolderClick = { showCreateFolderDialog = true },
             onEnterSelectionMode = { isSelectionMode = true },
@@ -165,6 +239,7 @@ fun ExplorerScreen(
                         selectedPaths + item.path
                     }
                 } else if (item.isDirectory) {
+                    if (isSearchActive) closeSearch()
                     viewModel.onEvent(ExplorerUiEvent.ItemClick(item))
                 } else if (FileTypeClassifier.isImage(item) || FileTypeClassifier.isVideo(item)) {
                     val idx = mediaItems.indexOfFirst { it.path == item.path }
@@ -262,6 +337,15 @@ fun ExplorerScreenContent(
     isDarkTheme: Boolean,
     isSelectionMode: Boolean,
     selectedPaths: Set<String>,
+    isSearchActive: Boolean,
+    searchQuery: String,
+    isSearchLoading: Boolean,
+    searchError: String?,
+    onOpenSearch: () -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onCloseSearch: () -> Unit,
+    onSearchRetry: () -> Unit,
+    onRefresh: () -> Unit,
     onToggleTheme: () -> Unit,
     onBackClick: () -> Unit,
     onCreateFolderClick: () -> Unit,
@@ -311,7 +395,11 @@ fun ExplorerScreenContent(
     }
     val isAllSelected = currentItems.isNotEmpty() && selectedPaths.size >= currentItems.size
 
-    Box(modifier = modifier.fillMaxSize()) {
+    PullToRefreshBox(
+        isRefreshing = isSearchLoading || (state as? ExplorerUiState.Success)?.isRefreshing == true,
+        onRefresh = onRefresh,
+        modifier = modifier.fillMaxSize()
+    ) {
         Scaffold(
             containerColor = AppColors.canvasBackground,
             topBar = {
@@ -323,8 +411,16 @@ fun ExplorerScreenContent(
                     isAllSelected = isAllSelected,
                     showHiddenFiles = showHiddenFiles,
                     sortOption = sortOption,
+                    isSearchActive = isSearchActive,
+                    searchQuery = searchQuery,
+                    onOpenSearch = onOpenSearch,
+                    onSearchQueryChange = onSearchQueryChange,
+                    onCloseSearch = onCloseSearch,
                     onBackClick = onBackClick,
-                    onBreadcrumbClick = { onEvent(ExplorerUiEvent.NavigateToBreadcrumb(it)) },
+                    onBreadcrumbClick = {
+                        if (isSearchActive) onCloseSearch()
+                        onEvent(ExplorerUiEvent.NavigateToBreadcrumb(it))
+                    },
                     onCreateFolderClick = onCreateFolderClick,
                     onEnterSelectionMode = onEnterSelectionMode,
                     onCloseSelectionMode = onCloseSelectionMode,
@@ -335,7 +431,7 @@ fun ExplorerScreenContent(
                     onToggleHiddenFiles = onToggleHiddenFiles,
                     onSortOptionSelected = onSortOptionSelected,
                     onToggleTheme = onToggleTheme,
-                    onRefreshClick = { onEvent(ExplorerUiEvent.Refresh) }
+                    onRefreshClick = onRefresh
                 )
             }
         ) { innerPadding ->
@@ -409,7 +505,46 @@ fun ExplorerScreenContent(
                 }
 
                 is ExplorerUiState.Success -> {
-                    LazyColumn(
+                    when {
+                        isSearchActive && searchQuery.isNotBlank() && searchError != null -> {
+                            Box(
+                                modifier = Modifier.fillMaxSize().padding(innerPadding).padding(Dimensions.SpacingLarge),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                RetryErrorState(message = searchError, onRetry = onSearchRetry)
+                            }
+                        }
+
+                        isSearchActive && searchQuery.isNotBlank() && isSearchLoading && currentItems.isEmpty() -> {
+                            Box(
+                                modifier = Modifier.fillMaxSize().padding(innerPadding),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = AppColors.brandAccent)
+                            }
+                        }
+
+                        isSearchActive && searchQuery.isNotBlank() && currentItems.isEmpty() -> {
+                            Column(
+                                modifier = Modifier.fillMaxSize().padding(innerPadding).padding(Dimensions.SpacingLarge),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = stringResource(tr.canugur.mywayfiles.R.string.search_no_results),
+                                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                                    color = AppColors.textPrimary
+                                )
+                                Spacer(modifier = Modifier.height(Dimensions.SpacingSmall))
+                                Text(
+                                    text = stringResource(tr.canugur.mywayfiles.R.string.search_no_results_hint),
+                                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                                    color = AppColors.textSecondary
+                                )
+                            }
+                        }
+
+                        else -> LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(innerPadding),
@@ -418,6 +553,14 @@ fun ExplorerScreenContent(
                             vertical = Dimensions.SpacingSmall
                         ),
                     ) {
+                        if (isSearchActive && isSearchLoading && currentItems.isNotEmpty()) {
+                            item(key = "search-progress") {
+                                LinearProgressIndicator(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = AppColors.brandAccent
+                                )
+                            }
+                        }
                         state.operationError?.let { message ->
                             item(key = "operation-error") {
                                 OperationErrorBanner(
@@ -469,6 +612,7 @@ fun ExplorerScreenContent(
                         item {
                             Spacer(modifier = Modifier.height(Dimensions.SpacingHuge))
                         }
+                    }
                     }
                 }
             }

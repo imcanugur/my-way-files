@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,6 +20,7 @@ import tr.canugur.mywayfiles.domain.model.SortOption
 import tr.canugur.mywayfiles.domain.repository.FileRepository
 import tr.canugur.mywayfiles.domain.repository.RecycleBinRepository
 import tr.canugur.mywayfiles.domain.usecase.GetDirectoryContentsUseCase
+import tr.canugur.mywayfiles.domain.usecase.SearchFilesUseCase
 import java.io.File
 import java.util.Locale
 
@@ -32,17 +34,23 @@ class ExplorerViewModel(
     private val getDirectoryContentsUseCase: GetDirectoryContentsUseCase,
     private val fileRepository: FileRepository,
     private val recycleBinRepository: RecycleBinRepository,
-    private val explorerPreferences: ExplorerPreferences
+    private val explorerPreferences: ExplorerPreferences,
+    private val searchFilesUseCase: SearchFilesUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ExplorerUiState>(ExplorerUiState.Loading)
     val uiState: StateFlow<ExplorerUiState> = _uiState.asStateFlow()
+
+    private val _searchState = MutableStateFlow(ExplorerSearchState())
+    val searchState: StateFlow<ExplorerSearchState> = _searchState.asStateFlow()
 
     private var activePath: String = rootPath
     private var activeClipboard: Clipboard? = null
     private var showHiddenFiles: Boolean = explorerPreferences.showHiddenFiles
     private var sortOption: SortOption = explorerPreferences.sortOption
     private var directoryRequestId: Long = 0L
+    private var searchRequestId: Long = 0L
+    private var searchJob: Job? = null
 
     init {
         loadDirectory(rootPath)
@@ -104,6 +112,56 @@ class ExplorerViewModel(
                 loadDirectory(activePath, isRefreshing = true)
             }
         }
+    }
+
+    fun search(query: String) {
+        val requestId = ++searchRequestId
+        searchJob?.cancel()
+        if (query.isBlank()) {
+            _searchState.value = ExplorerSearchState()
+            return
+        }
+
+        val path = activePath
+        val includeHidden = showHiddenFiles
+        val sort = sortOption
+        _searchState.value = ExplorerSearchState(isSearching = true)
+        searchJob = viewModelScope.launch {
+            searchFilesUseCase(
+                path = path,
+                query = query,
+                showHidden = includeHidden,
+                sortOption = sort,
+                onResults = { partialResults ->
+                    if (requestId == searchRequestId) {
+                        _searchState.value = ExplorerSearchState(
+                            results = partialResults,
+                            isSearching = true
+                        )
+                    }
+                }
+            ).fold(
+                onSuccess = { items ->
+                    if (requestId == searchRequestId) {
+                        _searchState.value = ExplorerSearchState(results = items)
+                    }
+                },
+                onFailure = { error ->
+                    if (requestId == searchRequestId) {
+                        _searchState.value = ExplorerSearchState(
+                            error = error.localizedMessage ?: "Search failed"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun clearSearch() {
+        searchRequestId++
+        searchJob?.cancel()
+        searchJob = null
+        _searchState.value = ExplorerSearchState()
     }
 
     private fun handleItemClick(item: FileItem) {
@@ -403,6 +461,7 @@ class ExplorerViewModel(
                 val repository = FileRepositoryImpl(dataSource, directoryCache)
                 val recycleBinRepository = RecycleBinRepositoryImpl.getInstance(appContext)
                 val useCase = GetDirectoryContentsUseCase(repository)
+                val searchUseCase = SearchFilesUseCase(repository)
                 val explorerPreferences = ExplorerPreferences(appContext)
                 return ExplorerViewModel(
                     rootPath = rootPath,
@@ -410,7 +469,8 @@ class ExplorerViewModel(
                     getDirectoryContentsUseCase = useCase,
                     fileRepository = repository,
                     recycleBinRepository = recycleBinRepository,
-                    explorerPreferences = explorerPreferences
+                    explorerPreferences = explorerPreferences,
+                    searchFilesUseCase = searchUseCase
                 ) as T
             }
         }

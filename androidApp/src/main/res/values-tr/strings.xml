@@ -27,6 +27,14 @@
     <string name="permission_message">Bu cihazdaki dosya ve klasörlere göz atmak için lütfen Ayarlar\'dan Tüm Dosyalara Erişim iznini verin.</string>
     <string name="permission_button">Ayarları Aç</string>
     <string name="navigate_up">Geri</string>
+    <string name="search_files">Dosyalarda ara</string>
+    <string name="search_this_location">Bu konumda ara</string>
+    <string name="search_choose_location">Aramak için bir depolama konumu seçin.</string>
+    <string name="close_search">Aramayı kapat</string>
+    <string name="clear_search">Aramayı temizle</string>
+    <string name="search_no_results">Eşleşen dosya veya klasör yok</string>
+    <string name="search_no_results_hint">Başka bir ad deneyin veya yazımı kontrol edin.</string>
+    <string name="search_failed">Bu konumda arama yapılamadı.</string>
     <string name="image_viewer_title">Resim Görüntüleyici</string>
     <string name="image_dimensions">%1$d × %2$d</string>
     <string name="image_load_failed">Resim yüklenemedi</string>

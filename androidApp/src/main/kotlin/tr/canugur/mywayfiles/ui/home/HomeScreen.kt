@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -23,6 +24,9 @@ import tr.canugur.mywayfiles.ui.home.components.RecycleBinCard
 import tr.canugur.mywayfiles.ui.home.components.StorageDriveCard
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 
 /**
  * Stateful root decoupling ViewModel from stateless UI presentation.
@@ -32,6 +36,7 @@ fun HomeScreen(
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
     onDriveClick: (StorageDrive) -> Unit,
+    onSearchDriveClick: (StorageDrive) -> Unit,
     onRecycleBinClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -46,6 +51,7 @@ fun HomeScreen(
         isDarkTheme = isDarkTheme,
         onToggleTheme = onToggleTheme,
         onDriveClick = onDriveClick,
+        onSearchDriveClick = onSearchDriveClick,
         onRecycleBinClick = onRecycleBinClick,
         onEvent = viewModel::onEvent,
         modifier = modifier
@@ -61,10 +67,12 @@ fun HomeScreenContent(
     isDarkTheme: Boolean,
     onToggleTheme: () -> Unit,
     onDriveClick: (StorageDrive) -> Unit,
+    onSearchDriveClick: (StorageDrive) -> Unit,
     onRecycleBinClick: () -> Unit,
     onEvent: (HomeUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var showSearchLocationPicker by remember { mutableStateOf(false) }
     Scaffold(
         containerColor = AppColors.canvasBackground,
         topBar = {
@@ -72,6 +80,7 @@ fun HomeScreenContent(
                 isDarkTheme = isDarkTheme,
                 isRefreshing = (state as? HomeUiState.Success)?.isRefreshing == true,
                 onToggleTheme = onToggleTheme,
+                onSearchClick = { showSearchLocationPicker = true },
                 onRefreshClick = { onEvent(HomeUiEvent.Refresh) }
             )
         },
@@ -120,15 +129,20 @@ fun HomeScreenContent(
             }
 
             is HomeUiState.Success -> {
-                LazyColumn(
+                PullToRefreshBox(
+                    isRefreshing = state.isRefreshing,
+                    onRefresh = { onEvent(HomeUiEvent.Refresh) },
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(innerPadding),
-                    contentPadding = PaddingValues(
-                        horizontal = Dimensions.SpacingLarge,
-                        vertical = Dimensions.SpacingDefault
-                    ),
+                        .padding(innerPadding)
                 ) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            horizontal = Dimensions.SpacingLarge,
+                            vertical = Dimensions.SpacingDefault
+                        ),
+                    ) {
                     if (state.hasRefreshError) {
                         item(key = "refresh-error") {
                             RefreshErrorBanner(
@@ -195,8 +209,45 @@ fun HomeScreenContent(
                     item {
                         Spacer(modifier = Modifier.height(Dimensions.SpacingHuge))
                     }
-                }
+                    }
             }
         }
+    }
+    }
+
+    if (showSearchLocationPicker) {
+        AlertDialog(
+            onDismissRequest = { showSearchLocationPicker = false },
+            title = { Text(stringResource(R.string.search_files)) },
+            text = {
+                val drives = (state as? HomeUiState.Success)?.drives.orEmpty()
+                if (drives.isEmpty()) {
+                    Text(stringResource(R.string.no_drives_found))
+                } else {
+                    Column {
+                        Text(stringResource(R.string.search_choose_location))
+                        LazyColumn(modifier = Modifier.heightIn(max = Dimensions.SpacingHuge * 8f)) {
+                            itemsIndexed(drives, key = { _, drive -> drive.id }) { _, drive ->
+                                TextButton(
+                                    onClick = {
+                                        showSearchLocationPicker = false
+                                        onSearchDriveClick(drive)
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(drive.name, modifier = Modifier.fillMaxWidth())
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showSearchLocationPicker = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
     }
 }

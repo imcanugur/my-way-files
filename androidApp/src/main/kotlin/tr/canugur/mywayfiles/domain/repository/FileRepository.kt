@@ -12,6 +12,13 @@ interface FileRepository {
         forceRefresh: Boolean = false
     ): Result<List<FileItem>>
     suspend fun getCachedContents(path: String, showHidden: Boolean = false): List<FileItem>? = null
+    /** Searches the accessible descendants of [path], including nested folders. */
+    suspend fun searchFiles(
+        path: String,
+        query: String,
+        showHidden: Boolean = false,
+        onResults: (List<FileItem>) -> Unit = {}
+    ): Result<List<FileItem>>
     fun hasStoragePermission(): Boolean
     suspend fun delete(path: String): Result<Unit>
     suspend fun rename(path: String, newName: String): Result<Unit>

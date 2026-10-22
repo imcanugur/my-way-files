@@ -25,6 +25,7 @@ fun HomeTopBar(
     isDarkTheme: Boolean,
     isRefreshing: Boolean,
     onToggleTheme: () -> Unit,
+    onSearchClick: () -> Unit,
     onRefreshClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -44,6 +45,17 @@ fun HomeTopBar(
                 color = AppColors.textPrimary,
                 modifier = Modifier.weight(1f)
             )
+
+            IconButton(
+                onClick = onSearchClick,
+                modifier = Modifier.size(Dimensions.ActionButtonSize)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_search),
+                    contentDescription = stringResource(R.string.search_files),
+                    tint = AppColors.textSecondary
+                )
+            }
 
             IconButton(
                 onClick = onRefreshClick,

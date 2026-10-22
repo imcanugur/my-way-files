@@ -16,6 +16,12 @@ data class Clipboard(
     val item: FileItem get() = items.first()
 }
 
+data class ExplorerSearchState(
+    val results: List<FileItem> = emptyList(),
+    val isSearching: Boolean = false,
+    val error: String? = null
+)
+
 sealed interface ExplorerUiState {
     data object Loading : ExplorerUiState
 

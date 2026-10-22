@@ -21,6 +21,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.domain.model.TrashedItem
 import tr.canugur.mywayfiles.ui.common.RetryErrorState
+import tr.canugur.mywayfiles.ui.common.OperationErrorBanner
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 import tr.canugur.mywayfiles.ui.trash.components.EmptyTrashConfirmDialog
@@ -121,6 +122,13 @@ fun RecycleBinScreen(
                         style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                         color = AppColors.textSecondary
                     )
+                    s.operationError?.let { error ->
+                        Spacer(modifier = Modifier.height(Dimensions.SpacingDefault))
+                        OperationErrorBanner(
+                            message = error,
+                            onDismiss = { viewModel.onEvent(RecycleBinUiEvent.ClearOperationError) }
+                        )
+                    }
                 }
             }
 
@@ -148,6 +156,15 @@ fun RecycleBinScreen(
                         vertical = Dimensions.SpacingSmall
                     ),
                 ) {
+                    s.operationError?.let { error ->
+                        item(key = "recycle-bin-operation-error") {
+                            OperationErrorBanner(
+                                message = error,
+                                onDismiss = { viewModel.onEvent(RecycleBinUiEvent.ClearOperationError) },
+                                modifier = Modifier.padding(bottom = Dimensions.SpacingSmall)
+                            )
+                        }
+                    }
                     item(key = "recycle-bin-description") {
                         Text(
                             text = stringResource(R.string.recycle_bin_description),

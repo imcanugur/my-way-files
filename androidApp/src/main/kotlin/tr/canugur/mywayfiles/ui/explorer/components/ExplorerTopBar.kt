@@ -10,6 +10,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.TextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -19,6 +20,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -41,6 +45,11 @@ fun ExplorerTopBar(
     isAllSelected: Boolean,
     showHiddenFiles: Boolean,
     sortOption: SortOption,
+    isSearchActive: Boolean,
+    searchQuery: String,
+    onOpenSearch: () -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    onCloseSearch: () -> Unit,
     onBackClick: () -> Unit,
     onBreadcrumbClick: (String) -> Unit,
     onCreateFolderClick: () -> Unit,
@@ -58,9 +67,17 @@ fun ExplorerTopBar(
 ) {
     val scrollState = rememberScrollState()
     var optionsMenuExpanded by remember { mutableStateOf(false) }
+    val searchFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
     val parentBreadcrumbs = breadcrumbs.dropLast(1)
 
     LaunchedEffect(breadcrumbs.size) { scrollState.animateScrollTo(scrollState.maxValue) }
+    LaunchedEffect(isSearchActive) {
+        if (isSearchActive) {
+            searchFocusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
 
     Surface(
         color = AppColors.canvasBackground,
@@ -81,6 +98,37 @@ fun ExplorerTopBar(
                     onBatchCut = onBatchCut,
                     onBatchDelete = onBatchDelete
                 )
+            } else if (isSearchActive) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onCloseSearch,
+                        modifier = Modifier.size(Dimensions.ActionButtonSize)
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_close),
+                            contentDescription = stringResource(R.string.close_search),
+                            tint = AppColors.textPrimary
+                        )
+                    }
+                    TextField(
+                        value = searchQuery,
+                        onValueChange = onSearchQueryChange,
+                        modifier = Modifier.weight(1f).focusRequester(searchFocusRequester),
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.search_this_location)) },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { onSearchQueryChange("") }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_close),
+                                        contentDescription = stringResource(R.string.clear_search),
+                                        tint = AppColors.textSecondary
+                                    )
+                                }
+                            }
+                        }
+                    )
+                }
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onBackClick, modifier = Modifier.size(Dimensions.ActionButtonSize)) {
@@ -98,6 +146,14 @@ fun ExplorerTopBar(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
+
+                    IconButton(onClick = onOpenSearch, modifier = Modifier.size(Dimensions.ActionButtonSize)) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_search),
+                            contentDescription = stringResource(R.string.search_files),
+                            tint = AppColors.textSecondary
+                        )
+                    }
 
                     Box(
                         modifier = Modifier

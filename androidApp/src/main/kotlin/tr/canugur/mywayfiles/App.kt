@@ -13,7 +13,7 @@ import tr.canugur.mywayfiles.ui.trash.RecycleBinScreen
 
 sealed interface NavigationDestination {
     data object Home : NavigationDestination
-    data class Explorer(val drive: StorageDrive) : NavigationDestination
+    data class Explorer(val drive: StorageDrive, val startInSearch: Boolean = false) : NavigationDestination
     data object RecycleBin : NavigationDestination
 }
 
@@ -62,6 +62,9 @@ fun App() {
                         isDarkTheme = isDarkTheme,
                         onToggleTheme = { isDarkTheme = !isDarkTheme },
                         onDriveClick = { drive -> currentDestination = NavigationDestination.Explorer(drive) },
+                        onSearchDriveClick = { drive ->
+                            currentDestination = NavigationDestination.Explorer(drive, startInSearch = true)
+                        },
                         onRecycleBinClick = { currentDestination = NavigationDestination.RecycleBin }
                     )
                 }
@@ -70,6 +73,7 @@ fun App() {
                     ExplorerScreen(
                         rootPath = destination.drive.path,
                         driveName = destination.drive.name,
+                        startInSearch = destination.startInSearch,
                         isDarkTheme = isDarkTheme,
                         onToggleTheme = { isDarkTheme = !isDarkTheme },
                         onNavigateBack = { currentDestination = NavigationDestination.Home }

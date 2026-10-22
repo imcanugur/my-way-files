@@ -27,6 +27,14 @@
     <string name="permission_message">To browse files and folders on this device, please grant All Files Access in Settings.</string>
     <string name="permission_button">Open Settings</string>
     <string name="navigate_up">Back</string>
+    <string name="search_files">Search files</string>
+    <string name="search_this_location">Search this location</string>
+    <string name="search_choose_location">Choose a storage location to search.</string>
+    <string name="close_search">Close search</string>
+    <string name="clear_search">Clear search</string>
+    <string name="search_no_results">No matching files or folders</string>
+    <string name="search_no_results_hint">Try another name or check the spelling.</string>
+    <string name="search_failed">Could not search this location.</string>
     <string name="image_viewer_title">Image Viewer</string>
     <string name="image_dimensions">%1$d × %2$d</string>
     <string name="image_load_failed">Unable to load image</string>

@@ -95,48 +95,80 @@ class RecycleBinRepositoryImpl private constructor(
 
                 val id = UUID.randomUUID().toString()
                 val trashFile = File(filesDir, "${id}_${item.name}")
-
-                var moved = source.renameTo(trashFile)
-                if (!moved) {
-                    if (source.isDirectory) {
-                        source.copyRecursively(trashFile, overwrite = false)
-                        if (!trashFile.exists()) return@withContext Result.failure(IOException("Trash copy was incomplete"))
-                        if (!source.deleteRecursively()) {
-                            trashFile.deleteRecursively()
-                            return@withContext Result.failure(IOException("Copied ${item.name}, but could not remove the original"))
-                        }
-                    } else {
-                        source.copyTo(trashFile, overwrite = false)
-                        if (!trashFile.isFile || trashFile.length() != source.length()) {
-                            trashFile.delete()
-                            return@withContext Result.failure(IOException("Trash copy was incomplete"))
-                        }
-                        if (!source.delete()) {
-                            trashFile.delete()
-                            return@withContext Result.failure(IOException("Copied ${item.name}, but could not remove the original"))
-                        }
-                    }
-                    moved = trashFile.exists()
-                }
-
-                if (!moved || !trashFile.exists()) {
-                    return@withContext Result.failure(IOException("Failed to move ${item.name} to trash"))
-                }
-
                 val trashedItem = TrashedItem(
                     id = id,
                     name = item.name,
                     trashPath = trashFile.canonicalPath,
                     originalPath = source.canonicalPath,
                     deletedAtMs = System.currentTimeMillis(),
-                    sizeBytes = if (item.isDirectory) computeDirectorySize(trashFile) else trashFile.length(),
+                    sizeBytes = if (item.isDirectory) computeDirectorySize(source) else source.length(),
                     isDirectory = item.isDirectory
                 )
 
-                val list = readManifest().toMutableList()
-                list.add(trashedItem)
-                writeManifest(list)
-                Result.success(Unit)
+                // Persist the recovery record before moving user data. If the process stops
+                // between these steps, getTrashedItems() removes the pending entry because
+                // its trash path does not exist and the original file remains untouched.
+                val previousManifest = readManifest()
+                writeManifest(previousManifest + trashedItem)
+
+                var copyComplete = false
+                try {
+                    var moved = source.renameTo(trashFile)
+                    if (!moved) {
+                        if (source.isDirectory) {
+                            source.copyRecursively(trashFile, overwrite = false)
+                            if (!trashFile.exists()) throw IOException("Trash copy was incomplete")
+                            copyComplete = true
+                            if (!source.deleteRecursively()) {
+                                throw IOException("Copied ${item.name}, but could not remove the original")
+                            }
+                        } else {
+                            source.copyTo(trashFile, overwrite = false)
+                            if (!trashFile.isFile || trashFile.length() != source.length()) {
+                                trashFile.delete()
+                                throw IOException("Trash copy was incomplete")
+                            }
+                            copyComplete = true
+                            if (!source.delete()) {
+                                throw IOException("Copied ${item.name}, but could not remove the original")
+                            }
+                        }
+                        moved = trashFile.exists()
+                    }
+
+                    if (!moved || !trashFile.exists()) {
+                        throw IOException("Failed to move ${item.name} to trash")
+                    }
+                    Result.success(Unit)
+                } catch (error: Exception) {
+                    // A failed cross-volume copy can leave a partial destination. Remove it
+                    // while keeping the original whenever possible, then discard the pending
+                    // manifest entry. A later read also reconciles any failed cleanup.
+                    var keepRecoveryRecord = false
+                    if (trashFile.exists() && source.exists() && copyComplete) {
+                        // The full copy is the recovery copy; keep its manifest entry even
+                        // though removal of the source was only partially successful.
+                        keepRecoveryRecord = true
+                    } else if (trashFile.exists() && source.exists()) {
+                        if (trashFile.isDirectory) trashFile.deleteRecursively() else trashFile.delete()
+                    } else if (trashFile.exists() && !source.exists()) {
+                        val restored = runCatching { trashFile.renameTo(source) }.getOrDefault(false) ||
+                            runCatching {
+                                if (trashFile.isDirectory) trashFile.copyRecursively(source, overwrite = false)
+                                else trashFile.copyTo(source, overwrite = false)
+                                source.exists()
+                            }.getOrDefault(false)
+                        if (restored && source.exists()) {
+                            if (trashFile.isDirectory) trashFile.deleteRecursively() else trashFile.delete()
+                        } else {
+                            keepRecoveryRecord = true
+                        }
+                    }
+                    if (!keepRecoveryRecord) {
+                        runCatching { writeManifest(readManifest().filterNot { it.id == id }) }
+                    }
+                    Result.failure(error)
+                }
             } catch (e: Exception) {
                 Result.failure(e)
             }
