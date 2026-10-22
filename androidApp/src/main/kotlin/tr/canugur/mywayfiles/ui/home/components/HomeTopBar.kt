@@ -22,9 +22,8 @@ import tr.canugur.mywayfiles.ui.theme.Dimensions
 /** Material top app bar for the storage overview. */
 @Composable
 fun HomeTopBar(
-    isDarkTheme: Boolean,
     isRefreshing: Boolean,
-    onToggleTheme: () -> Unit,
+    onOpenDrawer: () -> Unit,
     onSearchClick: () -> Unit,
     onRefreshClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -39,6 +38,16 @@ fun HomeTopBar(
                 .padding(horizontal = Dimensions.SpacingLarge, vertical = Dimensions.SpacingSmall),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            IconButton(
+                onClick = onOpenDrawer,
+                modifier = Modifier.size(Dimensions.ActionButtonSize)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_menu),
+                    contentDescription = stringResource(R.string.open_navigation),
+                    tint = AppColors.textSecondary
+                )
+            }
             Text(
                 text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.titleLarge,
@@ -75,19 +84,6 @@ fun HomeTopBar(
                         tint = AppColors.textSecondary
                     )
                 }
-            }
-
-            IconButton(
-                onClick = onToggleTheme,
-                modifier = Modifier.size(Dimensions.ActionButtonSize)
-            ) {
-                Icon(
-                    painter = painterResource(
-                        if (isDarkTheme) R.drawable.ic_mode_light else R.drawable.ic_mode_dark
-                    ),
-                    contentDescription = stringResource(R.string.theme_toggle),
-                    tint = AppColors.textSecondary
-                )
             }
         }
     }

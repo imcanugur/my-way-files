@@ -9,6 +9,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import tr.canugur.mywayfiles.data.cache.DirectoryCache
 import tr.canugur.mywayfiles.data.datasource.AndroidFileLocalDataSource
@@ -30,12 +31,14 @@ import java.util.Locale
  */
 class ExplorerViewModel(
     val rootPath: String,
+    initialPath: String = rootPath,
     private val driveName: String,
     private val getDirectoryContentsUseCase: GetDirectoryContentsUseCase,
     private val fileRepository: FileRepository,
     private val recycleBinRepository: RecycleBinRepository,
     private val explorerPreferences: ExplorerPreferences,
-    private val searchFilesUseCase: SearchFilesUseCase
+    private val searchFilesUseCase: SearchFilesUseCase,
+    private val clipboardStore: FileClipboardStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<ExplorerUiState>(ExplorerUiState.Loading)
@@ -45,7 +48,9 @@ class ExplorerViewModel(
     val searchState: StateFlow<ExplorerSearchState> = _searchState.asStateFlow()
 
     private var activePath: String = rootPath
-    private var activeClipboard: Clipboard? = null
+    private var activeClipboard: Clipboard?
+        get() = clipboardStore.clipboard.value
+        set(value) = clipboardStore.set(value)
     private var showHiddenFiles: Boolean = explorerPreferences.showHiddenFiles
     private var sortOption: SortOption = explorerPreferences.sortOption
     private var directoryRequestId: Long = 0L
@@ -53,7 +58,11 @@ class ExplorerViewModel(
     private var searchJob: Job? = null
 
     init {
-        loadDirectory(rootPath)
+        activePath = initialPath
+        viewModelScope.launch {
+            clipboardStore.clipboard.collect { updateStateClipboard() }
+        }
+        loadDirectory(initialPath)
     }
 
     fun onEvent(event: ExplorerUiEvent) {
@@ -64,6 +73,7 @@ class ExplorerViewModel(
             is ExplorerUiEvent.Refresh -> loadDirectory(activePath, isRefreshing = true)
             is ExplorerUiEvent.CheckPermission -> {
                 if (fileRepository.hasStoragePermission()) {
+                    showHiddenFiles = explorerPreferences.showHiddenFiles
                     loadDirectory(activePath)
                 } else {
                     _uiState.value = ExplorerUiState.PermissionRequired
@@ -162,6 +172,13 @@ class ExplorerViewModel(
         searchJob?.cancel()
         searchJob = null
         _searchState.value = ExplorerSearchState()
+    }
+
+    fun updateShowHiddenFilesPreference(showHidden: Boolean) {
+        if (showHiddenFiles != showHidden) {
+            showHiddenFiles = showHidden
+            loadDirectory(activePath)
+        }
     }
 
     private fun handleItemClick(item: FileItem) {
@@ -280,6 +297,8 @@ class ExplorerViewModel(
         val activeNormalized = File(activePath).canonicalPath
         return activeNormalized != rootNormalized && activeNormalized.startsWith(rootNormalized)
     }
+
+    fun currentDirectoryPath(): String = activePath
 
     fun navigateUp(): Boolean {
         if (!canNavigateUp()) return false
@@ -451,7 +470,9 @@ class ExplorerViewModel(
         fun provideFactory(
             context: Context,
             rootPath: String,
-            driveName: String
+            driveName: String,
+            initialPath: String = rootPath,
+            clipboardStore: FileClipboardStore
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -465,12 +486,14 @@ class ExplorerViewModel(
                 val explorerPreferences = ExplorerPreferences(appContext)
                 return ExplorerViewModel(
                     rootPath = rootPath,
+                    initialPath = initialPath,
                     driveName = driveName,
                     getDirectoryContentsUseCase = useCase,
                     fileRepository = repository,
                     recycleBinRepository = recycleBinRepository,
                     explorerPreferences = explorerPreferences,
-                    searchFilesUseCase = searchUseCase
+                    searchFilesUseCase = searchUseCase,
+                    clipboardStore = clipboardStore
                 ) as T
             }
         }

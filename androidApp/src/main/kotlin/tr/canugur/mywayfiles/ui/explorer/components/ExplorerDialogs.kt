@@ -137,7 +137,7 @@ fun DeleteConfirmDialog(
         containerColor = AppColors.cardSurface,
         title = {
             Text(
-                text = stringResource(R.string.action_delete),
+                text = stringResource(R.string.dialog_move_to_trash_title),
                 color = AppColors.textPrimary,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold
@@ -163,7 +163,7 @@ fun DeleteConfirmDialog(
                 shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
             ) {
                 Text(
-                    text = stringResource(R.string.action_delete),
+                    text = stringResource(R.string.action_move_to_trash),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
                 )

@@ -33,11 +33,11 @@ import androidx.compose.runtime.setValue
  */
 @Composable
 fun HomeScreen(
-    isDarkTheme: Boolean,
-    onToggleTheme: () -> Unit,
     onDriveClick: (StorageDrive) -> Unit,
     onSearchDriveClick: (StorageDrive) -> Unit,
     onRecycleBinClick: () -> Unit,
+    onOpenDrawer: () -> Unit,
+    onDrivesLoaded: (List<StorageDrive>) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -48,11 +48,11 @@ fun HomeScreen(
 
     HomeScreenContent(
         state = state,
-        isDarkTheme = isDarkTheme,
-        onToggleTheme = onToggleTheme,
         onDriveClick = onDriveClick,
         onSearchDriveClick = onSearchDriveClick,
         onRecycleBinClick = onRecycleBinClick,
+        onOpenDrawer = onOpenDrawer,
+        onDrivesLoaded = onDrivesLoaded,
         onEvent = viewModel::onEvent,
         modifier = modifier
     )
@@ -64,22 +64,25 @@ fun HomeScreen(
 @Composable
 fun HomeScreenContent(
     state: HomeUiState,
-    isDarkTheme: Boolean,
-    onToggleTheme: () -> Unit,
     onDriveClick: (StorageDrive) -> Unit,
     onSearchDriveClick: (StorageDrive) -> Unit,
     onRecycleBinClick: () -> Unit,
+    onOpenDrawer: () -> Unit,
+    onDrivesLoaded: (List<StorageDrive>) -> Unit,
     onEvent: (HomeUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showSearchLocationPicker by remember { mutableStateOf(false) }
+    val availableDrives = (state as? HomeUiState.Success)?.drives.orEmpty()
+    androidx.compose.runtime.LaunchedEffect(availableDrives) {
+        if (availableDrives.isNotEmpty()) onDrivesLoaded(availableDrives)
+    }
     Scaffold(
         containerColor = AppColors.canvasBackground,
         topBar = {
             HomeTopBar(
-                isDarkTheme = isDarkTheme,
                 isRefreshing = (state as? HomeUiState.Success)?.isRefreshing == true,
-                onToggleTheme = onToggleTheme,
+                onOpenDrawer = onOpenDrawer,
                 onSearchClick = { showSearchLocationPicker = true },
                 onRefreshClick = { onEvent(HomeUiEvent.Refresh) }
             )

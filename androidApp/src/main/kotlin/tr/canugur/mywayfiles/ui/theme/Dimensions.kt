@@ -44,4 +44,7 @@ object Dimensions {
 
     // Responsive layout constraint (available content width after insets and padding).
     val CompactActionBreakpoint: Dp = 380.dp
+
+    /** Keep modal navigation from obscuring nearly the entire viewport on compact phones. */
+    val NavigationDrawerMaxWidth: Dp = 320.dp
 }

@@ -1,10 +1,23 @@
 package tr.canugur.mywayfiles.ui.explorer.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -14,40 +27,52 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import java.io.File
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.ui.explorer.Clipboard
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 
+/** Destination-aware action surface for the active copy or cut operation. */
 @Composable
 fun ClipboardBar(
     clipboard: Clipboard,
+    destinationPath: String,
+    destinationName: String,
     onPaste: () -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(Dimensions.CornerRadiusMedium)
+    val isInvalidDestination = clipboard.items.any { item ->
+        val source = File(item.path).absolutePath.trimEnd(File.separatorChar)
+        val destination = File(destinationPath).absolutePath.trimEnd(File.separatorChar)
+        val sourceParent = File(source).parentFile?.absolutePath?.trimEnd(File.separatorChar)
+        val sameSourceFolder = sourceParent == destination
+        val destinationInsideSourceFolder = item.isDirectory &&
+            (destination == source || destination.startsWith(source + File.separator))
+        sameSourceFolder || destinationInsideSourceFolder
+    }
+    val shape = RoundedCornerShape(
+        topStart = Dimensions.CornerRadiusLarge,
+        topEnd = Dimensions.CornerRadiusLarge
+    )
 
     Surface(
         color = AppColors.cardSurface,
         shape = shape,
-        shadowElevation = 8.dp,
+        shadowElevation = 3.dp,
         modifier = modifier
             .fillMaxWidth()
+            .navigationBarsPadding()
             .clip(shape)
-            .border(width = Dimensions.CardBorderWidth, color = AppColors.brandAccent, shape = shape)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = Dimensions.SpacingMedium, vertical = Dimensions.SpacingSmall),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+        Column {
+            HorizontalDivider(color = AppColors.divider)
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = Dimensions.SpacingLarge, end = Dimensions.SpacingSmall, top = Dimensions.SpacingSmall),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     painter = painterResource(if (clipboard.isCut) R.drawable.ic_cut else R.drawable.ic_copy),
@@ -55,58 +80,79 @@ fun ClipboardBar(
                     tint = AppColors.brandAccent,
                     modifier = Modifier.size(Dimensions.IconSizeMedium)
                 )
-
-                Spacer(modifier = Modifier.width(Dimensions.SpacingSmall))
-
-                Column {
-                    val actionLabel = if (clipboard.isCut) {
-                        stringResource(R.string.action_cut)
-                    } else {
-                        stringResource(R.string.action_copy)
-                    }
-
-                    Text(
-                        text = "$actionLabel: ${clipboard.item.name}",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = AppColors.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                Spacer(Modifier.width(Dimensions.SpacingMedium))
+                Text(
+                    text = stringResource(
+                        if (clipboard.isCut) R.string.clipboard_move_to else R.string.clipboard_copy_to
+                    ),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = AppColors.textPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                IconButton(onClick = onClear, modifier = Modifier.size(Dimensions.ActionButtonSize)) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_close),
+                        contentDescription = stringResource(R.string.action_cancel),
+                        tint = AppColors.textSecondary
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.width(Dimensions.SpacingSmall))
+            Text(
+                text = if (clipboard.items.size == 1) clipboard.items.first().name
+                else stringResource(R.string.items_count, clipboard.items.size),
+                style = MaterialTheme.typography.bodyMedium,
+                color = AppColors.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = Dimensions.SpacingLarge)
+            )
+            Text(
+                text = stringResource(R.string.clipboard_destination, destinationName),
+                style = MaterialTheme.typography.bodySmall,
+                color = AppColors.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(
+                    horizontal = Dimensions.SpacingLarge,
+                    vertical = Dimensions.SpacingExtraSmall
+                )
+            )
 
-            Row(horizontalArrangement = Arrangement.spacedBy(Dimensions.SpacingExtraSmall)) {
-                Button(
-                    onClick = onPaste,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AppColors.brandAccent,
-                        contentColor = AppColors.cardSurface
+            if (isInvalidDestination) {
+                Text(
+                    text = stringResource(R.string.clipboard_choose_different_folder),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppColors.statusWarning,
+                    modifier = Modifier.padding(horizontal = Dimensions.SpacingLarge)
+                )
+            }
+
+            Button(
+                onClick = onPaste,
+                enabled = !isInvalidDestination,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal = Dimensions.SpacingLarge,
+                        vertical = Dimensions.SpacingSmall
+                    )
+                    .heightIn(min = Dimensions.ActionButtonSize),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AppColors.brandAccent,
+                    contentColor = AppColors.cardSurface
+                ),
+                shape = RoundedCornerShape(Dimensions.CornerRadiusPill)
+            ) {
+                Text(
+                    text = stringResource(
+                        if (clipboard.isCut) R.string.action_move_here else R.string.action_copy_here
                     ),
-                    shape = RoundedCornerShape(Dimensions.CornerRadiusSmall),
-                    contentPadding = PaddingValues(horizontal = Dimensions.SpacingMedium, vertical = Dimensions.SpacingExtraSmall)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_paste),
-                        contentDescription = null,
-                        modifier = Modifier.size(Dimensions.IconSizeSmall)
-                    )
-                    Spacer(modifier = Modifier.width(Dimensions.SpacingExtraSmall))
-                    Text(
-                        text = stringResource(R.string.action_paste),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-
-                TextButton(
-                    onClick = onClear,
-                    colors = ButtonDefaults.textButtonColors(contentColor = AppColors.textSecondary)
-                ) {
-                    Text(text = stringResource(R.string.action_cancel), fontSize = 12.sp)
-                }
+                    style = MaterialTheme.typography.labelLarge
+                )
             }
         }
     }

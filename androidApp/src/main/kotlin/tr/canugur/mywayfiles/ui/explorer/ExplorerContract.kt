@@ -1,5 +1,7 @@
 package tr.canugur.mywayfiles.ui.explorer
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.domain.model.SortOption
 
@@ -14,6 +16,16 @@ data class Clipboard(
 ) {
     constructor(item: FileItem, isCut: Boolean) : this(listOf(item), isCut)
     val item: FileItem get() = items.first()
+}
+
+/** Shared across Explorer ViewModels so clipboard operations survive switching storage volumes. */
+class FileClipboardStore {
+    private val _clipboard = MutableStateFlow<Clipboard?>(null)
+    val clipboard = _clipboard.asStateFlow()
+
+    fun set(clipboard: Clipboard?) {
+        _clipboard.value = clipboard
+    }
 }
 
 data class ExplorerSearchState(

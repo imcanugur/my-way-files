@@ -35,6 +35,7 @@ import tr.canugur.mywayfiles.ui.trash.components.TrashedItemRow
  */
 @Composable
 fun RecycleBinScreen(
+    confirmBeforePermanentDelete: Boolean = true,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -87,7 +88,13 @@ fun RecycleBinScreen(
                     viewModel.onEvent(RecycleBinUiEvent.RestoreSelected(selectedItems))
                     selectedIds = emptySet()
                 },
-                onDeleteSelected = { showSelectedDeleteConfirm = true }
+                onDeleteSelected = {
+                    if (confirmBeforePermanentDelete) showSelectedDeleteConfirm = true
+                    else {
+                        viewModel.onEvent(RecycleBinUiEvent.DeleteSelectedPermanently(selectedItems))
+                        selectedIds = emptySet()
+                    }
+                }
             )
         },
         modifier = modifier
@@ -208,7 +215,10 @@ fun RecycleBinScreen(
                                 selectedIds = if (item.id in selectedIds) selectedIds - item.id else selectedIds + item.id
                             },
                             onRestore = { viewModel.onEvent(RecycleBinUiEvent.Restore(item)) },
-                            onDeletePermanently = { itemToDeletePermanently = item }
+                            onDeletePermanently = {
+                                if (confirmBeforePermanentDelete) itemToDeletePermanently = item
+                                else viewModel.onEvent(RecycleBinUiEvent.DeletePermanently(item))
+                            }
                         )
                         if (index < s.items.lastIndex) {
                             androidx.compose.material3.HorizontalDivider(color = AppColors.divider)
@@ -271,7 +281,8 @@ fun RecycleBinScreen(
                     itemToPreview = null
                 },
                 onDeletePermanently = {
-                    itemToDeletePermanently = previewItem
+                    if (confirmBeforePermanentDelete) itemToDeletePermanently = previewItem
+                    else viewModel.onEvent(RecycleBinUiEvent.DeletePermanently(previewItem))
                     itemToPreview = null
                 },
                 onDismiss = { itemToPreview = null }

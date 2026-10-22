@@ -34,6 +34,7 @@ import tr.canugur.mywayfiles.ui.theme.Dimensions
 @Composable
 fun FileItemRow(
     item: FileItem,
+    isFavorite: Boolean,
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onClick: (FileItem) -> Unit,
@@ -45,6 +46,7 @@ fun FileItemRow(
     onRename: (FileItem) -> Unit,
     onDelete: (FileItem) -> Unit,
     onProperties: (FileItem) -> Unit,
+    onToggleFavorite: (FileItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val shape = RoundedCornerShape(Dimensions.CornerRadiusMedium)
@@ -185,6 +187,26 @@ fun FileItemRow(
                     onDismissRequest = { menuExpanded = false },
                     modifier = Modifier.background(AppColors.cardSurface)
                 ) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = stringResource(if (isFavorite) R.string.remove_favorite else R.string.add_favorite),
+                                color = AppColors.textPrimary
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                painterResource(R.drawable.ic_favorite),
+                                contentDescription = null,
+                                tint = if (isFavorite) AppColors.brandAccent else AppColors.textSecondary,
+                                modifier = Modifier.size(Dimensions.IconSizeMedium)
+                            )
+                        },
+                        onClick = {
+                            menuExpanded = false
+                            onToggleFavorite(item)
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text(text = stringResource(R.string.action_copy), color = AppColors.textPrimary) },
                         leadingIcon = {

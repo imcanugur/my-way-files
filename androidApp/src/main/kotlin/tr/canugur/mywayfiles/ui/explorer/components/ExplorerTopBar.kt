@@ -1,19 +1,18 @@
 package tr.canugur.mywayfiles.ui.explorer.components
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,33 +35,29 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.sp
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.domain.model.SortOption
 import tr.canugur.mywayfiles.ui.explorer.Breadcrumb
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
+import tr.canugur.mywayfiles.ui.theme.MotionTokens
 
-/** Explorer app bar: current directory first, with its navigable ancestors directly below. */
+/** Explorer app bar keeps the navigation drawer available at every directory depth. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExplorerTopBar(
     breadcrumbs: List<Breadcrumb>,
-    isDarkTheme: Boolean,
     isSelectionMode: Boolean,
     selectedCount: Int,
     isAllSelected: Boolean,
-    showHiddenFiles: Boolean,
     sortOption: SortOption,
     isSearchActive: Boolean,
     searchQuery: String,
     onOpenSearch: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onCloseSearch: () -> Unit,
-    onBackClick: () -> Unit,
-    onBreadcrumbClick: (String) -> Unit,
+    onOpenDrawer: () -> Unit,
     onCreateFolderClick: () -> Unit,
     onEnterSelectionMode: () -> Unit,
     onCloseSelectionMode: () -> Unit,
@@ -72,22 +67,14 @@ fun ExplorerTopBar(
     canShareSelected: Boolean,
     onBatchCut: () -> Unit,
     onBatchDelete: () -> Unit,
-    onToggleHiddenFiles: () -> Unit,
     onSortOptionSelected: (SortOption) -> Unit,
-    onToggleTheme: () -> Unit,
     onRefreshClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val scrollState = rememberScrollState()
     var optionsMenuExpanded by remember { mutableStateOf(false) }
     var sortMenuExpanded by remember { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
-    val parentBreadcrumbs = breadcrumbs.dropLast(1)
-
-    LaunchedEffect(breadcrumbs) {
-        scrollState.animateScrollTo(scrollState.maxValue)
-    }
     LaunchedEffect(isSearchActive) {
         if (isSearchActive) {
             searchFocusRequester.requestFocus()
@@ -99,7 +86,29 @@ fun ExplorerTopBar(
         color = AppColors.canvasBackground,
         modifier = modifier.fillMaxWidth().statusBarsPadding()
     ) {
-        if (isSelectionMode) {
+        AnimatedContent(
+            targetState = when {
+                isSelectionMode -> "selection"
+                isSearchActive -> "search"
+                else -> "browse"
+            },
+            transitionSpec = {
+                (fadeIn(animationSpec = tween(MotionTokens.CONTENT_ENTER_MS)) +
+                    slideInVertically(
+                        initialOffsetY = { it / 5 },
+                        animationSpec = tween(MotionTokens.CONTENT_ENTER_MS)
+                    )).togetherWith(
+                    fadeOut(animationSpec = tween(MotionTokens.CONTENT_EXIT_MS)) +
+                        slideOutVertically(
+                            targetOffsetY = { -it / 5 },
+                            animationSpec = tween(MotionTokens.CONTENT_EXIT_MS)
+                        )
+                )
+            },
+            label = "explorer-toolbar-state"
+        ) { toolbarState ->
+        when (toolbarState) {
+        "selection" -> {
             ExplorerSelectionTopBar(
                 selectedCount = selectedCount,
                 isAllSelected = isAllSelected,
@@ -112,7 +121,8 @@ fun ExplorerTopBar(
                 onBatchDelete = onBatchDelete,
                 modifier = Modifier.fillMaxWidth()
             )
-        } else if (isSearchActive) {
+        }
+        "search" -> {
             TopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onCloseSearch) {
@@ -148,28 +158,47 @@ fun ExplorerTopBar(
                 windowInsets = WindowInsets(0, 0, 0, 0),
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = AppColors.canvasBackground)
             )
-        } else {
+        }
+        else -> {
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val compactToolbar = maxWidth < Dimensions.CompactActionBreakpoint
                 TopAppBar(
                 navigationIcon = {
-                    IconButton(onClick = onBackClick) {
+                    IconButton(onClick = onOpenDrawer) {
                         Icon(
-                            painter = painterResource(R.drawable.ic_arrow_back),
-                            contentDescription = stringResource(R.string.navigate_up),
+                            painter = painterResource(R.drawable.ic_menu),
+                            contentDescription = stringResource(R.string.open_navigation),
                             tint = AppColors.textPrimary
                         )
                     }
                 },
                 title = {
-                    Text(
-                        text = breadcrumbs.lastOrNull()?.title.orEmpty(),
-                        style = if (compactToolbar) MaterialTheme.typography.titleMedium
-                        else MaterialTheme.typography.titleLarge,
-                        color = AppColors.textPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    AnimatedContent(
+                        targetState = breadcrumbs.lastOrNull()?.title.orEmpty(),
+                        transitionSpec = {
+                            (fadeIn(animationSpec = tween(MotionTokens.CONTENT_ENTER_MS)) +
+                                slideInVertically(
+                                    initialOffsetY = { it / 5 },
+                                    animationSpec = tween(MotionTokens.CONTENT_ENTER_MS)
+                                )).togetherWith(
+                                fadeOut(animationSpec = tween(MotionTokens.CONTENT_EXIT_MS)) +
+                                    slideOutVertically(
+                                        targetOffsetY = { -it / 5 },
+                                        animationSpec = tween(MotionTokens.CONTENT_EXIT_MS)
+                                    )
+                            )
+                        },
+                        label = "explorer-folder-title"
+                    ) { title ->
+                        Text(
+                            text = title,
+                            style = if (compactToolbar) MaterialTheme.typography.titleMedium
+                            else MaterialTheme.typography.titleLarge,
+                            color = AppColors.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 },
                 actions = {
                     IconButton(onClick = onOpenSearch) {
@@ -184,11 +213,9 @@ fun ExplorerTopBar(
                             expanded = sortMenuExpanded,
                             onExpand = { sortMenuExpanded = true },
                             onDismiss = { sortMenuExpanded = false },
-                            showHiddenFiles = showHiddenFiles,
                             sortOption = sortOption,
                             onCreateFolderClick = onCreateFolderClick,
                             onEnterSelectionMode = onEnterSelectionMode,
-                            onToggleHiddenFiles = onToggleHiddenFiles,
                             onSortOptionSelected = onSortOptionSelected,
                             onRefreshClick = onRefreshClick
                         )
@@ -197,15 +224,12 @@ fun ExplorerTopBar(
                         expanded = optionsMenuExpanded,
                         onExpand = { optionsMenuExpanded = true },
                         onDismiss = { optionsMenuExpanded = false },
-                        showHiddenFiles = showHiddenFiles,
                         sortOption = sortOption,
                         onCreateFolderClick = onCreateFolderClick,
                         onEnterSelectionMode = onEnterSelectionMode,
-                        onToggleHiddenFiles = onToggleHiddenFiles,
                         onSortOptionSelected = onSortOptionSelected,
                         onRefreshClick = onRefreshClick,
-                        isDarkTheme = isDarkTheme,
-                        onToggleTheme = onToggleTheme
+                        onOpenDrawer = onOpenDrawer
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -214,37 +238,8 @@ fun ExplorerTopBar(
                 )
             }
 
-            if (parentBreadcrumbs.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(scrollState)
-                        .padding(
-                            start = Dimensions.ActionButtonSize + Dimensions.SpacingLarge,
-                            end = Dimensions.SpacingSmall
-                        ),
-                    horizontalArrangement = Arrangement.spacedBy(Dimensions.SpacingExtraSmall),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    parentBreadcrumbs.forEachIndexed { index, crumb ->
-                        if (index > 0) {
-                            Text("›", color = AppColors.textMuted, fontSize = 14.sp)
-                        }
-                        Text(
-                            text = crumb.title,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = AppColors.textSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .heightIn(min = Dimensions.ActionButtonSize)
-                                .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
-                                .clickable(role = Role.Button) { onBreadcrumbClick(crumb.path) }
-                                .padding(horizontal = Dimensions.SpacingSmall)
-                        )
-                    }
-                }
-            }
+        }
+        }
         }
     }
 }
@@ -254,15 +249,12 @@ private fun ExplorerOverflowAnchor(
     expanded: Boolean,
     onExpand: () -> Unit,
     onDismiss: () -> Unit,
-    showHiddenFiles: Boolean,
     sortOption: SortOption,
     onCreateFolderClick: () -> Unit,
     onEnterSelectionMode: () -> Unit,
-    onToggleHiddenFiles: () -> Unit,
     onSortOptionSelected: (SortOption) -> Unit,
     onRefreshClick: () -> Unit,
-    isDarkTheme: Boolean,
-    onToggleTheme: () -> Unit
+    onOpenDrawer: () -> Unit
 ) {
     androidx.compose.foundation.layout.Box {
         IconButton(onClick = onExpand) {
@@ -274,16 +266,13 @@ private fun ExplorerOverflowAnchor(
         }
         ExplorerOptionsMenu(
             expanded = expanded,
-            showHiddenFiles = showHiddenFiles,
             currentSortOption = sortOption,
             onDismissRequest = onDismiss,
             onCreateFolderClick = onCreateFolderClick,
             onEnterSelectionMode = onEnterSelectionMode,
-            onToggleHiddenFiles = onToggleHiddenFiles,
             onSortOptionSelected = onSortOptionSelected,
             onRefreshClick = onRefreshClick,
-            isDarkTheme = isDarkTheme,
-            onToggleTheme = onToggleTheme
+            onOpenDrawer = onOpenDrawer
         )
     }
 }
@@ -293,11 +282,9 @@ private fun SortMenuAnchor(
     expanded: Boolean,
     onExpand: () -> Unit,
     onDismiss: () -> Unit,
-    showHiddenFiles: Boolean,
     sortOption: SortOption,
     onCreateFolderClick: () -> Unit,
     onEnterSelectionMode: () -> Unit,
-    onToggleHiddenFiles: () -> Unit,
     onSortOptionSelected: (SortOption) -> Unit,
     onRefreshClick: () -> Unit
 ) {
@@ -311,12 +298,10 @@ private fun SortMenuAnchor(
         }
         ExplorerOptionsMenu(
             expanded = expanded,
-            showHiddenFiles = showHiddenFiles,
             currentSortOption = sortOption,
             onDismissRequest = onDismiss,
             onCreateFolderClick = onCreateFolderClick,
             onEnterSelectionMode = onEnterSelectionMode,
-            onToggleHiddenFiles = onToggleHiddenFiles,
             onSortOptionSelected = onSortOptionSelected,
             onRefreshClick = onRefreshClick,
             sortOnly = true

@@ -1,7 +1,6 @@
 package tr.canugur.mywayfiles.ui.explorer.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -23,22 +22,19 @@ import tr.canugur.mywayfiles.ui.theme.Dimensions
 
 /**
  * Universal Explorer overflow dropdown menu containing folder creation,
- * selection mode, hidden files toggle, sorting, and refresh.
+ * selection mode, sorting, and refresh.
  */
 @Composable
 fun ExplorerOptionsMenu(
     expanded: Boolean,
-    showHiddenFiles: Boolean,
     currentSortOption: SortOption,
     onDismissRequest: () -> Unit,
     onCreateFolderClick: () -> Unit,
     onEnterSelectionMode: () -> Unit,
-    onToggleHiddenFiles: () -> Unit,
     onSortOptionSelected: (SortOption) -> Unit,
     onRefreshClick: () -> Unit,
+    onOpenDrawer: () -> Unit = {},
     sortOnly: Boolean = false,
-    isDarkTheme: Boolean = false,
-    onToggleTheme: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showSortSubmenu by remember(expanded, sortOnly) { mutableStateOf(sortOnly) }
@@ -84,49 +80,6 @@ fun ExplorerOptionsMenu(
                 }
             )
 
-            HorizontalDivider(color = AppColors.cardStroke)
-
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        text = stringResource(R.string.show_hidden_files),
-                        color = AppColors.textPrimary
-                    )
-                },
-                leadingIcon = {
-                    if (showHiddenFiles) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_check),
-                            contentDescription = null,
-                            tint = AppColors.brandAccent,
-                            modifier = Modifier.size(Dimensions.IconSizeMedium)
-                        )
-                    } else {
-                        Spacer(modifier = Modifier.size(Dimensions.IconSizeMedium))
-                    }
-                },
-                onClick = {
-                    onDismissRequest()
-                    onToggleHiddenFiles()
-                }
-            )
-
-            DropdownMenuItem(
-                text = { Text(text = stringResource(R.string.theme_toggle), color = AppColors.textPrimary) },
-                leadingIcon = {
-                    Icon(
-                        painter = painterResource(if (isDarkTheme) R.drawable.ic_mode_light else R.drawable.ic_mode_dark),
-                        contentDescription = null,
-                        tint = AppColors.textSecondary,
-                        modifier = Modifier.size(Dimensions.IconSizeMedium)
-                    )
-                },
-                onClick = {
-                    onDismissRequest()
-                    onToggleTheme()
-                }
-            )
-
             DropdownMenuItem(
                 text = { Text(text = stringResource(R.string.sort_by), color = AppColors.textPrimary) },
                 leadingIcon = {
@@ -157,6 +110,22 @@ fun ExplorerOptionsMenu(
                 onClick = {
                     onDismissRequest()
                     onRefreshClick()
+                }
+            )
+
+            DropdownMenuItem(
+                text = { Text(text = stringResource(R.string.drawer_open_locations), color = AppColors.textPrimary) },
+                leadingIcon = {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_menu),
+                        contentDescription = null,
+                        tint = AppColors.textSecondary,
+                        modifier = Modifier.size(Dimensions.IconSizeMedium)
+                    )
+                },
+                onClick = {
+                    onDismissRequest()
+                    onOpenDrawer()
                 }
             )
         } else {

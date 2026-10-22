@@ -3,8 +3,16 @@ package tr.canugur.mywayfiles.ui.explorer
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,21 +29,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
+import java.io.File
 import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.core.util.FileShareHelper
+import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.domain.model.SortOption
+import tr.canugur.mywayfiles.data.preferences.SavedLocation
 import tr.canugur.mywayfiles.ui.common.RetryErrorState
 import tr.canugur.mywayfiles.ui.common.OperationErrorBanner
 import tr.canugur.mywayfiles.ui.explorer.components.*
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
+import tr.canugur.mywayfiles.ui.theme.MotionTokens
 import tr.canugur.mywayfiles.ui.viewer.ImageViewerScreen
 
 /**
@@ -45,10 +59,17 @@ import tr.canugur.mywayfiles.ui.viewer.ImageViewerScreen
 fun ExplorerScreen(
     rootPath: String,
     driveName: String,
+    initialPath: String = rootPath,
+    initialFilePath: String? = null,
+    favoritePaths: Set<String> = emptySet(),
     startInSearch: Boolean = false,
-    isDarkTheme: Boolean,
-    onToggleTheme: () -> Unit,
+    showHiddenFilesSetting: Boolean,
+    confirmBeforeMovingToTrash: Boolean,
     onNavigateBack: () -> Unit,
+    onOpenDrawer: () -> Unit,
+    onDirectoryVisited: (String, String, String, String) -> Unit,
+    onToggleFavorite: (SavedLocation) -> Unit,
+    clipboardStore: FileClipboardStore,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -56,10 +77,18 @@ fun ExplorerScreen(
         factory = ExplorerViewModel.provideFactory(
             context = context,
             rootPath = rootPath,
-            driveName = driveName
+            driveName = driveName,
+            initialPath = initialPath,
+            clipboardStore = clipboardStore
         ),
-        key = rootPath
+        key = "$rootPath:$initialPath"
     )
+    LaunchedEffect(showHiddenFilesSetting) {
+        viewModel.updateShowHiddenFilesPreference(showHiddenFilesSetting)
+    }
+    LaunchedEffect(initialPath) {
+        if (viewModel.currentDirectoryPath() != initialPath) viewModel.loadDirectory(initialPath)
+    }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val searchState by viewModel.searchState.collectAsStateWithLifecycle()
 
@@ -71,11 +100,15 @@ fun ExplorerScreen(
     val currentPath = when (val s = state) {
         is ExplorerUiState.Success -> s.currentPath
         is ExplorerUiState.Empty -> s.currentPath
-        else -> rootPath
+        is ExplorerUiState.Error -> s.currentPath
+        ExplorerUiState.Loading -> viewModel.currentDirectoryPath()
+        else -> initialPath
     }
     LaunchedEffect(currentPath) {
         isSelectionMode = false
         selectedPaths = emptySet()
+        val folderName = File(currentPath).name.ifBlank { driveName }
+        onDirectoryVisited(currentPath, folderName, rootPath, driveName)
     }
 
     val showHiddenFiles = when (val current = state) {
@@ -131,6 +164,22 @@ fun ExplorerScreen(
     var itemToRename by remember { mutableStateOf<FileItem?>(null) }
     var itemForProperties by remember { mutableStateOf<FileItem?>(null) }
     var showCreateFolderDialog by remember { mutableStateOf(false) }
+    var itemToMoveToTrash by remember { mutableStateOf<FileItem?>(null) }
+    var itemsToMoveToTrash by remember { mutableStateOf<List<FileItem>?>(null) }
+
+    fun requestMoveToTrash(item: FileItem) {
+        if (confirmBeforeMovingToTrash) itemToMoveToTrash = item
+        else viewModel.onEvent(ExplorerUiEvent.MoveToTrash(item))
+    }
+
+    fun requestBatchMoveToTrash(items: List<FileItem>) {
+        if (confirmBeforeMovingToTrash) itemsToMoveToTrash = items
+        else viewModel.onEvent(ExplorerUiEvent.BatchMoveToTrash(items))
+        if (!confirmBeforeMovingToTrash) {
+            isSelectionMode = false
+            selectedPaths = emptySet()
+        }
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -161,19 +210,31 @@ fun ExplorerScreen(
         else -> emptyList()
     }
 
+    LaunchedEffect(initialFilePath, currentItems) {
+        val targetPath = initialFilePath ?: return@LaunchedEffect
+        val target = currentItems.firstOrNull { it.path == targetPath } ?: return@LaunchedEffect
+        if (FileTypeClassifier.isImage(target) || FileTypeClassifier.isVideo(target)) {
+            val index = mediaItems.indexOfFirst { it.path == targetPath }
+            if (index >= 0) activeMediaIndex = index
+        } else {
+            itemForProperties = target
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         ExplorerScreenContent(
             state = displayedState,
             fallbackDriveName = driveName,
             fallbackRootPath = rootPath,
-            isDarkTheme = isDarkTheme,
             isSelectionMode = isSelectionMode,
             selectedPaths = selectedPaths,
             isSearchActive = isSearchActive,
             searchQuery = searchQuery,
             isSearchLoading = searchState.isSearching,
             searchError = searchState.error,
-            onToggleTheme = onToggleTheme,
+            onOpenDrawer = onOpenDrawer,
+            favoritePaths = favoritePaths,
+            onToggleFavorite = { item -> onToggleFavorite(SavedLocation(item.path, item.name, item.isDirectory)) },
             onBackClick = {
                 if (isSelectionMode) {
                     isSelectionMode = false
@@ -230,11 +291,8 @@ fun ExplorerScreen(
             },
             onBatchDelete = {
                 val items = currentItems.filter { it.path in selectedPaths }
-                viewModel.onEvent(ExplorerUiEvent.BatchMoveToTrash(items))
-                isSelectionMode = false
-                selectedPaths = emptySet()
+                requestBatchMoveToTrash(items)
             },
-            onToggleHiddenFiles = { viewModel.onEvent(ExplorerUiEvent.ToggleShowHiddenFiles) },
             onSortOptionSelected = { viewModel.onEvent(ExplorerUiEvent.ChangeSortOption(it)) },
             onItemClick = { item ->
                 if (isSelectionMode) {
@@ -270,7 +328,7 @@ fun ExplorerScreen(
             onCopy = { viewModel.onEvent(ExplorerUiEvent.Copy(it)) },
             onCut = { viewModel.onEvent(ExplorerUiEvent.Cut(it)) },
             onRename = { itemToRename = it },
-            onDelete = { viewModel.onEvent(ExplorerUiEvent.MoveToTrash(it)) },
+            onDelete = ::requestMoveToTrash,
             onProperties = { itemForProperties = it },
             onPaste = { viewModel.onEvent(ExplorerUiEvent.Paste) },
             onClearClipboard = { viewModel.onEvent(ExplorerUiEvent.ClearClipboard) },
@@ -281,20 +339,23 @@ fun ExplorerScreen(
         val currentMediaIndex = activeMediaIndex
         AnimatedVisibility(
             visible = currentMediaIndex != null && mediaItems.isNotEmpty(),
-            enter = fadeIn(),
-            exit = fadeOut()
+            enter = fadeIn(animationSpec = tween(MotionTokens.NAVIGATION_ENTER_MS)) +
+                scaleIn(
+                    initialScale = 0.985f,
+                    animationSpec = tween(MotionTokens.NAVIGATION_ENTER_MS, easing = FastOutSlowInEasing)
+                ),
+            exit = fadeOut(animationSpec = tween(MotionTokens.NAVIGATION_EXIT_MS)) +
+                scaleOut(
+                    targetScale = 0.985f,
+                    animationSpec = tween(MotionTokens.NAVIGATION_EXIT_MS, easing = FastOutSlowInEasing)
+                )
         ) {
             if (currentMediaIndex != null && mediaItems.isNotEmpty()) {
                 ImageViewerScreen(
                     images = mediaItems,
                     initialIndex = currentMediaIndex,
                     onDelete = { item ->
-                        viewModel.onEvent(ExplorerUiEvent.MoveToTrash(item))
-                        if (mediaItems.size <= 1) {
-                            activeMediaIndex = null
-                        } else if (currentMediaIndex >= mediaItems.size - 1) {
-                            activeMediaIndex = (mediaItems.size - 2).coerceAtLeast(0)
-                        }
+                        requestMoveToTrash(item)
                     },
                     onCopy = { viewModel.onEvent(ExplorerUiEvent.Copy(it)) },
                     onDismiss = {
@@ -328,6 +389,42 @@ fun ExplorerScreen(
                 onDismiss = { showCreateFolderDialog = false }
             )
         }
+
+        val trashItem = itemToMoveToTrash
+        if (trashItem != null) {
+            DeleteConfirmDialog(
+                fileName = trashItem.name,
+                onConfirm = {
+                    viewModel.onEvent(ExplorerUiEvent.MoveToTrash(trashItem))
+                    if (activeMediaIndex != null) activeMediaIndex = null
+                    itemToMoveToTrash = null
+                },
+                onDismiss = { itemToMoveToTrash = null }
+            )
+        }
+
+        val trashItems = itemsToMoveToTrash
+        if (trashItems != null) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { itemsToMoveToTrash = null },
+                title = { Text(stringResource(R.string.dialog_move_to_trash_title)) },
+                text = { Text(stringResource(R.string.batch_delete_confirm, trashItems.size)) },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(onClick = {
+                        viewModel.onEvent(ExplorerUiEvent.BatchMoveToTrash(trashItems))
+                        itemsToMoveToTrash = null
+                        isSelectionMode = false
+                        selectedPaths = emptySet()
+                    }) { Text(stringResource(R.string.action_move_to_trash), color = AppColors.statusCritical) }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { itemsToMoveToTrash = null }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                },
+                containerColor = AppColors.cardSurface
+            )
+        }
     }
 }
 
@@ -339,7 +436,6 @@ fun ExplorerScreenContent(
     state: ExplorerUiState,
     fallbackDriveName: String,
     fallbackRootPath: String,
-    isDarkTheme: Boolean,
     isSelectionMode: Boolean,
     selectedPaths: Set<String>,
     isSearchActive: Boolean,
@@ -351,7 +447,9 @@ fun ExplorerScreenContent(
     onCloseSearch: () -> Unit,
     onSearchRetry: () -> Unit,
     onRefresh: () -> Unit,
-    onToggleTheme: () -> Unit,
+    onOpenDrawer: () -> Unit,
+    favoritePaths: Set<String>,
+    onToggleFavorite: (FileItem) -> Unit,
     onBackClick: () -> Unit,
     onCreateFolderClick: () -> Unit,
     onEnterSelectionMode: () -> Unit,
@@ -361,7 +459,6 @@ fun ExplorerScreenContent(
     onBatchShare: () -> Unit,
     onBatchCut: () -> Unit,
     onBatchDelete: () -> Unit,
-    onToggleHiddenFiles: () -> Unit,
     onSortOptionSelected: (SortOption) -> Unit,
     onItemClick: (FileItem) -> Unit,
     onLongClick: (FileItem) -> Unit,
@@ -377,33 +474,41 @@ fun ExplorerScreenContent(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val breadcrumbs = when (state) {
-        is ExplorerUiState.Success -> state.breadcrumbs
-        is ExplorerUiState.Empty -> state.breadcrumbs
-        is ExplorerUiState.Error -> state.breadcrumbs
+    val density = LocalDensity.current
+    val contentOffsetPx = with(density) { MotionTokens.NAVIGATION_OFFSET_DP.dp.roundToPx() }
+    var lastVisibleDirectoryState by remember { mutableStateOf<ExplorerUiState?>(null) }
+    LaunchedEffect(state) {
+        if (state is ExplorerUiState.Success || state is ExplorerUiState.Empty) {
+            lastVisibleDirectoryState = state
+        }
+    }
+    val contentState = if (state is ExplorerUiState.Loading) {
+        lastVisibleDirectoryState ?: state
+    } else state
+
+    val breadcrumbs = when (contentState) {
+        is ExplorerUiState.Success -> contentState.breadcrumbs
+        is ExplorerUiState.Empty -> contentState.breadcrumbs
+        is ExplorerUiState.Error -> contentState.breadcrumbs
         else -> listOf(Breadcrumb(title = fallbackDriveName, path = fallbackRootPath))
     }
 
-    val showHiddenFiles = when (state) {
-        is ExplorerUiState.Success -> state.showHiddenFiles
-        is ExplorerUiState.Empty -> state.showHiddenFiles
-        else -> false
-    }
-
-    val sortOption = when (state) {
-        is ExplorerUiState.Success -> state.sortOption
-        is ExplorerUiState.Empty -> state.sortOption
+    val sortOption = when (contentState) {
+        is ExplorerUiState.Success -> contentState.sortOption
+        is ExplorerUiState.Empty -> contentState.sortOption
         else -> SortOption.NAME_ASC
     }
 
-    val currentItems = when (state) {
-        is ExplorerUiState.Success -> state.items
+    val currentItems = when (contentState) {
+        is ExplorerUiState.Success -> contentState.items
         else -> emptyList()
     }
     val isAllSelected = currentItems.isNotEmpty() && selectedPaths.size >= currentItems.size
 
     PullToRefreshBox(
-        isRefreshing = isSearchLoading || (state as? ExplorerUiState.Success)?.isRefreshing == true,
+        isRefreshing = isSearchLoading ||
+            (state as? ExplorerUiState.Success)?.isRefreshing == true ||
+            (state is ExplorerUiState.Loading && contentState !== state),
         onRefresh = onRefresh,
         modifier = modifier.fillMaxSize()
     ) {
@@ -412,22 +517,16 @@ fun ExplorerScreenContent(
             topBar = {
                 ExplorerTopBar(
                     breadcrumbs = breadcrumbs,
-                    isDarkTheme = isDarkTheme,
                     isSelectionMode = isSelectionMode,
                     selectedCount = selectedPaths.size,
                     isAllSelected = isAllSelected,
-                    showHiddenFiles = showHiddenFiles,
                     sortOption = sortOption,
                     isSearchActive = isSearchActive,
                     searchQuery = searchQuery,
                     onOpenSearch = onOpenSearch,
                     onSearchQueryChange = onSearchQueryChange,
                     onCloseSearch = onCloseSearch,
-                    onBackClick = onBackClick,
-                    onBreadcrumbClick = {
-                        if (isSearchActive) onCloseSearch()
-                        onEvent(ExplorerUiEvent.NavigateToBreadcrumb(it))
-                    },
+                    onOpenDrawer = onOpenDrawer,
                     onCreateFolderClick = onCreateFolderClick,
                     onEnterSelectionMode = onEnterSelectionMode,
                     onCloseSelectionMode = onCloseSelectionMode,
@@ -439,13 +538,35 @@ fun ExplorerScreenContent(
                     },
                     onBatchCut = onBatchCut,
                     onBatchDelete = onBatchDelete,
-                    onToggleHiddenFiles = onToggleHiddenFiles,
                     onSortOptionSelected = onSortOptionSelected,
-                    onToggleTheme = onToggleTheme,
                     onRefreshClick = onRefresh
                 )
             }
         ) { innerPadding ->
+            AnimatedContent(
+                targetState = contentState,
+                contentKey = { it.directoryMotionKey() },
+                transitionSpec = {
+                    val fromPath = initialState.directoryPathOrNull()
+                    val toPath = targetState.directoryPathOrNull()
+                    val backward = fromPath != null && toPath != null &&
+                        isPathAncestor(toPath, fromPath)
+                    val enterOffset = if (backward) -contentOffsetPx else contentOffsetPx
+                    val exitOffset = -enterOffset
+                    (slideInHorizontally(
+                        initialOffsetX = { enterOffset },
+                        animationSpec = tween(MotionTokens.CONTENT_ENTER_MS, easing = FastOutSlowInEasing)
+                    ) + fadeIn(animationSpec = tween(MotionTokens.CONTENT_ENTER_MS)))
+                        .togetherWith(
+                            slideOutHorizontally(
+                                targetOffsetX = { exitOffset },
+                                animationSpec = tween(MotionTokens.CONTENT_EXIT_MS, easing = FastOutSlowInEasing)
+                            ) + fadeOut(animationSpec = tween(MotionTokens.CONTENT_EXIT_MS))
+                        )
+                },
+                modifier = Modifier.fillMaxSize(),
+                label = "directory-content"
+            ) { state ->
             when (state) {
                 is ExplorerUiState.Loading -> {
                     Box(
@@ -604,6 +725,7 @@ fun ExplorerScreenContent(
                         itemsIndexed(state.items, key = { _, item -> item.id }) { index, item ->
                             FileItemRow(
                                 item = item,
+                                isFavorite = item.path in favoritePaths,
                                 isSelectionMode = isSelectionMode,
                                 isSelected = item.path in selectedPaths,
                                 onClick = { onItemClick(item) },
@@ -614,7 +736,8 @@ fun ExplorerScreenContent(
                                 onShare = { FileShareHelper.shareFile(context, it.path) },
                                 onRename = onRename,
                                 onDelete = onDelete,
-                                onProperties = onProperties
+                                onProperties = onProperties,
+                                onToggleFavorite = onToggleFavorite
                             )
                             if (index < state.items.lastIndex) {
                                 androidx.compose.material3.HorizontalDivider(color = AppColors.divider)
@@ -628,23 +751,44 @@ fun ExplorerScreenContent(
                     }
                 }
             }
+            }
         }
 
-        // Floating Clipboard Banner
-        val activeClipboard = when (state) {
-            is ExplorerUiState.Success -> state.clipboard
-            is ExplorerUiState.Empty -> state.clipboard
+        // Clipboard actions are local state changes: show the destination bar immediately.
+        val activeClipboard = when (contentState) {
+            is ExplorerUiState.Success -> contentState.clipboard
+            is ExplorerUiState.Empty -> contentState.clipboard
             else -> null
         }
         if (activeClipboard != null) {
             ClipboardBar(
                 clipboard = activeClipboard,
+                destinationPath = contentState.directoryPathOrNull() ?: fallbackRootPath,
+                destinationName = breadcrumbs.lastOrNull()?.title ?: fallbackDriveName,
                 onPaste = onPaste,
                 onClear = onClearClipboard,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(Dimensions.SpacingDefault)
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
     }
+}
+
+private fun ExplorerUiState.directoryPathOrNull(): String? = when (this) {
+    is ExplorerUiState.Success -> currentPath
+    is ExplorerUiState.Empty -> currentPath
+    is ExplorerUiState.Error -> currentPath
+    else -> null
+}
+
+private fun ExplorerUiState.directoryMotionKey(): String =
+    directoryPathOrNull()?.let { "directory:$it" } ?: when (this) {
+        ExplorerUiState.Loading -> "loading"
+        ExplorerUiState.PermissionRequired -> "permission"
+        else -> "unavailable"
+    }
+
+private fun isPathAncestor(ancestor: String, descendant: String): Boolean {
+    val normalizedAncestor = ancestor.trimEnd(File.separatorChar)
+    return descendant != normalizedAncestor &&
+        descendant.startsWith(normalizedAncestor + File.separator)
 }
