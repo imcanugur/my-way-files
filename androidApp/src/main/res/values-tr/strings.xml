@@ -144,10 +144,14 @@
     <string name="settings_dark_theme">Koyu tema</string>
     <string name="settings_dark_theme_description">Uygulamanın koyu görünümünü kullan</string>
     <string name="settings_recent_folders">Son klasörler</string>
-    <string name="settings_recent_folders_description">Her depolama için tutulacak son klasör sayısını seç</string>
-    <string name="settings_recent_folders_option">Depolama başına %1$d klasör</string>
+    <string name="settings_recent_folders_description">Depolama başına saklanacak son ziyaret edilen klasör (1–%1$d)</string>
+    <string name="settings_recent_move_targets">Son taşıma hedefleri</string>
+    <string name="settings_recent_move_targets_description">Gösterilecek benzersiz klasör sayısı (0–%1$d; 0 bu bölümü gizler)</string>
     <string name="settings_hidden_files">Gizli dosyaları göster</string>
     <string name="settings_hidden_files_description">Nokta ile başlayan dosya ve klasörleri listeye ekle</string>
+    <string name="settings_viewer">Medya görüntüleyici</string>
+    <string name="settings_auto_hide_viewer_controls">Görüntüleyici denetimlerini otomatik gizle</string>
+    <string name="settings_auto_hide_viewer_controls_description">Görsel ve video panellerini 3,5 saniye sonra gizle. Kapatırsan medyaya dokunana kadar görünür kalırlar.</string>
     <string name="settings_confirm_trash">Geri Dönüşüm Kutusuna taşımadan önce sor</string>
     <string name="dialog_move_to_trash_title">Geri Dönüşüm Kutusuna taşınsın mı?</string>
     <string name="settings_confirm_trash_description">Dosya ve klasörler Geri Dönüşüm Kutusuna taşınırken onay iste. Silinen öğeler burada geri yüklenebilir.</string>

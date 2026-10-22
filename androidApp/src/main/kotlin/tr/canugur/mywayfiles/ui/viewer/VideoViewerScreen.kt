@@ -40,6 +40,7 @@ fun VideoViewerScreen(
     onDelete: (FileItem) -> Unit,
     onCopy: (FileItem) -> Unit,
     onMoveToFolder: (FileItem) -> Unit,
+    autoHideControls: Boolean = true,
     onDismiss: () -> Unit,
     onIndexChanged: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -74,8 +75,8 @@ fun VideoViewerScreen(
     var showProperties by remember { mutableStateOf(false) }
 
     // Auto-hide controls timer (3.5 seconds)
-    LaunchedEffect(controlsVisible, isPlaying, isUserScrubbing) {
-        if (controlsVisible && isPlaying && !isUserScrubbing) {
+    LaunchedEffect(autoHideControls, controlsVisible, isPlaying, isUserScrubbing) {
+        if (autoHideControls && controlsVisible && isPlaying && !isUserScrubbing) {
             delay(3500)
             controlsVisible = false
         }

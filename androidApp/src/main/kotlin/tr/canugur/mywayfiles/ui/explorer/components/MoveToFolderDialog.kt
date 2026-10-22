@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,6 +53,7 @@ fun MoveToFolderDialog(
     roots: List<MoveTargetRoot>,
     recentTargets: List<SavedLocation>,
     initialRootPath: String,
+    initialDirectoryPath: String,
     onLoadFolders: suspend (String) -> Result<List<FileItem>>,
     onCreateFolder: suspend (String, String) -> Result<Unit>,
     onMove: suspend (List<FileItem>, String) -> List<Result<Unit>>,
@@ -67,13 +67,23 @@ fun MoveToFolderDialog(
             .filter { target -> File(target.path).isDirectory }
             .filter { target -> safeRoots.any { storage -> isInsideRoot(storage.path, target.path) } }
             .distinctBy { target -> runCatching { File(target.path).canonicalPath }.getOrDefault(target.path) }
-            .take(5)
             .toList()
     }
-    var root by remember(safeRoots, initialRootPath) {
-        mutableStateOf(safeRoots.firstOrNull { it.path == initialRootPath } ?: safeRoots.first())
+    val startingRoot = remember(safeRoots, initialRootPath, initialDirectoryPath) {
+        safeRoots.firstOrNull { isInsideRoot(it.path, initialDirectoryPath) }
+            ?: safeRoots.firstOrNull { it.path == initialRootPath }
+            ?: safeRoots.first()
     }
-    var currentPath by remember(root) { mutableStateOf(root.path) }
+    var root by remember(safeRoots, initialRootPath, initialDirectoryPath) {
+        mutableStateOf(startingRoot)
+    }
+    var currentPath by remember(safeRoots, initialRootPath, initialDirectoryPath) {
+        mutableStateOf(
+            initialDirectoryPath.takeIf {
+                isInsideRoot(startingRoot.path, it) && File(it).isDirectory
+            } ?: startingRoot.path
+        )
+    }
     var folders by remember { mutableStateOf<List<FileItem>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -110,7 +120,10 @@ fun MoveToFolderDialog(
     }
 
     if (!showCreateFolder) {
-    AppModalBottomSheet(onDismissRequest = { if (!moving && !creatingFolder) onDismiss() }) {
+    AppModalBottomSheet(
+        onDismissRequest = { if (!moving && !creatingFolder) onDismiss() },
+        expandFullyOnShow = true
+    ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Dimensions.SpacingLarge)
                 .padding(bottom = Dimensions.SpacingLarge),
@@ -144,7 +157,7 @@ fun MoveToFolderDialog(
                             )
                         }
                     }
-                    Column(modifier = Modifier.widthIn(max = 160.dp)) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = stringResource(R.string.move_destination),
                             style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
@@ -152,8 +165,7 @@ fun MoveToFolderDialog(
                         )
                         Text(
                             text = currentPath,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            softWrap = true,
                             color = AppColors.textPrimary
                         )
                     }

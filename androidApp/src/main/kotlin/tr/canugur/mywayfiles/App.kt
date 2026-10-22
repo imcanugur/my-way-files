@@ -62,6 +62,9 @@ fun App() {
     var confirmBeforePermanentDelete by remember(appSettingsStore) {
         mutableStateOf(appSettingsStore.confirmBeforePermanentDelete())
     }
+    var autoHideViewerControls by remember(appSettingsStore) {
+        mutableStateOf(appSettingsStore.autoHideViewerControls())
+    }
     var showHiddenFiles by remember(explorerPreferences) {
         mutableStateOf(explorerPreferences.showHiddenFiles)
     }
@@ -77,6 +80,7 @@ fun App() {
     var recentFolders by remember { mutableStateOf(locationStore.recentFolders()) }
     var recentMoveTargets by remember { mutableStateOf(locationStore.recentMoveTargets()) }
     var recentFolderLimit by remember { mutableStateOf(locationStore.recentFolderLimit) }
+    var recentMoveTargetLimit by remember { mutableStateOf(locationStore.recentMoveTargetLimit) }
     var favorites by remember { mutableStateOf(locationStore.favorites()) }
     val navigationOffsetPx = with(LocalDensity.current) {
         MotionTokens.NAVIGATION_OFFSET_DP.dp.roundToPx()
@@ -220,6 +224,7 @@ fun App() {
                         startInSearch = destination.startInSearch,
                         showHiddenFilesSetting = showHiddenFiles,
                         confirmBeforeMovingToTrash = confirmBeforeMovingToTrash,
+                        autoHideViewerControls = autoHideViewerControls,
                         viewMode = explorerViewMode,
                         gridTileSize = gridTileSize.minWidthDp,
                         moveTargetRoots = storageDrives.map { MoveTargetRoot(it.name, it.path) },
@@ -285,6 +290,17 @@ fun App() {
                             gridTileSize = size
                         },
                         recentFolderLimit = recentFolderLimit,
+                        autoHideViewerControls = autoHideViewerControls,
+                        onAutoHideViewerControlsChange = { enabled ->
+                            appSettingsStore.setAutoHideViewerControls(enabled)
+                            autoHideViewerControls = enabled
+                        },
+                        recentMoveTargetLimit = recentMoveTargetLimit,
+                        onRecentMoveTargetLimitChange = { limit ->
+                            locationStore.setRecentMoveTargetLimit(limit)
+                            recentMoveTargetLimit = locationStore.recentMoveTargetLimit
+                            recentMoveTargets = locationStore.recentMoveTargets()
+                        },
                         confirmBeforeMovingToTrash = confirmBeforeMovingToTrash,
                         onConfirmBeforeMovingToTrashChange = { enabled ->
                             appSettingsStore.setConfirmBeforeMovingToTrash(enabled)

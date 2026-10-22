@@ -3,7 +3,9 @@ package tr.canugur.mywayfiles.ui.navigation
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -17,6 +19,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -24,12 +27,18 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import kotlin.math.roundToInt
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.data.preferences.SavedLocationStore
 import tr.canugur.mywayfiles.domain.model.FileViewMode
@@ -50,6 +59,10 @@ fun AppSettingsScreen(
     onGridTileSizeChange: (GridTileSize) -> Unit,
     recentFolderLimit: Int,
     onRecentFolderLimitChange: (Int) -> Unit,
+    autoHideViewerControls: Boolean,
+    onAutoHideViewerControlsChange: (Boolean) -> Unit,
+    recentMoveTargetLimit: Int,
+    onRecentMoveTargetLimitChange: (Int) -> Unit,
     confirmBeforeMovingToTrash: Boolean,
     onConfirmBeforeMovingToTrashChange: (Boolean) -> Unit,
     confirmBeforePermanentDelete: Boolean,
@@ -58,7 +71,6 @@ fun AppSettingsScreen(
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var recentLimitMenuExpanded by remember { mutableStateOf(false) }
     var viewModeMenuExpanded by remember { mutableStateOf(false) }
     var gridSizeMenuExpanded by remember { mutableStateOf(false) }
     BackHandler(enabled = !isDrawerOpen, onBack = onNavigateBack)
@@ -162,32 +174,29 @@ fun AppSettingsScreen(
                 )
             }
             item {
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.settings_recent_folders)) },
-                    supportingContent = { Text(stringResource(R.string.settings_recent_folders_description)) },
-                    trailingContent = {
-                        Box {
-                            TextButton(onClick = { recentLimitMenuExpanded = true }) {
-                                Text(stringResource(R.string.drawer_recent_limit_label, recentFolderLimit))
-                            }
-                            DropdownMenu(
-                                expanded = recentLimitMenuExpanded,
-                                onDismissRequest = { recentLimitMenuExpanded = false }
-                            ) {
-                                SavedLocationStore.RECENT_FOLDER_LIMITS.forEach { limit ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(stringResource(R.string.settings_recent_folders_option, limit))
-                                        },
-                                        onClick = {
-                                            recentLimitMenuExpanded = false
-                                            onRecentFolderLimitChange(limit)
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
+                IntegerSliderPreference(
+                    title = stringResource(R.string.settings_recent_folders),
+                    description = stringResource(
+                        R.string.settings_recent_folders_description,
+                        SavedLocationStore.MAX_RECENTS_PER_STORAGE
+                    ),
+                    value = recentFolderLimit,
+                    valueRange = 1f..SavedLocationStore.MAX_RECENTS_PER_STORAGE.toFloat(),
+                    steps = SavedLocationStore.MAX_RECENTS_PER_STORAGE - 2,
+                    onValueChange = onRecentFolderLimitChange
+                )
+            }
+            item {
+                IntegerSliderPreference(
+                    title = stringResource(R.string.settings_recent_move_targets),
+                    description = stringResource(
+                        R.string.settings_recent_move_targets_description,
+                        SavedLocationStore.MAX_MOVE_TARGETS
+                    ),
+                    value = recentMoveTargetLimit,
+                    valueRange = 0f..SavedLocationStore.MAX_MOVE_TARGETS.toFloat(),
+                    steps = SavedLocationStore.MAX_MOVE_TARGETS - 1,
+                    onValueChange = onRecentMoveTargetLimitChange
                 )
             }
             item {
@@ -196,6 +205,27 @@ fun AppSettingsScreen(
                     supportingContent = { Text(stringResource(R.string.settings_hidden_files_description)) },
                     trailingContent = {
                         Switch(checked = showHiddenFiles, onCheckedChange = onShowHiddenFilesChange)
+                    }
+                )
+            }
+            item {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = Dimensions.SpacingLarge),
+                    color = AppColors.divider
+                )
+            }
+            item { SettingsSectionTitle(stringResource(R.string.settings_viewer)) }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_auto_hide_viewer_controls)) },
+                    supportingContent = {
+                        Text(stringResource(R.string.settings_auto_hide_viewer_controls_description))
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = autoHideViewerControls,
+                            onCheckedChange = onAutoHideViewerControlsChange
+                        )
                     }
                 )
             }
@@ -244,6 +274,59 @@ private fun GridTileSize.labelResource(): Int = when (this) {
     GridTileSize.SMALL -> R.string.settings_grid_size_small
     GridTileSize.MEDIUM -> R.string.settings_grid_size_medium
     GridTileSize.LARGE -> R.string.settings_grid_size_large
+}
+
+@Composable
+private fun IntegerSliderPreference(
+    title: String,
+    description: String,
+    value: Int,
+    valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    onValueChange: (Int) -> Unit
+) {
+    var sliderValue by remember(value) { mutableFloatStateOf(value.toFloat()) }
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(
+            horizontal = Dimensions.SpacingLarge,
+            vertical = Dimensions.SpacingSmall
+        )
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.bodyLarge, color = AppColors.textPrimary)
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppColors.textSecondary
+                )
+            }
+            Text(
+                text = sliderValue.roundToInt().toString(),
+                style = MaterialTheme.typography.titleMedium,
+                color = AppColors.brandAccent,
+                modifier = Modifier.padding(start = Dimensions.SpacingMedium)
+            )
+        }
+        Slider(
+            value = sliderValue,
+            onValueChange = { sliderValue = it },
+            onValueChangeFinished = {
+                val selectedValue = sliderValue.roundToInt()
+                sliderValue = selectedValue.toFloat()
+                onValueChange(selectedValue)
+            },
+            valueRange = valueRange,
+            steps = steps,
+            modifier = Modifier.fillMaxWidth().semantics {
+                contentDescription = title
+                stateDescription = sliderValue.roundToInt().toString()
+            }
+        )
+    }
 }
 
 @Composable

@@ -46,6 +46,7 @@ fun ImageViewerScreen(
     onCopy: (FileItem) -> Unit,
     onMoveToFolder: (FileItem) -> Unit,
     onDismiss: () -> Unit,
+    autoHideControls: Boolean = true,
     initialPlayVideo: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -72,8 +73,8 @@ fun ImageViewerScreen(
     }
 
     // Auto-hide top and bottom bars after 3.5 seconds of inactivity
-    LaunchedEffect(controlsVisible, pagerState.currentPage, isCurrentZoomed) {
-        if (controlsVisible && !isCurrentZoomed && playingVideoItem == null) {
+    LaunchedEffect(autoHideControls, controlsVisible, pagerState.currentPage, isCurrentZoomed) {
+        if (autoHideControls && controlsVisible && !isCurrentZoomed && playingVideoItem == null) {
             delay(3500)
             controlsVisible = false
         }
@@ -220,6 +221,7 @@ fun ImageViewerScreen(
                     },
                     onCopy = onCopy,
                     onMoveToFolder = onMoveToFolder,
+                    autoHideControls = autoHideControls,
                     onIndexChanged = { newIdx ->
                         val currentPlayed = allVideos.getOrNull(newIdx)
                         if (currentPlayed != null) {

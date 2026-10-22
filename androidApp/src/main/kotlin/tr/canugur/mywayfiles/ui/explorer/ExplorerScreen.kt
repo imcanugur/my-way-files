@@ -74,6 +74,7 @@ fun ExplorerScreen(
     startInSearch: Boolean = false,
     showHiddenFilesSetting: Boolean,
     confirmBeforeMovingToTrash: Boolean,
+    autoHideViewerControls: Boolean,
     viewMode: FileViewMode,
     gridTileSize: Int,
     moveTargetRoots: List<MoveTargetRoot>,
@@ -379,6 +380,7 @@ fun ExplorerScreen(
                 ImageViewerScreen(
                     images = mediaItems,
                     initialIndex = currentMediaIndex,
+                    autoHideControls = autoHideViewerControls,
                     onDelete = { item ->
                         requestMoveToTrash(item)
                     },
@@ -423,6 +425,7 @@ fun ExplorerScreen(
                 roots = moveTargetRoots,
                 recentTargets = recentMoveTargets,
                 initialRootPath = rootPath,
+                initialDirectoryPath = currentPath,
                 onLoadFolders = viewModel::listMoveTargets,
                 onCreateFolder = viewModel::createMoveTargetFolder,
                 onMove = { items, targetPath ->

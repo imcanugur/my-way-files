@@ -28,10 +28,17 @@ class AppSettingsStore(context: Context) {
         preferences.edit().putBoolean(KEY_CONFIRM_PERMANENT_DELETE, enabled).apply()
     }
 
+    fun autoHideViewerControls(): Boolean = preferences.getBoolean(KEY_AUTO_HIDE_VIEWER_CONTROLS, true)
+
+    fun setAutoHideViewerControls(enabled: Boolean) {
+        preferences.edit().putBoolean(KEY_AUTO_HIDE_VIEWER_CONTROLS, enabled).apply()
+    }
+
     private companion object {
         const val PREFERENCES_NAME = "myway_app_settings"
         const val KEY_DARK_THEME = "dark_theme_enabled"
         const val KEY_CONFIRM_TRASH = "confirm_before_trash"
         const val KEY_CONFIRM_PERMANENT_DELETE = "confirm_before_permanent_delete"
+        const val KEY_AUTO_HIDE_VIEWER_CONTROLS = "auto_hide_viewer_controls"
     }
 }

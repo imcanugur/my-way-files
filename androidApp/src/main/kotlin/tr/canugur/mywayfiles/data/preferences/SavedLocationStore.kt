@@ -11,8 +11,7 @@ class SavedLocationStore(context: Context) {
 
     val recentFolderLimit: Int
         get() = prefs.getInt(KEY_RECENT_FOLDER_LIMIT, DEFAULT_RECENT_FOLDER_LIMIT)
-            .takeIf { it in RECENT_FOLDER_LIMITS }
-            ?: DEFAULT_RECENT_FOLDER_LIMIT
+            .coerceIn(1, MAX_RECENTS_PER_STORAGE)
 
     @Synchronized
     fun recordVisit(path: String, name: String, isDirectory: Boolean, storageRoot: String, storageName: String) {
@@ -24,7 +23,7 @@ class SavedLocationStore(context: Context) {
                     previous.storageRoot == storageRoot && pathsOverlap(previous.path, path)
                 }
             ),
-            MAX_RECENTS_PER_STORAGE
+            recentFolderLimit
         )
         write(KEY_RECENTS, updated)
     }
@@ -34,7 +33,7 @@ class SavedLocationStore(context: Context) {
         val valid = prune(KEY_RECENTS, directoriesOnly = true)
         val limited = limitRecentFoldersPerStorage(
             removeOverlappingRecentFolders(valid),
-            MAX_RECENTS_PER_STORAGE
+            recentFolderLimit
         )
         if (limited != valid) write(KEY_RECENTS, limited)
         return limited
@@ -42,6 +41,11 @@ class SavedLocationStore(context: Context) {
 
     @Synchronized
     fun recentMoveTargets(): List<SavedLocation> = prune(KEY_MOVE_TARGETS, directoriesOnly = true)
+        .take(recentMoveTargetLimit)
+
+    val recentMoveTargetLimit: Int
+        get() = prefs.getInt(KEY_MOVE_TARGET_LIMIT, DEFAULT_MOVE_TARGET_LIMIT)
+            .coerceIn(0, MAX_MOVE_TARGETS)
 
     @Synchronized
     fun recordMoveTarget(path: String, name: String, storageRoot: String, storageName: String) {
@@ -54,14 +58,23 @@ class SavedLocationStore(context: Context) {
         }
         write(
             KEY_MOVE_TARGETS,
-            (listOf(SavedLocation(canonicalPath, name, true, canonicalRoot, storageName)) + existing).take(MAX_MOVE_TARGETS)
+            (listOf(SavedLocation(canonicalPath, name, true, canonicalRoot, storageName)) + existing)
+                .take(recentMoveTargetLimit)
         )
     }
 
     @Synchronized
+    fun setRecentMoveTargetLimit(limit: Int) {
+        val boundedLimit = limit.coerceIn(0, MAX_MOVE_TARGETS)
+        prefs.edit().putInt(KEY_MOVE_TARGET_LIMIT, boundedLimit).apply()
+        write(KEY_MOVE_TARGETS, read(KEY_MOVE_TARGETS).take(boundedLimit))
+    }
+
+    @Synchronized
     fun setRecentFolderLimit(limit: Int) {
-        val supportedLimit = RECENT_FOLDER_LIMITS.minBy { kotlin.math.abs(it - limit) }
-        prefs.edit().putInt(KEY_RECENT_FOLDER_LIMIT, supportedLimit).apply()
+        val boundedLimit = limit.coerceIn(1, MAX_RECENTS_PER_STORAGE)
+        prefs.edit().putInt(KEY_RECENT_FOLDER_LIMIT, boundedLimit).apply()
+        write(KEY_RECENTS, limitRecentFoldersPerStorage(read(KEY_RECENTS), boundedLimit))
     }
 
     @Synchronized
@@ -185,11 +198,12 @@ class SavedLocationStore(context: Context) {
         private const val KEY_FAVORITES = "favorite_locations"
         private const val KEY_RECENT_FOLDER_LIMIT = "recent_folder_limit"
         private const val KEY_MOVE_TARGETS = "recent_move_targets"
+        private const val KEY_MOVE_TARGET_LIMIT = "recent_move_target_limit"
         private const val DEFAULT_RECENT_FOLDER_LIMIT = 3
-        private const val MAX_RECENTS_PER_STORAGE = 5
+        const val MAX_RECENTS_PER_STORAGE = 50
         private const val MAX_RECENTS_TOTAL = 50
-        private const val MAX_MOVE_TARGETS = 5
-        val RECENT_FOLDER_LIMITS = listOf(1, 3, 5)
+        const val MAX_MOVE_TARGETS = 50
+        private const val DEFAULT_MOVE_TARGET_LIMIT = 5
         private const val MAX_FAVORITES = 100
     }
 }

@@ -157,10 +157,14 @@
     <string name="settings_dark_theme">Dark theme</string>
     <string name="settings_dark_theme_description">Use a dark appearance throughout the app</string>
     <string name="settings_recent_folders">Recent folders</string>
-    <string name="settings_recent_folders_description">Choose how many recent folders to keep for each storage</string>
-    <string name="settings_recent_folders_option">%1$d folders per storage</string>
+    <string name="settings_recent_folders_description">Recently visited folders kept per storage (1–%1$d)</string>
+    <string name="settings_recent_move_targets">Recent move destinations</string>
+    <string name="settings_recent_move_targets_description">Choose how many unique folders to show (0–%1$d; 0 hides this section)</string>
     <string name="settings_hidden_files">Show hidden files</string>
     <string name="settings_hidden_files_description">Include files and folders whose names start with a dot</string>
+    <string name="settings_viewer">Media viewer</string>
+    <string name="settings_auto_hide_viewer_controls">Automatically hide viewer controls</string>
+    <string name="settings_auto_hide_viewer_controls_description">Hide the image and video panels after 3.5 seconds. Turn off to keep them visible until you tap the media.</string>
     <string name="settings_confirm_trash">Confirm before moving to Recycle Bin</string>
     <string name="dialog_move_to_trash_title">Move to Recycle Bin?</string>
     <string name="action_move_to_trash">Move to Recycle Bin</string>
