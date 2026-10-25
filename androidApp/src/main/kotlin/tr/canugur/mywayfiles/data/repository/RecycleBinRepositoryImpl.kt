@@ -3,6 +3,7 @@ package tr.canugur.mywayfiles.data.repository
 import android.content.Context
 import android.os.Build
 import android.os.Environment
+import android.os.SystemClock
 import android.os.storage.StorageManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -96,7 +97,12 @@ class RecycleBinRepositoryImpl private constructor(
         }
     }
 
-    override suspend fun moveToTrash(item: FileItem): Result<Unit> = withContext(Dispatchers.IO) {
+    override suspend fun moveToTrash(item: FileItem): Result<Unit> = moveToTrash(item) { _, _ -> }
+
+    override suspend fun moveToTrash(
+        item: FileItem,
+        onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
+    ): Result<Unit> = withContext(Dispatchers.IO) {
         val result = synchronized(this@RecycleBinRepositoryImpl) {
             try {
                 val source = File(item.path)
@@ -134,7 +140,7 @@ class RecycleBinRepositoryImpl private constructor(
                                 throw IOException("Copied ${item.name}, but could not remove the original")
                             }
                         } else {
-                            source.copyTo(trashFile, overwrite = false)
+                            copyFileWithProgress(source, trashFile, onProgress)
                             if (!trashFile.isFile || trashFile.length() != source.length()) {
                                 trashFile.delete()
                                 throw IOException("Trash copy was incomplete")
@@ -188,7 +194,12 @@ class RecycleBinRepositoryImpl private constructor(
         result
     }
 
-    override suspend fun restore(trashedItem: TrashedItem): Result<Unit> = withContext(Dispatchers.IO) {
+    override suspend fun restore(trashedItem: TrashedItem): Result<Unit> = restore(trashedItem) { _, _ -> }
+
+    override suspend fun restore(
+        trashedItem: TrashedItem,
+        onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
+    ): Result<Unit> = withContext(Dispatchers.IO) {
         val result = synchronized(this@RecycleBinRepositoryImpl) {
             try {
                 val trashFile = File(trashedItem.trashPath)
@@ -219,7 +230,7 @@ class RecycleBinRepositoryImpl private constructor(
                             return@withContext Result.failure(IOException("Restored ${trashedItem.name}, but could not remove the trash copy"))
                         }
                     } else {
-                        trashFile.copyTo(dest, overwrite = false)
+                        copyFileWithProgress(trashFile, dest, onProgress)
                         if (!dest.isFile || dest.length() != trashFile.length()) {
                             dest.delete()
                             return@withContext Result.failure(IOException("Restore copy was incomplete"))
@@ -285,6 +296,34 @@ class RecycleBinRepositoryImpl private constructor(
                 Result.failure(e)
             }
         }
+    }
+
+    private fun copyFileWithProgress(
+        source: File,
+        destination: File,
+        onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
+    ) {
+        val totalBytes = source.length()
+        var copiedBytes = 0L
+        var lastReportedAt = SystemClock.elapsedRealtime()
+        java.io.FileInputStream(source).use { input ->
+            java.io.FileOutputStream(destination, false).use { output ->
+                val buffer = ByteArray(128 * 1024)
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    output.write(buffer, 0, read)
+                    copiedBytes += read
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - lastReportedAt >= 100L || copiedBytes >= totalBytes) {
+                        onProgress(copiedBytes.coerceAtMost(totalBytes), totalBytes)
+                        lastReportedAt = now
+                    }
+                }
+                output.flush()
+            }
+        }
+        onProgress(totalBytes, totalBytes)
     }
 
     private fun computeDirectorySize(dir: File): Long {

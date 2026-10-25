@@ -49,6 +49,8 @@ class ExplorerViewModel(
     private val _searchState = MutableStateFlow(ExplorerSearchState())
     private val _operationFeedback = MutableSharedFlow<OperationFeedback>(extraBufferCapacity = 8)
     val operationFeedback = _operationFeedback.asSharedFlow()
+    private val _activeOperation = MutableStateFlow<FileOperationProgress?>(null)
+    val activeOperation: StateFlow<FileOperationProgress?> = _activeOperation.asStateFlow()
     val searchState: StateFlow<ExplorerSearchState> = _searchState.asStateFlow()
 
     private var activePath: String = rootPath
@@ -60,6 +62,7 @@ class ExplorerViewModel(
     private var directoryRequestId: Long = 0L
     private var searchRequestId: Long = 0L
     private var searchJob: Job? = null
+    private var activeMutationJob: Job? = null
 
     init {
         activePath = initialPath
@@ -197,22 +200,15 @@ class ExplorerViewModel(
 
     private fun handlePaste() {
         val clip = activeClipboard ?: return
-        viewModelScope.launch {
-            val results = clip.items.map { item ->
-                if (clip.isCut) {
-                    fileRepository.move(item.path, activePath)
-                } else {
-                    fileRepository.copy(item.path, activePath)
-                }
-            }
-            if (results.all { it.isSuccess } && clip.isCut) {
-                activeClipboard = null
-            }
-            finishMutation(results, FileOperation.PASTE, "Unable to paste the selected items")
+        val destinationPath = activePath
+        runTrackedOperation(FileOperation.PASTE, clip.items) { item, report ->
+            if (clip.isCut) fileRepository.move(item.path, destinationPath, report)
+            else fileRepository.copy(item.path, destinationPath, report)
         }
     }
 
     private fun handleRename(item: FileItem, newName: String) {
+        if (_activeOperation.value != null || activeMutationJob?.isActive == true) return
         viewModelScope.launch {
             finishMutation(
                 listOf(fileRepository.rename(item.path, newName)),
@@ -222,45 +218,59 @@ class ExplorerViewModel(
         }
     }
 
-    private fun handleMoveToTrash(item: FileItem) {
-        viewModelScope.launch {
-            finishMutation(
-                listOf(recycleBinRepository.moveToTrash(item)),
-                FileOperation.MOVE_TO_TRASH,
-                "Unable to move ${item.name} to Recycle Bin"
-            )
+    private fun handleMoveToTrash(item: FileItem) =
+        runTrackedOperation(FileOperation.MOVE_TO_TRASH, listOf(item)) { selected, report ->
+            recycleBinRepository.moveToTrash(selected, report)
         }
-    }
 
-    private fun handleBatchMoveToTrash(items: List<FileItem>) {
-        viewModelScope.launch {
-            val results = items.map { item ->
-                recycleBinRepository.moveToTrash(item)
+    private fun handleBatchMoveToTrash(items: List<FileItem>) =
+        runTrackedOperation(FileOperation.MOVE_TO_TRASH, items) { item, report ->
+            recycleBinRepository.moveToTrash(item, report)
+        }
+
+    private fun handleDelete(item: FileItem) =
+        runTrackedOperation(FileOperation.DELETE, listOf(item)) { selected, _ ->
+            fileRepository.delete(selected.path)
+        }
+
+    private fun handleBatchDelete(items: List<FileItem>) =
+        runTrackedOperation(FileOperation.DELETE, items) { item, _ ->
+            fileRepository.delete(item.path)
+        }
+
+    private fun runTrackedOperation(
+        operation: FileOperation,
+        items: List<FileItem>,
+        action: suspend (FileItem, (Long, Long) -> Unit) -> Result<Unit>
+    ) {
+        if (items.isEmpty() || activeMutationJob?.isActive == true) return
+        activeMutationJob = viewModelScope.launch {
+            val results = mutableListOf<Result<Unit>>()
+            try {
+                items.forEachIndexed { index, item ->
+                    _activeOperation.value = FileOperationProgress(operation, item.name, index, items.size, 0L, 0L)
+                    results += try {
+                        action(item) { copied, total ->
+                            _activeOperation.value = FileOperationProgress(operation, item.name, index, items.size, copied, total)
+                        }
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        Result.failure(error)
+                    }
+                }
+                if (operation == FileOperation.PASTE && results.all { it.isSuccess } && activeClipboard?.isCut == true) {
+                    activeClipboard = null
+                }
+                finishMutation(results, operation, "Unable to complete ${operation.name.lowercase(Locale.ROOT)}")
+            } finally {
+                _activeOperation.value = null
             }
-            finishMutation(results, FileOperation.MOVE_TO_TRASH, "Unable to move all selected items to Recycle Bin")
-        }
-    }
-
-    private fun handleDelete(item: FileItem) {
-        viewModelScope.launch {
-            finishMutation(
-                listOf(fileRepository.delete(item.path)),
-                FileOperation.DELETE,
-                "Unable to delete ${item.name}"
-            )
-        }
-    }
-
-    private fun handleBatchDelete(items: List<FileItem>) {
-        viewModelScope.launch {
-            val results = items.map { item ->
-                fileRepository.delete(item.path)
-            }
-            finishMutation(results, FileOperation.DELETE, "Unable to delete all selected items")
         }
     }
 
     private fun handleCreateFolder(name: String) {
+        if (_activeOperation.value != null || activeMutationJob?.isActive == true) return
         viewModelScope.launch {
             finishMutation(
                 listOf(fileRepository.createFolder(activePath, name)),
@@ -320,13 +330,25 @@ class ExplorerViewModel(
     suspend fun createMoveTargetFolder(parentPath: String, name: String): Result<Unit> =
         fileRepository.createFolder(parentPath, name)
 
-    suspend fun moveItemsToFolder(items: List<FileItem>, targetPath: String): List<Result<Unit>> {
-        val results = items.map { item ->
+    suspend fun moveItemsToFolder(
+        items: List<FileItem>,
+        targetPath: String,
+        onProgress: (MoveProgress) -> Unit = {}
+    ): List<Result<Unit>> {
+        val results = mutableListOf<Result<Unit>>()
+        items.forEachIndexed { index, item ->
             val alreadyAtTarget = runCatching {
                 File(item.path).parentFile?.canonicalPath == File(targetPath).canonicalPath
             }.getOrDefault(false)
-            if (alreadyAtTarget) Result.success(Unit)
-            else fileRepository.move(item.path, targetPath)
+            val result = if (alreadyAtTarget) {
+                Result.success(Unit)
+            } else {
+                onProgress(MoveProgress(index, items.size, 0L, item.sizeBytes))
+                fileRepository.move(item.path, targetPath) { copied, total ->
+                    onProgress(MoveProgress(index, items.size, copied, total))
+                }
+            }
+            results += result
         }
         finishMutation(results, FileOperation.MOVE_MEDIA, "Unable to move the selected media")
         return results

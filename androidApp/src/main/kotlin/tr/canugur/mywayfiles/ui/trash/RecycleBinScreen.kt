@@ -47,6 +47,7 @@ fun RecycleBinScreen(
         factory = RecycleBinViewModel.provideFactory(context)
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val activeOperation by viewModel.activeOperation.collectAsStateWithLifecycle()
     LaunchedEffect(viewModel) {
         viewModel.operationFeedback.collect(context::showOperationFeedback)
     }
@@ -76,7 +77,8 @@ fun RecycleBinScreen(
     Scaffold(
         containerColor = AppColors.canvasBackground,
         topBar = {
-            RecycleBinTopBar(
+            Column {
+                RecycleBinTopBar(
                 itemCount = successState?.items?.size ?: 0,
                 totalBytes = successState?.totalBytes ?: 0L,
                 hasItems = hasItems,
@@ -95,7 +97,14 @@ fun RecycleBinScreen(
                     selectedIds = emptySet()
                 },
                 onDeleteSelected = { showSelectedDeleteConfirm = true }
-            )
+                )
+                activeOperation?.let { progress ->
+                    tr.canugur.mywayfiles.ui.common.FileOperationProgressBanner(
+                        progress = progress,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+            }
         },
         modifier = modifier
     ) { innerPadding ->

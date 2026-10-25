@@ -217,4 +217,8 @@
     <string name="operation_add_favorite">Add to favorites</string>
     <string name="operation_remove_favorite">Remove from favorites</string>
     <string name="settings_video_playback_mode_description">Choose what happens when a video ends. Your choice is remembered across videos and app restarts.</string>
+    <string name="operation_running">%1$s in progress</string>
+    <string name="operation_progress_item">%1$s · item %2$d of %3$d: %4$s</string>
+    <string name="move_progress_item">Moving item %1$d of %2$d: %3$s</string>
+    <string name="move_progress_bytes">%1$s of %2$s • %3$d%%</string>
 </resources>

@@ -5,14 +5,21 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Environment
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import tr.canugur.mywayfiles.domain.model.FileItem
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.FileNotFoundException
 import java.io.IOException
+import java.util.ArrayDeque
 
 class AndroidFileLocalDataSource(
     private val context: Context,
@@ -118,12 +125,22 @@ class AndroidFileLocalDataSource(
         }
     }
 
-    override suspend fun copy(sourcePath: String, targetDirPath: String): Result<Unit> = withContext(ioDispatcher) {
+    override suspend fun copy(sourcePath: String, targetDirPath: String): Result<Unit> =
+        copy(sourcePath, targetDirPath) { _, _ -> }
+
+    override suspend fun copy(
+        sourcePath: String,
+        targetDirPath: String,
+        onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
+    ): Result<Unit> = withContext(ioDispatcher) {
+        var destination: File? = null
         try {
             val source = File(sourcePath)
             val targetDir = File(targetDirPath)
             if (!source.exists()) return@withContext Result.failure(FileNotFoundException("Source not found: $sourcePath"))
-            if (!targetDir.exists() || !targetDir.isDirectory) return@withContext Result.failure(IllegalArgumentException("Target is not a directory"))
+            if (!targetDir.exists() || !targetDir.isDirectory) {
+                return@withContext Result.failure(IllegalArgumentException("Target is not a directory"))
+            }
 
             var dest = File(targetDir, source.name)
             if (dest.exists()) {
@@ -135,60 +152,171 @@ class AndroidFileLocalDataSource(
                     counter++
                 }
             }
-
-            if (source.isDirectory) {
-                source.copyRecursively(dest, overwrite = false)
-                if (!dest.exists()) return@withContext Result.failure(IOException("Copy did not create ${dest.name}"))
-            } else {
-                source.copyTo(dest, overwrite = false)
-                if (!dest.isFile || dest.length() != source.length()) {
-                    dest.delete()
-                    return@withContext Result.failure(IOException("Copy was incomplete: ${dest.name}"))
+            destination = dest
+            val totalBytes = if (source.isDirectory) directorySize(source) else source.length()
+            var copiedBytes = 0L
+            var lastReportAt = SystemClock.elapsedRealtime()
+            fun reportCopied(chunkBytes: Long) {
+                copiedBytes += chunkBytes
+                val now = SystemClock.elapsedRealtime()
+                if (now - lastReportAt >= PROGRESS_REPORT_INTERVAL_MS || (totalBytes > 0L && copiedBytes >= totalBytes)) {
+                    onProgress(copiedBytes.coerceAtMost(totalBytes), totalBytes)
+                    lastReportAt = now
                 }
             }
+
+            if (source.isDirectory) {
+                copyTreeWithProgress(source, dest, ::reportCopied)
+            } else {
+                copyFileWithProgress(source, dest, ::reportCopied)
+                if (!dest.isFile || dest.length() != source.length()) {
+                    throw IOException("Copy was incomplete: ${dest.name}")
+                }
+            }
+            if (!dest.exists()) throw IOException("Copy did not create ${dest.name}")
+            onProgress(totalBytes, totalBytes)
             Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
+        } catch (cancelled: CancellationException) {
+            destination?.takeIf { it.exists() }?.deleteRecursively()
+            throw cancelled
+        } catch (error: Exception) {
+            destination?.takeIf { it.exists() }?.deleteRecursively()
+            Result.failure(error)
         }
     }
 
-    override suspend fun move(sourcePath: String, targetDirPath: String): Result<Unit> = withContext(ioDispatcher) {
+    override suspend fun move(sourcePath: String, targetDirPath: String): Result<Unit> =
+        move(sourcePath, targetDirPath) { _, _ -> }
+
+    override suspend fun move(
+        sourcePath: String,
+        targetDirPath: String,
+        onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
+    ): Result<Unit> = withContext(ioDispatcher) {
+        val source = File(sourcePath)
+        var destination: File? = null
         try {
-            val source = File(sourcePath)
-            val targetDir = File(targetDirPath)
             if (!source.exists()) return@withContext Result.failure(FileNotFoundException("Source not found: $sourcePath"))
-            if (!targetDir.exists() || !targetDir.isDirectory) return@withContext Result.failure(IllegalArgumentException("Target is not a directory"))
+            val targetDir = File(targetDirPath)
+            if (!targetDir.exists() || !targetDir.isDirectory) {
+                return@withContext Result.failure(IllegalArgumentException("Target is not a directory"))
+            }
 
             val dest = File(targetDir, source.name)
+            destination = dest
             if (dest.exists()) return@withContext Result.failure(IOException("Destination already exists: ${dest.name}"))
 
-            val renamed = source.renameTo(dest)
-            if (renamed) {
-                Result.success(Unit)
-            } else {
-                if (source.isDirectory) {
-                    source.copyRecursively(dest, overwrite = false)
-                    if (!dest.exists()) return@withContext Result.failure(IOException("Move copy was incomplete"))
-                    if (!source.deleteRecursively()) {
-                        dest.deleteRecursively()
-                        return@withContext Result.failure(IOException("Copied ${source.name}, but could not remove the original"))
-                    }
-                } else {
-                    source.copyTo(dest, overwrite = false)
-                    if (!dest.isFile || dest.length() != source.length()) {
-                        dest.delete()
-                        return@withContext Result.failure(IOException("Move copy was incomplete"))
-                    }
-                    if (!source.delete()) {
-                        dest.delete()
-                        return@withContext Result.failure(IOException("Copied ${source.name}, but could not remove the original"))
-                    }
-                }
-                Result.success(Unit)
+            // A same-volume rename is effectively instant. Cross-volume moves fall back to a
+            // cancellable buffered copy that reports the bytes actually written.
+            if (source.renameTo(dest)) {
+                onProgress(0L, 0L)
+                return@withContext Result.success(Unit)
             }
-        } catch (e: Exception) {
-            Result.failure(e)
+
+            val totalBytes = if (source.isDirectory) directorySize(source) else source.length()
+            var copiedBytes = 0L
+            var lastReportAt = SystemClock.elapsedRealtime()
+            fun reportCopied(chunkBytes: Long) {
+                copiedBytes += chunkBytes
+                val now = SystemClock.elapsedRealtime()
+                val completed = totalBytes > 0L && copiedBytes >= totalBytes
+                if (now - lastReportAt >= PROGRESS_REPORT_INTERVAL_MS || completed) {
+                    onProgress(copiedBytes.coerceAtMost(totalBytes), totalBytes)
+                    lastReportAt = now
+                }
+            }
+
+            if (source.isDirectory) {
+                copyTreeWithProgress(source, dest, ::reportCopied)
+            } else {
+                copyFileWithProgress(source, dest, ::reportCopied)
+                if (!dest.isFile || dest.length() != source.length()) {
+                    throw IOException("Move copy was incomplete: ${dest.name}")
+                }
+            }
+            if (!dest.exists()) throw IOException("Move copy was incomplete: ${dest.name}")
+            onProgress(totalBytes, totalBytes)
+
+            val removed = if (source.isDirectory) source.deleteRecursively() else source.delete()
+            if (!removed) throw IOException("Copied ${source.name}, but could not remove the original")
+            Result.success(Unit)
+        } catch (cancelled: CancellationException) {
+            destination?.takeIf { it.exists() }?.deleteRecursively()
+            throw cancelled
+        } catch (error: Exception) {
+            destination?.takeIf { it.exists() }?.deleteRecursively()
+            Result.failure(error)
         }
+    }
+
+    private suspend fun directorySize(root: File): Long {
+        val pending = ArrayDeque<File>().apply { add(root) }
+        val visited = mutableSetOf<String>()
+        var total = 0L
+        while (pending.isNotEmpty()) {
+            currentCoroutineContext().ensureActive()
+            val file = pending.removeLast()
+            if (file.isDirectory) {
+                val canonical = file.canonicalPath
+                if (!visited.add(canonical)) continue
+                val children = file.listFiles() ?: throw IOException("Unable to read ${file.path}")
+                children.forEach { pending.add(it) }
+            } else {
+                total += file.length()
+            }
+        }
+        return total
+    }
+
+    private suspend fun copyTreeWithProgress(
+        source: File,
+        destination: File,
+        onChunk: (Long) -> Unit,
+        visitedDirectories: MutableSet<String> = mutableSetOf()
+    ) {
+        currentCoroutineContext().ensureActive()
+        if (source.isDirectory) {
+            if (!visitedDirectories.add(source.canonicalPath)) return
+            if (!destination.mkdirs() && !destination.isDirectory) {
+                throw IOException("Unable to create ${destination.path}")
+            }
+            val children = source.listFiles() ?: throw IOException("Unable to read ${source.path}")
+            for (child in children) {
+                copyTreeWithProgress(child, File(destination, child.name), onChunk, visitedDirectories)
+            }
+            destination.setLastModified(source.lastModified())
+        } else {
+            copyFileWithProgress(source, destination, onChunk)
+            if (destination.length() != source.length()) {
+                throw IOException("Move copy was incomplete: ${destination.name}")
+            }
+            destination.setLastModified(source.lastModified())
+        }
+    }
+
+    private suspend fun copyFileWithProgress(source: File, destination: File, onChunk: (Long) -> Unit) {
+        val coroutineContext = currentCoroutineContext()
+        destination.parentFile?.let { parent ->
+            if (!parent.exists() && !parent.mkdirs()) throw IOException("Unable to create ${parent.path}")
+        }
+        FileInputStream(source).use { input ->
+            FileOutputStream(destination, false).use { output ->
+                val buffer = ByteArray(COPY_BUFFER_SIZE)
+                while (true) {
+                    coroutineContext.ensureActive()
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    output.write(buffer, 0, read)
+                    onChunk(read.toLong())
+                }
+                output.flush()
+            }
+        }
+    }
+
+    private companion object {
+        const val COPY_BUFFER_SIZE = 128 * 1024
+        const val PROGRESS_REPORT_INTERVAL_MS = 100L
     }
 
     override suspend fun createFolder(parentDirPath: String, folderName: String): Result<Unit> = withContext(ioDispatcher) {

@@ -10,6 +10,22 @@ enum class FileOperation {
     RESTORE, PERMANENT_DELETE, EMPTY_TRASH, ADD_FAVORITE, REMOVE_FAVORITE
 }
 
+data class MoveProgress(
+    val itemIndex: Int,
+    val itemCount: Int,
+    val copiedBytes: Long,
+    val totalBytes: Long
+)
+
+data class FileOperationProgress(
+    val operation: FileOperation,
+    val itemName: String,
+    val itemIndex: Int,
+    val itemCount: Int,
+    val copiedBytes: Long = 0L,
+    val totalBytes: Long = 0L
+)
+
 data class OperationFeedback(
     val operation: FileOperation,
     val succeeded: Int,

@@ -1,14 +1,20 @@
 package tr.canugur.mywayfiles.ui.explorer.components
 
+import android.text.format.Formatter
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -17,10 +23,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,13 +36,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 import tr.canugur.mywayfiles.R
@@ -45,6 +57,7 @@ import tr.canugur.mywayfiles.ui.theme.Dimensions
 import tr.canugur.mywayfiles.ui.common.AppModalBottomSheet
 import tr.canugur.mywayfiles.ui.common.showOperationFeedback
 import tr.canugur.mywayfiles.ui.explorer.FileOperation
+import tr.canugur.mywayfiles.ui.explorer.MoveProgress
 import tr.canugur.mywayfiles.ui.explorer.OperationFeedback
 import java.io.File
 
@@ -62,7 +75,7 @@ fun MoveToFolderDialog(
     initialDirectoryPath: String,
     onLoadFolders: suspend (String) -> Result<List<FileItem>>,
     onCreateFolder: suspend (String, String) -> Result<Unit>,
-    onMove: suspend (List<FileItem>, String) -> List<Result<Unit>>,
+    onMove: suspend (List<FileItem>, String, (MoveProgress) -> Unit) -> List<Result<Unit>>,
     onDismiss: () -> Unit
 ) {
     val safeRoots = remember(roots, initialRootPath) {
@@ -111,6 +124,8 @@ fun MoveToFolderDialog(
     var enterCreatedFolder by remember { mutableStateOf(false) }
     var creatingFolder by remember { mutableStateOf(false) }
     var moving by remember { mutableStateOf(false) }
+    val moveProgressFlow = remember(itemsToMove) { MutableStateFlow<MoveProgress?>(null) }
+    val moveProgress by moveProgressFlow.collectAsState()
     var resultMessage by remember { mutableStateOf<String?>(null) }
     var resultIsError by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -165,10 +180,13 @@ fun MoveToFolderDialog(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (currentPath != root.path) {
-                        IconButton(onClick = {
-                            currentPath = File(currentPath).parentFile?.path ?: root.path
-                            selectedDestinationPath = currentPath
-                        }) {
+                        IconButton(
+                            onClick = {
+                                currentPath = File(currentPath).parentFile?.path ?: root.path
+                                selectedDestinationPath = currentPath
+                            },
+                            enabled = !moving
+                        ) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_arrow_back),
                                 contentDescription = stringResource(R.string.navigate_up),
@@ -189,7 +207,7 @@ fun MoveToFolderDialog(
                             )
                             if (safeRoots.size > 1) {
                                 androidx.compose.foundation.layout.Box {
-                                    TextButton(onClick = { rootMenuExpanded = true }) {
+                                    TextButton(onClick = { rootMenuExpanded = true }, enabled = !moving) {
                                         Text(root.name)
                                     }
                                     DropdownMenu(
@@ -241,16 +259,60 @@ fun MoveToFolderDialog(
                 ) { Text(stringResource(R.string.action_new_folder)) }
 
                 when {
-                    moving -> Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = Dimensions.SpacingMedium),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CircularProgressIndicator()
-                        Text(
-                            stringResource(R.string.move_in_progress),
-                            modifier = Modifier.padding(start = Dimensions.SpacingMedium)
-                        )
+                    moving -> {
+                        val currentProgress = moveProgress
+                        val currentItemName = currentProgress
+                            ?.let { itemsToMove.getOrNull(it.itemIndex)?.name }
+                            ?: itemsToMove.firstOrNull()?.name.orEmpty()
+                        val progressFraction = currentProgress?.takeIf { it.totalBytes > 0L }
+                            ?.let { (it.copiedBytes.toFloat() / it.totalBytes.toFloat()).coerceIn(0f, 1f) }
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = Dimensions.SpacingMedium),
+                            verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall)
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    R.string.move_progress_item,
+                                    (currentProgress?.itemIndex ?: 0) + 1,
+                                    currentProgress?.itemCount ?: itemsToMove.size,
+                                    currentItemName
+                                ),
+                                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                                color = AppColors.textPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (progressFraction != null) {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().height(Dimensions.SpacingMicro)
+                                        .clip(CircleShape).background(AppColors.divider)
+                                        .semantics {
+                                            progressBarRangeInfo = ProgressBarRangeInfo(progressFraction, 0f..1f)
+                                        }
+                                ) {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth(progressFraction).fillMaxHeight()
+                                            .background(AppColors.brandAccent)
+                                    )
+                                }
+                                Text(
+                                    text = stringResource(
+                                        R.string.move_progress_bytes,
+                                        Formatter.formatFileSize(context, currentProgress?.copiedBytes ?: 0L),
+                                        Formatter.formatFileSize(context, currentProgress?.totalBytes ?: 0L),
+                                        (progressFraction * 100f).toInt()
+                                    ),
+                                    style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                                    color = AppColors.textSecondary
+                                )
+                            } else {
+                                LinearProgressIndicator(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = AppColors.brandAccent
+                                )
+                            }
+                        }
                     }
                     loading -> Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = Dimensions.SpacingMedium),
@@ -316,7 +378,7 @@ fun MoveToFolderDialog(
                                     } else null,
                                     modifier = Modifier
                                         .semantics { selected = isTargetSelected }
-                                        .clickable {
+                                        .clickable(enabled = !moving) {
                                         val targetRoot = safeRoots.firstOrNull {
                                             isInsideRoot(it.path, target.path)
                                         }
@@ -358,7 +420,7 @@ fun MoveToFolderDialog(
                                         tint = if (isSelfOrChild) AppColors.textSecondary.copy(alpha = 0.5f) else AppColors.brandAccent
                                     )
                                 },
-                                modifier = Modifier.clickable(enabled = !isSelfOrChild) {
+                                modifier = Modifier.clickable(enabled = !isSelfOrChild && !moving) {
                                     if (isInsideRoot(root.path, folder.path)) {
                                         currentPath = folder.path
                                         selectedDestinationPath = folder.path
@@ -384,35 +446,42 @@ fun MoveToFolderDialog(
                 TextButton(
                     enabled = !loading && !moving && error == null && !isMovingInsideSelf,
                     onClick = {
-                        scope.launch {
+                        if (!moving && !loading) {
                             moving = true
-                            val results = try {
-                                onMove(itemsToMove, destinationToMove)
-                            } catch (cancelled: CancellationException) {
-                                throw cancelled
-                            } catch (failure: Exception) {
-                                listOf(Result.failure(failure))
-                            }
-                            val succeeded = results.count { it.isSuccess }
-                            val failed = results.size - succeeded
-                            if (failed == 0 && results.isNotEmpty()) {
+                            moveProgressFlow.value = MoveProgress(0, itemsToMove.size, 0L, 0L)
+                            scope.launch {
+                                val results = try {
+                                    onMove(itemsToMove, destinationToMove) { progress ->
+                                        moveProgressFlow.value = progress
+                                    }
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (failure: Exception) {
+                                    listOf(Result.failure(failure))
+                                }
+                                val succeeded = results.count { it.isSuccess }
+                                val failed = results.size - succeeded
+                                if (failed == 0 && results.isNotEmpty()) {
+                                    moving = false
+                                    onDismiss()
+                                    return@launch
+                                } else {
+                                    val detail = results.firstNotNullOfOrNull { it.exceptionOrNull()?.localizedMessage }
+                                    resultMessage = context.getString(
+                                        R.string.move_partial_result,
+                                        succeeded,
+                                        results.size,
+                                        detail ?: context.getString(R.string.error_unknown)
+                                    )
+                                    resultIsError = true
+                                }
                                 moving = false
-                                onDismiss()
-                                return@launch
-                            } else {
-                                val detail = results.firstNotNullOfOrNull { it.exceptionOrNull()?.localizedMessage }
-                                resultMessage = context.getString(
-                                    R.string.move_partial_result,
-                                    succeeded,
-                                    results.size,
-                                    detail ?: context.getString(R.string.error_unknown)
-                                )
-                                resultIsError = true
                             }
-                            moving = false
                         }
                     }
-                ) { Text(stringResource(R.string.action_move_here)) }
+                ) {
+                    Text(stringResource(if (moving) R.string.move_in_progress else R.string.action_move_here))
+                }
             }
             }
         }

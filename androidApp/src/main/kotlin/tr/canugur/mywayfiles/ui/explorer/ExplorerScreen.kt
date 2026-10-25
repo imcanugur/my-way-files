@@ -117,6 +117,7 @@ fun ExplorerScreen(
         }
     }
     val searchState by viewModel.searchState.collectAsStateWithLifecycle()
+    val activeOperation by viewModel.activeOperation.collectAsStateWithLifecycle()
 
     var isSelectionMode by remember { mutableStateOf(false) }
     var selectedPaths by remember { mutableStateOf(setOf<String>()) }
@@ -386,6 +387,16 @@ fun ExplorerScreen(
             onEvent = viewModel::onEvent
         )
 
+        activeOperation?.let { progress ->
+            tr.canugur.mywayfiles.ui.common.FileOperationProgressBanner(
+                progress = progress,
+                modifier = Modifier.align(Alignment.TopCenter)
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(top = 64.dp, start = 16.dp, end = 16.dp, bottom = 8.dp)
+                    .fillMaxWidth()
+            )
+        }
+
         // Integrated Full-Screen Unified Media Gallery Pager Overlay (Photos & Videos together)
         val currentMediaIndex = activeMediaIndex
         AnimatedVisibility(
@@ -455,8 +466,8 @@ fun ExplorerScreen(
                 initialDirectoryPath = currentPath,
                 onLoadFolders = viewModel::listMoveTargets,
                 onCreateFolder = viewModel::createMoveTargetFolder,
-                onMove = { items, targetPath ->
-                    val results = viewModel.moveItemsToFolder(items, targetPath)
+                onMove = { items, targetPath, onProgress ->
+                    val results = viewModel.moveItemsToFolder(items, targetPath, onProgress)
                     if (isSearchActive && searchQuery.isNotBlank()) viewModel.search(searchQuery)
                     onItemsMoved(
                         items.zip(results).filter { it.second.isSuccess }

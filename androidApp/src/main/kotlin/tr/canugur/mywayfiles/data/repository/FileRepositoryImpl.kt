@@ -105,14 +105,28 @@ class FileRepositoryImpl(
         return result
     }
 
-    override suspend fun copy(sourcePath: String, targetDirPath: String): Result<Unit> {
-        val result = localDataSource.copy(sourcePath, targetDirPath)
+    override suspend fun copy(sourcePath: String, targetDirPath: String): Result<Unit> =
+        copy(sourcePath, targetDirPath) { _, _ -> }
+
+    override suspend fun copy(
+        sourcePath: String,
+        targetDirPath: String,
+        onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
+    ): Result<Unit> {
+        val result = localDataSource.copy(sourcePath, targetDirPath, onProgress)
         result.onSuccess { directoryCache?.invalidate(targetDirPath) }
         return result
     }
 
-    override suspend fun move(sourcePath: String, targetDirPath: String): Result<Unit> {
-        val result = localDataSource.move(sourcePath, targetDirPath)
+    override suspend fun move(sourcePath: String, targetDirPath: String): Result<Unit> =
+        move(sourcePath, targetDirPath) { _, _ -> }
+
+    override suspend fun move(
+        sourcePath: String,
+        targetDirPath: String,
+        onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
+    ): Result<Unit> {
+        val result = localDataSource.move(sourcePath, targetDirPath, onProgress)
         result.onSuccess {
             directoryCache?.invalidate(sourcePath)
             directoryCache?.invalidate(targetDirPath)

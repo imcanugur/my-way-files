@@ -203,4 +203,8 @@
     <string name="operation_add_favorite">Favorilere ekleme</string>
     <string name="operation_remove_favorite">Favorilerden kaldırma</string>
     <string name="settings_video_playback_mode_description">Video bittiğinde ne olacağını seç. Seçimin videolar ve uygulama yeniden açıldığında da korunur.</string>
+    <string name="operation_running">%1$s sürüyor</string>
+    <string name="operation_progress_item">%1$s · %2$d / %3$d öğe: %4$s</string>
+    <string name="move_progress_item">%1$d / %2$d öğe taşınıyor: %3$s</string>
+    <string name="move_progress_bytes">%1$s / %2$s • %3$d%%</string>
 </resources>

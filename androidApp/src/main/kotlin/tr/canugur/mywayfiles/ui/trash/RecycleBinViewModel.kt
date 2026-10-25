@@ -27,7 +27,10 @@ class RecycleBinViewModel(
     val uiState: StateFlow<RecycleBinUiState> = _uiState.asStateFlow()
     private val _operationFeedback = MutableSharedFlow<OperationFeedback>(extraBufferCapacity = 8)
     val operationFeedback = _operationFeedback.asSharedFlow()
+    private val _activeOperation = MutableStateFlow<tr.canugur.mywayfiles.ui.explorer.FileOperationProgress?>(null)
+    val activeOperation: StateFlow<tr.canugur.mywayfiles.ui.explorer.FileOperationProgress?> = _activeOperation.asStateFlow()
     private var loadRequestId = 0L
+    private var operationInProgress = false
 
     fun onEvent(event: RecycleBinUiEvent) {
         when (event) {
@@ -72,58 +75,77 @@ class RecycleBinViewModel(
         }
     }
 
-    private fun restore(item: TrashedItem) {
-        viewModelScope.launch {
-            val result = repository.restore(item)
-            _operationFeedback.tryEmit(OperationFeedback(
-                FileOperation.RESTORE, if (result.isSuccess) 1 else 0, if (result.isFailure) 1 else 0,
-                result.exceptionOrNull()?.localizedMessage
-            ))
-            result.fold(onSuccess = { loadItems() }, onFailure = { loadItems(it.localizedMessage ?: "Unable to restore item") })
-        }
+    private fun restore(item: TrashedItem) = runTracked(FileOperation.RESTORE, listOf(item)) { item, progress ->
+        repository.restore(item, progress)
     }
 
-    private fun deletePermanently(item: TrashedItem) {
-        viewModelScope.launch {
-            val result = repository.deletePermanently(item)
-            _operationFeedback.tryEmit(OperationFeedback(
-                FileOperation.PERMANENT_DELETE, if (result.isSuccess) 1 else 0, if (result.isFailure) 1 else 0,
-                result.exceptionOrNull()?.localizedMessage
-            ))
-            result.fold(onSuccess = { loadItems() }, onFailure = { loadItems(it.localizedMessage ?: "Unable to delete item") })
-        }
-    }
+    private fun deletePermanently(item: TrashedItem) =
+        runTracked(FileOperation.PERMANENT_DELETE, listOf(item)) { selected, _ -> repository.deletePermanently(selected) }
 
-    private fun restoreSelected(items: List<TrashedItem>) {
-        viewModelScope.launch {
-            val results = items.map { repository.restore(it) }
-            val failures = results.count { it.isFailure }
-            val succeeded = results.size - failures
-            _operationFeedback.tryEmit(OperationFeedback(FileOperation.RESTORE, succeeded, failures))
-            val detail = results.firstNotNullOfOrNull { it.exceptionOrNull()?.localizedMessage }
-            loadItems(if (failures == 0) null else detail ?: "Unable to restore selected items")
-        }
-    }
+    private fun restoreSelected(items: List<TrashedItem>) =
+        runTracked(FileOperation.RESTORE, items) { item, progress -> repository.restore(item, progress) }
 
-    private fun deleteSelectedPermanently(items: List<TrashedItem>) {
-        viewModelScope.launch {
-            val results = items.map { repository.deletePermanently(it) }
-            val failures = results.count { it.isFailure }
-            val succeeded = results.size - failures
-            _operationFeedback.tryEmit(OperationFeedback(FileOperation.PERMANENT_DELETE, succeeded, failures))
-            val detail = results.firstNotNullOfOrNull { it.exceptionOrNull()?.localizedMessage }
-            loadItems(if (failures == 0) null else detail ?: "Unable to permanently delete selected items")
-        }
-    }
+    private fun deleteSelectedPermanently(items: List<TrashedItem>) =
+        runTracked(FileOperation.PERMANENT_DELETE, items) { selected, _ -> repository.deletePermanently(selected) }
 
     private fun emptyTrash() {
+        if (operationInProgress) return
+        operationInProgress = true
+        _activeOperation.value = tr.canugur.mywayfiles.ui.explorer.FileOperationProgress(
+            FileOperation.EMPTY_TRASH, "", 0, 1
+        )
         viewModelScope.launch {
-            val result = repository.emptyTrash()
-            _operationFeedback.tryEmit(OperationFeedback(
-                FileOperation.EMPTY_TRASH, if (result.isSuccess) 1 else 0, if (result.isFailure) 1 else 0,
-                result.exceptionOrNull()?.localizedMessage
-            ))
-            result.fold(onSuccess = { loadItems() }, onFailure = { loadItems(it.localizedMessage ?: "Unable to empty Recycle Bin") })
+            try {
+                val result = repository.emptyTrash()
+                _operationFeedback.tryEmit(OperationFeedback(
+                    FileOperation.EMPTY_TRASH, if (result.isSuccess) 1 else 0, if (result.isFailure) 1 else 0,
+                    result.exceptionOrNull()?.localizedMessage
+                ))
+                result.fold(onSuccess = { loadItems() }, onFailure = { loadItems(it.localizedMessage ?: "Unable to empty Recycle Bin") })
+            } finally {
+                _activeOperation.value = null
+                operationInProgress = false
+            }
+        }
+    }
+
+    private fun runTracked(
+        operation: FileOperation,
+        items: List<TrashedItem>,
+        action: suspend (TrashedItem, (Long, Long) -> Unit) -> Result<Unit>
+    ) {
+        if (operationInProgress || items.isEmpty()) return
+        operationInProgress = true
+        viewModelScope.launch {
+            val results = mutableListOf<Result<Unit>>()
+            try {
+                items.forEachIndexed { index, item ->
+                    _activeOperation.value = tr.canugur.mywayfiles.ui.explorer.FileOperationProgress(
+                        operation, item.name, index, items.size
+                    )
+                    results += try {
+                        action(item) { copied, total ->
+                            _activeOperation.value = tr.canugur.mywayfiles.ui.explorer.FileOperationProgress(
+                                operation, item.name, index, items.size, copied, total
+                            )
+                        }
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        Result.failure(error)
+                    }
+                }
+                val failures = results.count { it.isFailure }
+                val succeeded = results.size - failures
+                _operationFeedback.tryEmit(OperationFeedback(operation, succeeded, failures,
+                    results.firstNotNullOfOrNull { it.exceptionOrNull()?.localizedMessage }))
+                val fallback = if (operation == FileOperation.RESTORE) "Unable to restore selected items"
+                    else "Unable to permanently delete selected items"
+                loadItems(if (failures == 0) null else results.firstNotNullOfOrNull { it.exceptionOrNull()?.localizedMessage } ?: fallback)
+            } finally {
+                _activeOperation.value = null
+                operationInProgress = false
+            }
         }
     }
 
