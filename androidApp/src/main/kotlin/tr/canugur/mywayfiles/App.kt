@@ -1,5 +1,11 @@
 package tr.canugur.mywayfiles
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.os.SystemClock
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -89,6 +95,10 @@ fun App() {
     var favorites by remember { mutableStateOf(locationStore.favorites()) }
     val navigationOffsetPx = with(LocalDensity.current) {
         MotionTokens.NAVIGATION_OFFSET_DP.dp.roundToPx()
+    }
+    var lastHomeBackPressAt by remember { mutableStateOf(0L) }
+    LaunchedEffect(currentDestination, drawerState.isOpen) {
+        lastHomeBackPressAt = 0L
     }
 
     fun openExplorer(drive: StorageDrive, path: String = drive.path, filePath: String? = null) {
@@ -187,6 +197,19 @@ fun App() {
                 }
             }
         ) {
+        BackHandler(enabled = currentDestination is NavigationDestination.Home && !drawerState.isOpen) {
+            val now = SystemClock.elapsedRealtime()
+            if (lastHomeBackPressAt > 0L && now - lastHomeBackPressAt in 0L..HOME_EXIT_CONFIRM_WINDOW_MS) {
+                context.findActivity()?.finish()
+            } else {
+                lastHomeBackPressAt = now
+                Toast.makeText(
+                    context,
+                    R.string.press_back_again_to_exit,
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
         AnimatedContent(
             targetState = currentDestination,
             transitionSpec = {
@@ -356,4 +379,13 @@ private fun isPathAncestor(ancestor: String, descendant: String): Boolean {
     val normalizedAncestor = ancestor.trimEnd(File.separatorChar)
     return descendant != normalizedAncestor &&
         descendant.startsWith(normalizedAncestor + File.separator)
+}
+
+
+private const val HOME_EXIT_CONFIRM_WINDOW_MS = 2_000L
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

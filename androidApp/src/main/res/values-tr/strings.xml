@@ -179,6 +179,7 @@
     <string name="settings_confirm_trash">Geri Dönüşüm Kutusuna taşımadan önce sor</string>
     <string name="dialog_move_to_trash_title">Geri Dönüşüm Kutusuna taşınsın mı?</string>
     <string name="settings_confirm_trash_description">Dosya ve klasörler Geri Dönüşüm Kutusuna taşınırken onay iste. Silinen öğeler burada geri yüklenebilir.</string>
+    <string name="press_back_again_to_exit">Çıkmak için geri tuşuna tekrar basın</string>
     <string name="navigate_back">Geri</string>
     <string name="drawer_favorites_section">Favoriler</string>
     <string name="add_favorite">Favorilere ekle</string>
