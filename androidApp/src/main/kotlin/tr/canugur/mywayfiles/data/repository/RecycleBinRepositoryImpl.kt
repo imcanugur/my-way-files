@@ -111,7 +111,7 @@ class RecycleBinRepositoryImpl private constructor(
                 }
 
                 val id = UUID.randomUUID().toString()
-                val trashFile = File(trashFilesDirectoryFor(source), "${id}_${item.name}")
+                val trashFile = File(trashFilesDirectoryFor(source), id)
                 val trashedItem = TrashedItem(
                     id = id,
                     name = item.name,
