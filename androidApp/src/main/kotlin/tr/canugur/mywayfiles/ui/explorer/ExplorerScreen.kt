@@ -44,6 +44,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import java.io.File
+import tr.canugur.mywayfiles.core.util.FileLaunchHelper
 import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.core.constants.SearchTiming
 import tr.canugur.mywayfiles.core.util.FileShareHelper
@@ -80,6 +81,7 @@ fun ExplorerScreen(
     permanentlyDeleteInsteadOfTrashing: Boolean,
     autoHideViewerControls: Boolean,
     viewMode: FileViewMode,
+    onToggleViewMode: () -> Unit = {},
     gridTileSize: Int,
     moveTargetRoots: List<MoveTargetRoot>,
     recentMoveTargets: List<SavedLocation>,
@@ -251,7 +253,8 @@ fun ExplorerScreen(
             val index = mediaItems.indexOfFirst { it.path == targetPath }
             if (index >= 0) activeMediaIndex = index
         } else {
-            itemForProperties = target
+            val opened = FileLaunchHelper.openFile(context, target)
+            if (!opened) itemForProperties = target
         }
     }
 
@@ -338,12 +341,12 @@ fun ExplorerScreen(
                 requestBatchMoveToTrash(items)
             },
             onBatchMoveToFolder = {
-                itemsToMoveToFolder = currentItems.filter {
-                    it.path in selectedPaths && (FileTypeClassifier.isImage(it) || FileTypeClassifier.isVideo(it))
-                }
+                itemsToMoveToFolder = currentItems.filter { it.path in selectedPaths }
             },
             onSortOptionSelected = { viewModel.onEvent(ExplorerUiEvent.ChangeSortOption(it)) },
             viewMode = viewMode,
+            onToggleViewMode = onToggleViewMode,
+            onBreadcrumbClick = { viewModel.onEvent(ExplorerUiEvent.NavigateToBreadcrumb(it)) },
             gridTileSize = gridTileSize,
             onItemClick = { item ->
                 if (isSelectionMode) {
@@ -361,8 +364,10 @@ fun ExplorerScreen(
                         activeMediaIndex = idx
                     }
                 } else {
-                    // Unsupported file types have no inline viewer; expose their available details instead.
-                    itemForProperties = item
+                    val opened = FileLaunchHelper.openFile(context, item)
+                    if (!opened) {
+                        itemForProperties = item
+                    }
                 }
             },
             onLongClick = { item ->
@@ -594,6 +599,8 @@ fun ExplorerScreenContent(
     onBatchMoveToFolder: () -> Unit,
     onSortOptionSelected: (SortOption) -> Unit,
     viewMode: FileViewMode,
+    onToggleViewMode: () -> Unit = {},
+    onBreadcrumbClick: (String) -> Unit = {},
     gridTileSize: Int,
     onItemClick: (FileItem) -> Unit,
     onLongClick: (FileItem) -> Unit,
@@ -651,6 +658,8 @@ fun ExplorerScreenContent(
                 selectedCount = selectedPaths.size,
                 isAllSelected = isAllSelected,
                 sortOption = sortOption,
+                viewMode = viewMode,
+                onToggleViewMode = onToggleViewMode,
                 isSearchActive = isSearchActive,
                 searchQuery = searchQuery,
                 onOpenSearch = onOpenSearch,
@@ -668,13 +677,20 @@ fun ExplorerScreenContent(
         },
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
-            PullToRefreshBox(
-            isRefreshing = isSearchLoading ||
-                (state as? ExplorerUiState.Success)?.isRefreshing == true ||
-                (state is ExplorerUiState.Loading && contentState !== state),
-            onRefresh = onRefresh,
-            modifier = Modifier.padding(innerPadding).fillMaxSize()
-        ) {
+            Column(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
+                if (!isSearchActive && !isSelectionMode) {
+                    ExplorerBreadcrumbsBar(
+                        breadcrumbs = breadcrumbs,
+                        onBreadcrumbClick = onBreadcrumbClick
+                    )
+                }
+                PullToRefreshBox(
+                    isRefreshing = isSearchLoading ||
+                        (state as? ExplorerUiState.Success)?.isRefreshing == true ||
+                        (state is ExplorerUiState.Loading && contentState !== state),
+                    onRefresh = onRefresh,
+                    modifier = Modifier.fillMaxWidth().weight(1f)
+                ) {
             AnimatedContent(
                 targetState = contentState,
                 contentKey = { it.directoryMotionKey() },
@@ -959,6 +975,7 @@ fun ExplorerScreenContent(
             }
             }
         }
+        }
 
         // Clipboard actions are local state changes: show the destination bar immediately.
         val activeClipboard = when (contentState) {
@@ -980,9 +997,7 @@ fun ExplorerScreenContent(
         if (isSelectionMode) {
             val selectedItems = currentItems.filter { it.path in selectedPaths }
             val singleSelected = selectedItems.singleOrNull()
-            val canMoveSelected = selectedItems.isNotEmpty() && selectedItems.all {
-                FileTypeClassifier.isImage(it) || FileTypeClassifier.isVideo(it)
-            }
+            val canMoveSelected = selectedItems.isNotEmpty()
             ExplorerSelectionActionBar(
                 selectedCount = selectedItems.size,
                 canShare = singleSelected != null && !singleSelected.isDirectory,

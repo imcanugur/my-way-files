@@ -37,6 +37,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import tr.canugur.mywayfiles.R
+import tr.canugur.mywayfiles.domain.model.FileViewMode
 import tr.canugur.mywayfiles.domain.model.SortOption
 import tr.canugur.mywayfiles.ui.explorer.Breadcrumb
 import tr.canugur.mywayfiles.ui.theme.AppColors
@@ -52,6 +53,8 @@ fun ExplorerTopBar(
     selectedCount: Int,
     isAllSelected: Boolean,
     sortOption: SortOption,
+    viewMode: FileViewMode = FileViewMode.LIST,
+    onToggleViewMode: () -> Unit = {},
     isSearchActive: Boolean,
     searchQuery: String,
     onOpenSearch: () -> Unit,
@@ -206,6 +209,19 @@ fun ExplorerTopBar(
                         Icon(
                             painter = painterResource(R.drawable.ic_search),
                             contentDescription = stringResource(R.string.search_files),
+                            tint = AppColors.textSecondary
+                        )
+                    }
+                    IconButton(onClick = onToggleViewMode) {
+                        Icon(
+                            painter = painterResource(
+                                if (viewMode == FileViewMode.GRID) R.drawable.ic_view_list
+                                else R.drawable.ic_view_grid
+                            ),
+                            contentDescription = stringResource(
+                                if (viewMode == FileViewMode.GRID) R.string.view_mode_list
+                                else R.string.view_mode_grid
+                            ),
                             tint = AppColors.textSecondary
                         )
                     }

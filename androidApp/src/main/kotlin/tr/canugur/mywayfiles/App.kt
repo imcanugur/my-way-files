@@ -29,6 +29,7 @@ import tr.canugur.mywayfiles.data.preferences.AppSettingsStore
 import tr.canugur.mywayfiles.data.preferences.ExplorerPreferences
 import tr.canugur.mywayfiles.domain.model.StorageDrive
 import tr.canugur.mywayfiles.domain.model.GridTileSize
+import tr.canugur.mywayfiles.domain.model.FileViewMode
 import tr.canugur.mywayfiles.ui.navigation.AppNavigationDrawer
 import tr.canugur.mywayfiles.ui.navigation.AppSettingsScreen
 import tr.canugur.mywayfiles.ui.explorer.ExplorerScreen
@@ -277,6 +278,16 @@ fun App() {
                         },
                         onRecycleBinClick = { currentDestination = NavigationDestination.RecycleBin },
                         onOpenDrawer = ::openDrawer,
+                        onCategoryClick = { relativePath ->
+                            val primaryDrive = storageDrives.firstOrNull { it.isPrimary } ?: storageDrives.firstOrNull()
+                            if (primaryDrive != null) {
+                                val targetPath = File(primaryDrive.path, relativePath).absolutePath
+                                openExplorer(primaryDrive, targetPath)
+                            }
+                        },
+                        onLocationClick = ::selectLocation,
+                        favoriteLocations = favorites,
+                        recentLocations = recentFolders,
                         onDrivesLoaded = { drives -> storageDrives = drives }
                     )
                 }
@@ -294,6 +305,11 @@ fun App() {
                         permanentlyDeleteInsteadOfTrashing = permanentlyDeleteInsteadOfTrashing,
                         autoHideViewerControls = autoHideViewerControls,
                         viewMode = explorerViewMode,
+                        onToggleViewMode = {
+                            val nextMode = if (explorerViewMode == FileViewMode.LIST) FileViewMode.GRID else FileViewMode.LIST
+                            explorerPreferences.viewMode = nextMode
+                            explorerViewMode = nextMode
+                        },
                         gridTileSize = gridTileSize.minWidthDp,
                         moveTargetRoots = storageDrives.map { MoveTargetRoot(it.name, it.path) },
                         recentMoveTargets = recentMoveTargets,

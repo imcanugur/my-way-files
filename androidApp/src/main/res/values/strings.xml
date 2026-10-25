@@ -240,4 +240,22 @@
     <string name="operation_cancelled_with_progress">%1$s stopped. %2$d completed; %3$d not processed.</string>
     <string name="operation_cancelled_partial">%1$s stopped. %2$d completed, %3$d failed; %4$d not processed.</string>
     <string name="operation_cancelled_short">Operation cancelled.</string>
+    <string name="category_downloads">Downloads</string>
+    <string name="category_images">Images</string>
+    <string name="category_videos">Videos</string>
+    <string name="category_audio">Audio</string>
+    <string name="category_documents">Documents</string>
+    <string name="category_archives">Archives</string>
+    <string name="category_apps">Apps</string>
+    <string name="quick_access">Quick access</string>
+    <string name="filter_all">All</string>
+    <string name="filter_images">Images</string>
+    <string name="filter_videos">Videos</string>
+    <string name="filter_audio">Audio</string>
+    <string name="filter_documents">Documents</string>
+    <string name="filter_archives">Archives</string>
+    <string name="filter_apks">APKs</string>
+    <string name="view_mode_grid">Switch to grid view</string>
+    <string name="view_mode_list">Switch to list view</string>
+    <string name="cannot_open_file">No app found to open this file</string>
 </resources>

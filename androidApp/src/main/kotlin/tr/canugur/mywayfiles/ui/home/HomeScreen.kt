@@ -19,10 +19,13 @@ import tr.canugur.mywayfiles.ui.common.RefreshErrorBanner
 import tr.canugur.mywayfiles.ui.common.RetryErrorState
 import tr.canugur.mywayfiles.ui.common.AppModalBottomSheet
 import tr.canugur.mywayfiles.ui.home.components.EmptyDrivesView
+import tr.canugur.mywayfiles.ui.home.components.HomeQuickCategories
+import tr.canugur.mywayfiles.ui.home.components.HomeSavedLocationsSection
 import tr.canugur.mywayfiles.ui.home.components.HomeTopBar
 import tr.canugur.mywayfiles.ui.home.components.OverallStorageCard
 import tr.canugur.mywayfiles.ui.home.components.RecycleBinCard
 import tr.canugur.mywayfiles.ui.home.components.StorageDriveCard
+import tr.canugur.mywayfiles.data.preferences.SavedLocation
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +41,10 @@ fun HomeScreen(
     onSearchDriveClick: (StorageDrive) -> Unit,
     onRecycleBinClick: () -> Unit,
     onOpenDrawer: () -> Unit,
+    onCategoryClick: (String) -> Unit = {},
+    onLocationClick: (SavedLocation) -> Unit = {},
+    favoriteLocations: List<SavedLocation> = emptyList(),
+    recentLocations: List<SavedLocation> = emptyList(),
     onDrivesLoaded: (List<StorageDrive>) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -53,6 +60,10 @@ fun HomeScreen(
         onSearchDriveClick = onSearchDriveClick,
         onRecycleBinClick = onRecycleBinClick,
         onOpenDrawer = onOpenDrawer,
+        onCategoryClick = onCategoryClick,
+        onLocationClick = onLocationClick,
+        favoriteLocations = favoriteLocations,
+        recentLocations = recentLocations,
         onDrivesLoaded = onDrivesLoaded,
         onEvent = viewModel::onEvent,
         modifier = modifier
@@ -69,6 +80,10 @@ fun HomeScreenContent(
     onSearchDriveClick: (StorageDrive) -> Unit,
     onRecycleBinClick: () -> Unit,
     onOpenDrawer: () -> Unit,
+    onCategoryClick: (String) -> Unit = {},
+    onLocationClick: (SavedLocation) -> Unit = {},
+    favoriteLocations: List<SavedLocation> = emptyList(),
+    recentLocations: List<SavedLocation> = emptyList(),
     onDrivesLoaded: (List<StorageDrive>) -> Unit,
     onEvent: (HomeUiEvent) -> Unit,
     modifier: Modifier = Modifier
@@ -157,6 +172,32 @@ fun HomeScreenContent(
 
                     item {
                         OverallStorageCard(summary = state.summary)
+                    }
+
+                    item(key = "quick-categories-heading") {
+                        Text(
+                            text = stringResource(R.string.quick_access),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = AppColors.textPrimary,
+                            modifier = Modifier.padding(top = Dimensions.SpacingHuge, bottom = Dimensions.SpacingSmall)
+                        )
+                    }
+
+                    item(key = "quick-categories") {
+                        HomeQuickCategories(
+                            onCategoryClick = onCategoryClick
+                        )
+                    }
+
+                    if (favoriteLocations.isNotEmpty()) {
+                        item(key = "favorites-section") {
+                            HomeSavedLocationsSection(
+                                title = stringResource(R.string.drawer_favorites_section),
+                                locations = favoriteLocations,
+                                onLocationClick = onLocationClick,
+                                modifier = Modifier.padding(top = Dimensions.SpacingDefault)
+                            )
+                        }
                     }
 
                     item {

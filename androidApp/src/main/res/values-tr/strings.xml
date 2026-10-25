@@ -238,4 +238,22 @@
     <string name="operation_cancelled_with_progress">%1$s durduruldu. %2$d tamamlandı; %3$d işlenmedi.</string>
     <string name="operation_cancelled_partial">%1$s durduruldu. %2$d tamamlandı, %3$d başarısız; %4$d işlenmedi.</string>
     <string name="operation_cancelled_short">İşlem iptal edildi.</string>
+    <string name="category_downloads">İndirilenler</string>
+    <string name="category_images">Görseller</string>
+    <string name="category_videos">Videolar</string>
+    <string name="category_audio">Ses</string>
+    <string name="category_documents">Belgeler</string>
+    <string name="category_archives">Arşivler</string>
+    <string name="category_apps">Uygulamalar</string>
+    <string name="quick_access">Hızlı erişim</string>
+    <string name="filter_all">Tümü</string>
+    <string name="filter_images">Görseller</string>
+    <string name="filter_videos">Videolar</string>
+    <string name="filter_audio">Ses</string>
+    <string name="filter_documents">Belgeler</string>
+    <string name="filter_archives">Arşivler</string>
+    <string name="filter_apks">APK\'lar</string>
+    <string name="view_mode_grid">Izgara görünümüne geç</string>
+    <string name="view_mode_list">Liste görünümüne geç</string>
+    <string name="cannot_open_file">Bu dosyayı açabilecek bir uygulama bulunamadı</string>
 </resources>

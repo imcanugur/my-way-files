@@ -25,7 +25,7 @@ import tr.canugur.mywayfiles.ui.theme.Dimensions
 
 /**
  * Thumbnail component rendering asynchronously loaded, cached image thumbnails
- * or vector file/folder indicators.
+ * or vector file/folder indicators with thematic color-coding.
  */
 @Composable
 fun FileThumbnailView(
@@ -114,11 +114,36 @@ fun FileThumbnailView(
             }
         }
     } else {
-        val iconRes = if (item.isDirectory) R.drawable.ic_folder else R.drawable.ic_file_generic
-        val iconTint = if (item.isDirectory) AppColors.statusWarning else AppColors.textSecondary
+        val (iconRes, iconTint) = when {
+            item.isDirectory -> R.drawable.ic_folder to AppColors.statusWarning
+            FileTypeClassifier.isAudio(item) -> R.drawable.ic_audio to AppColors.brandAccent
+            FileTypeClassifier.isDocument(item) -> {
+                if (item.extension.equals("pdf", ignoreCase = true)) {
+                    R.drawable.ic_document to AppColors.statusCritical
+                } else {
+                    R.drawable.ic_document to AppColors.brandAccent
+                }
+            }
+            FileTypeClassifier.isArchive(item) -> R.drawable.ic_archive to AppColors.statusWarning
+            FileTypeClassifier.isApk(item) -> R.drawable.ic_apk to AppColors.brandAccent
+            else -> R.drawable.ic_file_generic to AppColors.textSecondary
+        }
+
+        val backgroundMod = if (thumbnailSize >= 72.dp && !item.isDirectory) {
+            containerModifier
+                .clip(iconContainerShape)
+                .background(iconTint.copy(alpha = 0.08f))
+                .border(
+                    width = Dimensions.CardBorderWidth,
+                    color = iconTint.copy(alpha = 0.2f),
+                    shape = iconContainerShape
+                )
+        } else {
+            containerModifier
+        }
 
         Box(
-            modifier = containerModifier,
+            modifier = backgroundMod,
             contentAlignment = Alignment.Center
         ) {
             Icon(

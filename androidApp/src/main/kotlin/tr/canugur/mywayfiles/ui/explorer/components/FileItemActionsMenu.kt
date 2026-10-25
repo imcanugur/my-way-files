@@ -84,10 +84,8 @@ fun FileItemActionsMenu(
                 ) { showActions = false; onToggleFavorite(item) }
                 ActionRow(R.string.action_copy, R.drawable.ic_copy) { showActions = false; onCopy(item) }
                 ActionRow(R.string.action_cut, R.drawable.ic_cut) { showActions = false; onCut(item) }
-                if (FileTypeClassifier.isImage(item) || FileTypeClassifier.isVideo(item)) {
-                    ActionRow(R.string.action_move_to_folder, R.drawable.ic_folder) {
-                        showActions = false; onMoveToFolder(item)
-                    }
+                ActionRow(R.string.action_move_to_folder, R.drawable.ic_folder) {
+                    showActions = false; onMoveToFolder(item)
                 }
                 if (!item.isDirectory) ActionRow(R.string.action_share, R.drawable.ic_share) {
                     showActions = false; onShare(item)
