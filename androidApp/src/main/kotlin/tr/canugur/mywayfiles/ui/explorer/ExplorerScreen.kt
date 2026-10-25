@@ -637,50 +637,51 @@ fun ExplorerScreenContent(
     }
     val isAllSelected = currentItems.isNotEmpty() && selectedPaths.size >= currentItems.size
 
-    PullToRefreshBox(
-        isRefreshing = isSearchLoading ||
-            (state as? ExplorerUiState.Success)?.isRefreshing == true ||
-            (state is ExplorerUiState.Loading && contentState !== state),
-        onRefresh = onRefresh,
-        modifier = modifier.fillMaxSize()
-    ) {
-        Scaffold(
-            containerColor = AppColors.canvasBackground,
-            topBar = {
-                ExplorerTopBar(
-                    breadcrumbs = breadcrumbs,
-                    isSelectionMode = isSelectionMode,
-                    selectedCount = selectedPaths.size,
-                    isAllSelected = isAllSelected,
-                    sortOption = sortOption,
-                    isSearchActive = isSearchActive,
-                    searchQuery = searchQuery,
-                    onOpenSearch = onOpenSearch,
-                    onSearchQueryChange = onSearchQueryChange,
-                    onCloseSearch = onCloseSearch,
-                    onOpenDrawer = onOpenDrawer,
-                    onCreateFolderClick = onCreateFolderClick,
-                    onEnterSelectionMode = onEnterSelectionMode,
-                    onCloseSelectionMode = onCloseSelectionMode,
-                    onToggleSelectAll = onToggleSelectAll,
-                    onBatchCopy = onBatchCopy,
-                    onBatchShare = onBatchShare,
-                    canShareSelected = selectedPaths.size == 1 && currentItems.any {
-                        it.path in selectedPaths && !it.isDirectory
-                    },
-                    canMoveSelected = currentItems.filter { it.path in selectedPaths }.let { selected ->
-                        selected.isNotEmpty() && selected.all {
-                            FileTypeClassifier.isImage(it) || FileTypeClassifier.isVideo(it)
-                        }
-                    },
-                    onBatchMoveToFolder = onBatchMoveToFolder,
-                    onBatchCut = onBatchCut,
-                    onBatchDelete = onBatchDelete,
-                    onSortOptionSelected = onSortOptionSelected,
-                    onRefreshClick = onRefresh
-                )
-            }
-        ) { innerPadding ->
+    Scaffold(
+        containerColor = AppColors.canvasBackground,
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            ExplorerTopBar(
+                breadcrumbs = breadcrumbs,
+                isSelectionMode = isSelectionMode,
+                selectedCount = selectedPaths.size,
+                isAllSelected = isAllSelected,
+                sortOption = sortOption,
+                isSearchActive = isSearchActive,
+                searchQuery = searchQuery,
+                onOpenSearch = onOpenSearch,
+                onSearchQueryChange = onSearchQueryChange,
+                onCloseSearch = onCloseSearch,
+                onOpenDrawer = onOpenDrawer,
+                onCreateFolderClick = onCreateFolderClick,
+                onEnterSelectionMode = onEnterSelectionMode,
+                onCloseSelectionMode = onCloseSelectionMode,
+                onToggleSelectAll = onToggleSelectAll,
+                onBatchCopy = onBatchCopy,
+                onBatchShare = onBatchShare,
+                canShareSelected = selectedPaths.size == 1 && currentItems.any {
+                    it.path in selectedPaths && !it.isDirectory
+                },
+                canMoveSelected = currentItems.filter { it.path in selectedPaths }.let { selected ->
+                    selected.isNotEmpty() && selected.all {
+                        FileTypeClassifier.isImage(it) || FileTypeClassifier.isVideo(it)
+                    }
+                },
+                onBatchMoveToFolder = onBatchMoveToFolder,
+                onBatchCut = onBatchCut,
+                onBatchDelete = onBatchDelete,
+                onSortOptionSelected = onSortOptionSelected,
+                onRefreshClick = onRefresh
+            )
+        }
+    ) { innerPadding ->
+        PullToRefreshBox(
+            isRefreshing = isSearchLoading ||
+                (state as? ExplorerUiState.Success)?.isRefreshing == true ||
+                (state is ExplorerUiState.Loading && contentState !== state),
+            onRefresh = onRefresh,
+            modifier = Modifier.padding(innerPadding).fillMaxSize()
+        ) {
             AnimatedContent(
                 targetState = contentState,
                 contentKey = { it.directoryMotionKey() },
@@ -708,9 +709,7 @@ fun ExplorerScreenContent(
             when (state) {
                 is ExplorerUiState.Loading -> {
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding),
+                        modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator(
@@ -724,7 +723,6 @@ fun ExplorerScreenContent(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(innerPadding)
                             .padding(Dimensions.SpacingLarge),
                         contentAlignment = Alignment.Center
                     ) {
@@ -734,9 +732,7 @@ fun ExplorerScreenContent(
 
                 is ExplorerUiState.Empty -> {
                     Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         state.operationError?.let { message ->
                             OperationErrorBanner(
@@ -763,7 +759,6 @@ fun ExplorerScreenContent(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(innerPadding)
                             .padding(Dimensions.SpacingLarge),
                         contentAlignment = Alignment.Center
                     ) {
@@ -778,7 +773,7 @@ fun ExplorerScreenContent(
                     when {
                         isSearchActive && searchQuery.isNotBlank() && searchError != null -> {
                             Box(
-                                modifier = Modifier.fillMaxSize().padding(innerPadding).padding(Dimensions.SpacingLarge),
+                                modifier = Modifier.fillMaxSize().padding(Dimensions.SpacingLarge),
                                 contentAlignment = Alignment.Center
                             ) {
                                 RetryErrorState(message = searchError, onRetry = onSearchRetry)
@@ -787,7 +782,7 @@ fun ExplorerScreenContent(
 
                         isSearchActive && searchQuery.isNotBlank() && isSearchLoading && currentItems.isEmpty() -> {
                             Box(
-                                modifier = Modifier.fillMaxSize().padding(innerPadding),
+                                modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center
                             ) {
                                 CircularProgressIndicator(color = AppColors.brandAccent)
@@ -796,7 +791,7 @@ fun ExplorerScreenContent(
 
                         isSearchActive && searchQuery.isNotBlank() && currentItems.isEmpty() -> {
                             Column(
-                                modifier = Modifier.fillMaxSize().padding(innerPadding).padding(Dimensions.SpacingLarge),
+                                modifier = Modifier.fillMaxSize().padding(Dimensions.SpacingLarge),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
@@ -819,7 +814,7 @@ fun ExplorerScreenContent(
                                 LazyVerticalGrid(
                                     columns = GridCells.Adaptive(minSize = gridTileSize.dp),
                                     state = gridState,
-                                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                                    modifier = Modifier.fillMaxSize(),
                                     contentPadding = PaddingValues(
                                         horizontal = Dimensions.SpacingLarge,
                                         vertical = Dimensions.SpacingSmall
@@ -876,7 +871,7 @@ fun ExplorerScreenContent(
                             } else {
                                 LazyColumn(
                                     state = listState,
-                                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                                    modifier = Modifier.fillMaxSize(),
                                     contentPadding = PaddingValues(
                                         horizontal = Dimensions.SpacingLarge,
                                         vertical = Dimensions.SpacingSmall
