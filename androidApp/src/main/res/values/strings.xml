@@ -68,6 +68,7 @@
     <string name="dialog_rename_title">Rename Item</string>
     <string name="dialog_new_folder_title">Create New Folder</string>
     <string name="dialog_new_folder_placeholder">Folder name</string>
+    <string name="dialog_new_folder_enter">Enter folder after creating</string>
     <string name="dialog_delete_confirm">Are you sure you want to permanently delete \"%1$s\"?</string>
     <string name="properties_path">Location</string>
     <string name="properties_size">Size</string>
@@ -143,6 +144,7 @@
     <string name="move_items_count">Moving %1$d items</string>
     <string name="move_source">From: %1$s</string>
     <string name="move_destination">Destination folder</string>
+    <string name="move_destination_selected">Selected as move destination</string>
     <string name="move_recent_targets">Recent destinations</string>
     <string name="move_browse_folders">Browse folders</string>
     <string name="move_storage">Storage</string>
@@ -160,6 +162,8 @@
     <string name="settings_recent_folders_description">Recently visited folders kept per storage (1–%1$d)</string>
     <string name="settings_recent_move_targets">Recent move destinations</string>
     <string name="settings_recent_move_targets_description">Choose how many unique folders to show (0–%1$d; 0 hides this section)</string>
+    <string name="settings_prefer_last_move_target">Use last move destination</string>
+    <string name="settings_prefer_last_move_target_description">Preselect the most recently used destination when opening the move sheet.</string>
     <string name="settings_hidden_files">Show hidden files</string>
     <string name="settings_hidden_files_description">Include files and folders whose names start with a dot</string>
     <string name="settings_viewer">Media viewer</string>

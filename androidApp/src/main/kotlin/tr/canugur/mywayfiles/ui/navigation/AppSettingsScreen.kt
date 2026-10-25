@@ -69,6 +69,8 @@ fun AppSettingsScreen(
     onRecentFolderLimitChange: (Int) -> Unit,
     autoHideViewerControls: Boolean,
     onAutoHideViewerControlsChange: (Boolean) -> Unit,
+    preferLastMoveTarget: Boolean,
+    onPreferLastMoveTargetChange: (Boolean) -> Unit,
     recentMoveTargetLimit: Int,
     onRecentMoveTargetLimitChange: (Int) -> Unit,
     confirmBeforeMovingToTrash: Boolean,
@@ -251,6 +253,20 @@ fun AppSettingsScreen(
                 )
             }
             item { SettingsSectionTitle(stringResource(R.string.settings_file_operations)) }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_prefer_last_move_target)) },
+                    supportingContent = {
+                        Text(stringResource(R.string.settings_prefer_last_move_target_description))
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = preferLastMoveTarget,
+                            onCheckedChange = onPreferLastMoveTargetChange
+                        )
+                    }
+                )
+            }
             item {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_confirm_trash)) },

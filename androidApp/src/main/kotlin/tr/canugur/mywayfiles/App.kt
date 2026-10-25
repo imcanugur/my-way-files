@@ -65,6 +65,9 @@ fun App() {
     var autoHideViewerControls by remember(appSettingsStore) {
         mutableStateOf(appSettingsStore.autoHideViewerControls())
     }
+    var preferLastMoveTarget by remember(appSettingsStore) {
+        mutableStateOf(appSettingsStore.preferLastMoveTarget())
+    }
     var showHiddenFiles by remember(explorerPreferences) {
         mutableStateOf(explorerPreferences.showHiddenFiles)
     }
@@ -79,6 +82,7 @@ fun App() {
     var storageDrives by remember { mutableStateOf(emptyList<StorageDrive>()) }
     var recentFolders by remember { mutableStateOf(locationStore.recentFolders()) }
     var recentMoveTargets by remember { mutableStateOf(locationStore.recentMoveTargets()) }
+    var lastMoveTarget by remember { mutableStateOf(locationStore.lastMoveTarget()) }
     var recentFolderLimit by remember { mutableStateOf(locationStore.recentFolderLimit) }
     var recentMoveTargetLimit by remember { mutableStateOf(locationStore.recentMoveTargetLimit) }
     var favorites by remember { mutableStateOf(locationStore.favorites()) }
@@ -229,6 +233,8 @@ fun App() {
                         gridTileSize = gridTileSize.minWidthDp,
                         moveTargetRoots = storageDrives.map { MoveTargetRoot(it.name, it.path) },
                         recentMoveTargets = recentMoveTargets,
+                        lastMoveTarget = lastMoveTarget,
+                        preferLastMoveTarget = preferLastMoveTarget,
                         onNavigateBack = { currentDestination = NavigationDestination.Home },
                         onOpenDrawer = ::openDrawer,
                         onDirectoryVisited = { path, name, storageRoot, storageName ->
@@ -245,13 +251,15 @@ fun App() {
                             }
                             if (movedItems.isNotEmpty()) {
                                 driveForPath(targetPath)?.let { drive ->
+                                    val targetName = if (targetPath == drive.path) drive.name else File(targetPath).name.ifBlank { drive.name }
                                     locationStore.recordMoveTarget(
                                         targetPath,
-                                        File(targetPath).name,
+                                        targetName,
                                         drive.path,
                                         drive.name
                                     )
                                     recentMoveTargets = locationStore.recentMoveTargets()
+                                    lastMoveTarget = locationStore.lastMoveTarget()
                                 }
                             }
                             favorites = locationStore.favorites()
@@ -294,6 +302,11 @@ fun App() {
                         onAutoHideViewerControlsChange = { enabled ->
                             appSettingsStore.setAutoHideViewerControls(enabled)
                             autoHideViewerControls = enabled
+                        },
+                        preferLastMoveTarget = preferLastMoveTarget,
+                        onPreferLastMoveTargetChange = { enabled ->
+                            appSettingsStore.setPreferLastMoveTarget(enabled)
+                            preferLastMoveTarget = enabled
                         },
                         recentMoveTargetLimit = recentMoveTargetLimit,
                         onRecentMoveTargetLimitChange = { limit ->

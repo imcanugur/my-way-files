@@ -34,11 +34,18 @@ class AppSettingsStore(context: Context) {
         preferences.edit().putBoolean(KEY_AUTO_HIDE_VIEWER_CONTROLS, enabled).apply()
     }
 
+    fun preferLastMoveTarget(): Boolean = preferences.getBoolean(KEY_PREFER_LAST_MOVE_TARGET, false)
+
+    fun setPreferLastMoveTarget(enabled: Boolean) {
+        preferences.edit().putBoolean(KEY_PREFER_LAST_MOVE_TARGET, enabled).apply()
+    }
+
     private companion object {
         const val PREFERENCES_NAME = "myway_app_settings"
         const val KEY_DARK_THEME = "dark_theme_enabled"
         const val KEY_CONFIRM_TRASH = "confirm_before_trash"
         const val KEY_CONFIRM_PERMANENT_DELETE = "confirm_before_permanent_delete"
         const val KEY_AUTO_HIDE_VIEWER_CONTROLS = "auto_hide_viewer_controls"
+        const val KEY_PREFER_LAST_MOVE_TARGET = "prefer_last_move_target"
     }
 }

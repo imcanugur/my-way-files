@@ -43,6 +43,10 @@ class SavedLocationStore(context: Context) {
     fun recentMoveTargets(): List<SavedLocation> = prune(KEY_MOVE_TARGETS, directoriesOnly = true)
         .take(recentMoveTargetLimit)
 
+    /** Most recent valid destination, independent of the user-facing recent-list limit. */
+    @Synchronized
+    fun lastMoveTarget(): SavedLocation? = prune(KEY_MOVE_TARGETS, directoriesOnly = true).firstOrNull()
+
     val recentMoveTargetLimit: Int
         get() = prefs.getInt(KEY_MOVE_TARGET_LIMIT, SavedLocationLimits.DEFAULT_RECENT_MOVE_TARGETS)
             .coerceIn(0, SavedLocationLimits.MAX_RECENT_MOVE_TARGETS)
@@ -59,7 +63,7 @@ class SavedLocationStore(context: Context) {
         write(
             KEY_MOVE_TARGETS,
             (listOf(SavedLocation(canonicalPath, name, true, canonicalRoot, storageName)) + existing)
-                .take(recentMoveTargetLimit)
+                .take(SavedLocationLimits.MAX_RECENT_MOVE_TARGETS)
         )
     }
 
@@ -67,7 +71,6 @@ class SavedLocationStore(context: Context) {
     fun setRecentMoveTargetLimit(limit: Int) {
         val boundedLimit = limit.coerceIn(0, SavedLocationLimits.MAX_RECENT_MOVE_TARGETS)
         prefs.edit().putInt(KEY_MOVE_TARGET_LIMIT, boundedLimit).apply()
-        write(KEY_MOVE_TARGETS, read(KEY_MOVE_TARGETS).take(boundedLimit))
     }
 
     @Synchronized

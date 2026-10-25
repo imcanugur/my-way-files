@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -32,6 +33,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
@@ -51,6 +54,8 @@ fun MoveToFolderDialog(
     itemsToMove: List<FileItem>,
     roots: List<MoveTargetRoot>,
     recentTargets: List<SavedLocation>,
+    lastMoveTarget: SavedLocation?,
+    preferLastMoveTarget: Boolean,
     initialRootPath: String,
     initialDirectoryPath: String,
     onLoadFolders: suspend (String) -> Result<List<FileItem>>,
@@ -68,6 +73,14 @@ fun MoveToFolderDialog(
             .distinctBy { target -> runCatching { File(target.path).canonicalPath }.getOrDefault(target.path) }
             .toList()
     }
+    val preferredTargetPath = remember(lastMoveTarget, preferLastMoveTarget, safeRoots, itemsToMove) {
+        lastMoveTarget?.path?.takeIf { path ->
+            preferLastMoveTarget &&
+                File(path).isDirectory &&
+                safeRoots.any { isInsideRoot(it.path, path) } &&
+                itemsToMove.none { item -> isInsideRoot(item.path, path) }
+        }
+    }
     val startingRoot = remember(safeRoots, initialRootPath, initialDirectoryPath) {
         safeRoots.firstOrNull { isInsideRoot(it.path, initialDirectoryPath) }
             ?: safeRoots.firstOrNull { it.path == initialRootPath }
@@ -83,6 +96,9 @@ fun MoveToFolderDialog(
             } ?: startingRoot.path
         )
     }
+    var selectedDestinationPath by remember(preferredTargetPath) {
+        mutableStateOf(preferredTargetPath)
+    }
     var folders by remember { mutableStateOf<List<FileItem>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -90,6 +106,7 @@ fun MoveToFolderDialog(
     var rootMenuExpanded by remember { mutableStateOf(false) }
     var showCreateFolder by remember { mutableStateOf(false) }
     var folderName by remember { mutableStateOf("") }
+    var enterCreatedFolder by remember { mutableStateOf(false) }
     var creatingFolder by remember { mutableStateOf(false) }
     var moving by remember { mutableStateOf(false) }
     var resultMessage by remember { mutableStateOf<String?>(null) }
@@ -148,6 +165,7 @@ fun MoveToFolderDialog(
                     if (currentPath != root.path) {
                         IconButton(onClick = {
                             currentPath = File(currentPath).parentFile?.path ?: root.path
+                            selectedDestinationPath = currentPath
                         }) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_arrow_back),
@@ -157,43 +175,66 @@ fun MoveToFolderDialog(
                         }
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.move_destination),
-                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-                            color = AppColors.textSecondary
-                        )
-                        Text(
-                            text = currentPath,
-                            softWrap = true,
-                            color = AppColors.textPrimary
-                        )
-                    }
-                    if (safeRoots.size > 1) {
-                        androidx.compose.foundation.layout.Box {
-                            TextButton(onClick = { rootMenuExpanded = true }) {
-                                Text(stringResource(R.string.move_storage))
-                            }
-                            DropdownMenu(
-                                expanded = rootMenuExpanded,
-                                onDismissRequest = { rootMenuExpanded = false }
-                            ) {
-                                safeRoots.forEach { destination ->
-                                    DropdownMenuItem(
-                                        text = { Text(destination.name) },
-                                        onClick = {
-                                            rootMenuExpanded = false
-                                            root = destination
-                                            currentPath = destination.path
-                                            resultMessage = null
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = stringResource(R.string.move_destination),
+                                style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                                color = AppColors.textSecondary
+                            )
+                            if (safeRoots.size > 1) {
+                                androidx.compose.foundation.layout.Box {
+                                    TextButton(onClick = { rootMenuExpanded = true }) {
+                                        Text(root.name)
+                                    }
+                                    DropdownMenu(
+                                        expanded = rootMenuExpanded,
+                                        onDismissRequest = { rootMenuExpanded = false }
+                                    ) {
+                                        safeRoots.forEach { destination ->
+                                            DropdownMenuItem(
+                                                text = { Text(destination.name) },
+                                                onClick = {
+                                                    rootMenuExpanded = false
+                                                    root = destination
+                                                    currentPath = destination.path
+                                                    selectedDestinationPath = destination.path
+                                                    resultMessage = null
+                                                }
+                                            )
                                         }
-                                    )
+                                    }
                                 }
+                            } else {
+                                Text(
+                                    text = root.name,
+                                    style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                                    color = AppColors.brandAccent
+                                )
+                            }
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = selectedDestinationPath ?: currentPath,
+                                modifier = Modifier.weight(1f),
+                                softWrap = true,
+                                color = AppColors.textPrimary
+                            )
+                            if (selectedDestinationPath != null) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_check),
+                                    contentDescription = stringResource(R.string.move_destination_selected),
+                                    tint = AppColors.brandAccent
+                                )
                             }
                         }
                     }
                 }
                 TextButton(
-                    onClick = { folderName = ""; showCreateFolder = true },
+                    onClick = { folderName = ""; enterCreatedFolder = false; showCreateFolder = true },
                     enabled = !moving && !loading
                 ) { Text(stringResource(R.string.action_new_folder)) }
 
@@ -243,15 +284,16 @@ fun MoveToFolderDialog(
                                 availableRecentTargets,
                                 key = { "recent:${it.path}" }
                             ) { target ->
+                                val isTargetSelected = selectedDestinationPath?.let { canonicalPathEquals(target.path, it) } ?: false
                                 ListItem(
                                     headlineContent = {
-                                        Text(target.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        Text(target.name, softWrap = true)
                                     },
                                     supportingContent = {
                                         Text(
-                                            target.storageName ?: target.path,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                            text = target.storageName?.let { "$it • ${target.path}" } ?: target.path,
+                                            softWrap = true,
+                                            color = AppColors.textSecondary
                                         )
                                     },
                                     leadingContent = {
@@ -261,13 +303,25 @@ fun MoveToFolderDialog(
                                             tint = AppColors.brandAccent
                                         )
                                     },
-                                    modifier = Modifier.clickable {
+                                    trailingContent = if (isTargetSelected) {
+                                        {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_check),
+                                                contentDescription = stringResource(R.string.move_destination_selected),
+                                                tint = AppColors.brandAccent
+                                            )
+                                        }
+                                    } else null,
+                                    modifier = Modifier
+                                        .semantics { selected = isTargetSelected }
+                                        .clickable {
                                         val targetRoot = safeRoots.firstOrNull {
                                             isInsideRoot(it.path, target.path)
                                         }
                                         if (targetRoot != null) {
                                             root = targetRoot
                                             currentPath = target.path
+                                            selectedDestinationPath = target.path
                                             resultMessage = null
                                             error = null
                                         }
@@ -292,18 +346,20 @@ fun MoveToFolderDialog(
                             }
                         }
                         items(folders, key = { "folder:${it.id}" }) { folder ->
+                            val isSelfOrChild = itemsToMove.any { isInsideRoot(it.path, folder.path) }
                             ListItem(
-                                headlineContent = { Text(folder.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                headlineContent = { Text(folder.name, softWrap = true) },
                                 leadingContent = {
                                     Icon(
                                         painter = painterResource(R.drawable.ic_folder),
                                         contentDescription = null,
-                                        tint = AppColors.brandAccent
+                                        tint = if (isSelfOrChild) AppColors.textSecondary.copy(alpha = 0.5f) else AppColors.brandAccent
                                     )
                                 },
-                                modifier = Modifier.clickable {
+                                modifier = Modifier.clickable(enabled = !isSelfOrChild) {
                                     if (isInsideRoot(root.path, folder.path)) {
                                         currentPath = folder.path
+                                        selectedDestinationPath = folder.path
                                         resultMessage = null
                                     } else {
                                         error = context.getString(R.string.move_outside_storage)
@@ -321,13 +377,15 @@ fun MoveToFolderDialog(
                     TextButton(onClick = onDismiss, enabled = !moving && !creatingFolder) {
                         Text(stringResource(R.string.action_cancel))
                     }
+                val destinationToMove = selectedDestinationPath ?: currentPath
+                val isMovingInsideSelf = itemsToMove.any { isInsideRoot(it.path, destinationToMove) }
                 TextButton(
-                    enabled = !loading && !moving && error == null,
+                    enabled = !loading && !moving && error == null && !isMovingInsideSelf,
                     onClick = {
                         scope.launch {
                             moving = true
                             val results = try {
-                                onMove(itemsToMove, currentPath)
+                                onMove(itemsToMove, destinationToMove)
                             } catch (cancelled: CancellationException) {
                                 throw cancelled
                             } catch (failure: Exception) {
@@ -380,6 +438,23 @@ fun MoveToFolderDialog(
                     singleLine = true,
                     enabled = !creatingFolder
                 )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = !creatingFolder) { enterCreatedFolder = !enterCreatedFolder }
+                ) {
+                    Checkbox(
+                        checked = enterCreatedFolder,
+                        onCheckedChange = { enterCreatedFolder = it },
+                        enabled = !creatingFolder
+                    )
+                    Text(
+                        text = stringResource(R.string.dialog_new_folder_enter),
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                        color = AppColors.textPrimary
+                    )
+                }
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = { showCreateFolder = false }, enabled = !creatingFolder) {
                         Text(stringResource(R.string.action_cancel))
@@ -399,7 +474,12 @@ fun MoveToFolderDialog(
                             result.onSuccess {
                                 val newPath = File(currentPath, folderName.trim()).path
                                 showCreateFolder = false
-                                currentPath = newPath
+                                selectedDestinationPath = newPath
+                                if (enterCreatedFolder) {
+                                    currentPath = newPath
+                                } else {
+                                    reloadToken++
+                                }
                                 resultMessage = null
                                 error = null
                             }.onFailure {
@@ -421,3 +501,7 @@ private fun isInsideRoot(rootPath: String, candidatePath: String): Boolean = run
     val candidate = File(candidatePath).canonicalPath
     candidate == root || candidate.startsWith(root + File.separator)
 }.getOrDefault(false)
+
+private fun canonicalPathEquals(firstPath: String, secondPath: String): Boolean =
+    runCatching { File(firstPath).canonicalPath == File(secondPath).canonicalPath }
+        .getOrDefault(firstPath == secondPath)
