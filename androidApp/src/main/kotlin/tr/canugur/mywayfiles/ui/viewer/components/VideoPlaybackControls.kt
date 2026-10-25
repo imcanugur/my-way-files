@@ -34,6 +34,12 @@ enum class VideoPlaybackMode {
     PLAY_ONCE
 }
 
+fun VideoPlaybackMode.labelResource(): Int = when (this) {
+    VideoPlaybackMode.PLAY_IN_ORDER -> R.string.play_in_order
+    VideoPlaybackMode.REPEAT_CURRENT -> R.string.repeat_current_video
+    VideoPlaybackMode.PLAY_ONCE -> R.string.play_once
+}
+
 /** Focused playback controls, visually separate from the shared file action bar. */
 @Composable
 fun VideoPlaybackControls(
@@ -97,13 +103,7 @@ fun VideoPlaybackControls(
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium
                 )
-                val modeLabel = stringResource(
-                    when (playbackMode) {
-                        VideoPlaybackMode.PLAY_IN_ORDER -> R.string.play_in_order
-                        VideoPlaybackMode.REPEAT_CURRENT -> R.string.repeat_current_video
-                        VideoPlaybackMode.PLAY_ONCE -> R.string.play_once
-                    }
-                )
+                val modeLabel = stringResource(playbackMode.labelResource())
                 IconButton(
                     onClick = {
                         val nextMode = when (playbackMode) {

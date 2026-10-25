@@ -216,4 +216,5 @@
     <string name="operation_completed_count">%1$s completed for %2$d items</string>
     <string name="operation_add_favorite">Add to favorites</string>
     <string name="operation_remove_favorite">Remove from favorites</string>
+    <string name="settings_video_playback_mode_description">Choose what happens when a video ends. Your choice is remembered across videos and app restarts.</string>
 </resources>

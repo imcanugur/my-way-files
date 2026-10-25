@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.core.constants.MediaViewerTiming
 import tr.canugur.mywayfiles.core.util.FileShareHelper
+import tr.canugur.mywayfiles.data.preferences.AppSettingsStore
 import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.ui.explorer.components.PropertiesDialog
@@ -32,6 +33,7 @@ import tr.canugur.mywayfiles.ui.theme.Dimensions
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.viewer.components.InteractiveImagePage
 import tr.canugur.mywayfiles.ui.viewer.components.VideoSlidePage
+import tr.canugur.mywayfiles.ui.viewer.components.VideoPlaybackMode
 import tr.canugur.mywayfiles.ui.viewer.components.ViewerBottomBar
 import tr.canugur.mywayfiles.ui.viewer.components.ViewerTopBar
 
@@ -57,6 +59,13 @@ fun ImageViewerScreen(
     }
 
     val context = LocalContext.current
+    val appSettingsStore = remember(context) { AppSettingsStore(context) }
+    var playbackMode by remember(appSettingsStore) {
+        mutableStateOf(
+            runCatching { VideoPlaybackMode.valueOf(appSettingsStore.videoPlaybackModeName()) }
+                .getOrDefault(VideoPlaybackMode.PLAY_IN_ORDER)
+        )
+    }
     val safeInitial = initialIndex.coerceIn(0, images.size - 1)
     val pagerState = rememberPagerState(initialPage = safeInitial) { images.size }
     val scope = rememberCoroutineScope()
@@ -71,6 +80,36 @@ fun ImageViewerScreen(
                 images[safeInitial]
             } else null
         )
+    }
+    var playingVideoIndex by remember(initialIndex, initialPlayVideo) {
+        mutableIntStateOf(
+            if (initialPlayVideo && images.isNotEmpty() && FileTypeClassifier.isVideo(images[safeInitial])) {
+                images.take(safeInitial + 1).count { FileTypeClassifier.isVideo(it) } - 1
+            } else 0
+        )
+    }
+
+    LaunchedEffect(playingVideoItem?.path, images.map { it.path }, playbackMode) {
+        val activeVideo = playingVideoItem ?: return@LaunchedEffect
+        if (images.any { it.path == activeVideo.path }) return@LaunchedEffect
+
+        // Only sequential playback should advance after the current video is removed.
+        // Repeat and play-once modes return to the gallery without starting another video.
+        if (playbackMode != VideoPlaybackMode.PLAY_IN_ORDER) {
+            playingVideoItem = null
+            return@LaunchedEffect
+        }
+        val remainingVideos = images.filter { FileTypeClassifier.isVideo(it) }
+        val nextIndex = playingVideoIndex.coerceAtMost(remainingVideos.lastIndex)
+        if (nextIndex >= 0) {
+            val nextVideo = remainingVideos[nextIndex]
+            playingVideoIndex = nextIndex
+            playingVideoItem = nextVideo
+            val mediaIndex = images.indexOfFirst { it.path == nextVideo.path }
+            if (mediaIndex >= 0) pagerState.scrollToPage(mediaIndex)
+        } else {
+            playingVideoItem = null
+        }
     }
 
     // Auto-hide top and bottom bars after 3.5 seconds of inactivity
@@ -109,7 +148,10 @@ fun ImageViewerScreen(
                     VideoSlidePage(
                         fileItem = item,
                         isCurrentPage = page == pagerState.currentPage,
-                        onPlay = { playingVideoItem = item },
+                        onPlay = {
+                            playingVideoIndex = images.take(page + 1).count { FileTypeClassifier.isVideo(it) } - 1
+                            playingVideoItem = item
+                        },
                         onToggleControls = { controlsVisible = !controlsVisible }
                     )
                 } else {
@@ -216,14 +258,13 @@ fun ImageViewerScreen(
                 VideoViewerScreen(
                     videos = allVideos.ifEmpty { listOf(activeVideo) },
                     initialIndex = videoIndex,
-                    onDelete = { deleted ->
-                        playingVideoItem = null
-                        onDelete(deleted)
-                    },
+                    onDelete = onDelete,
                     onCopy = onCopy,
                     onMoveToFolder = onMoveToFolder,
                     autoHideControls = autoHideControls,
+                    onPlaybackModeChanged = { playbackMode = it },
                     onIndexChanged = { newIdx ->
+                        playingVideoIndex = newIdx
                         val currentPlayed = allVideos.getOrNull(newIdx)
                         if (currentPlayed != null) {
                             val mediaIdx = images.indexOfFirst { it.path == currentPlayed.path }

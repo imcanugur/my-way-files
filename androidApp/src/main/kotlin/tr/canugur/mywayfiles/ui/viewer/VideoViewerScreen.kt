@@ -19,6 +19,7 @@ import kotlinx.coroutines.delay
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.core.constants.MediaViewerTiming
 import tr.canugur.mywayfiles.core.util.FileShareHelper
+import tr.canugur.mywayfiles.data.preferences.AppSettingsStore
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.ui.explorer.components.PropertiesDialog
 import tr.canugur.mywayfiles.ui.viewer.components.VideoErrorCard
@@ -43,6 +44,7 @@ fun VideoViewerScreen(
     onMoveToFolder: (FileItem) -> Unit,
     autoHideControls: Boolean = true,
     onDismiss: () -> Unit,
+    onPlaybackModeChanged: ((VideoPlaybackMode) -> Unit)? = null,
     onIndexChanged: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -52,18 +54,27 @@ fun VideoViewerScreen(
     }
 
     val context = LocalContext.current
+    val appSettingsStore = remember(context) { AppSettingsStore(context) }
     var currentIndex by remember {
         mutableIntStateOf(initialIndex.coerceIn(0, videos.size - 1))
     }
-    val currentItem = videos.getOrNull(currentIndex) ?: videos[0]
+    val currentItem = videos[currentIndex.coerceIn(0, videos.lastIndex)]
 
     LaunchedEffect(currentIndex) {
         onIndexChanged?.invoke(currentIndex)
     }
+    LaunchedEffect(videos.map { it.path }) {
+        if (currentIndex > videos.lastIndex) currentIndex = videos.lastIndex
+    }
 
     var videoViewRef by remember { mutableStateOf<VideoView?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
-    var playbackMode by remember { mutableStateOf(VideoPlaybackMode.PLAY_IN_ORDER) }
+    var playbackMode by remember(appSettingsStore) {
+        mutableStateOf(
+            runCatching { VideoPlaybackMode.valueOf(appSettingsStore.videoPlaybackModeName()) }
+                .getOrDefault(VideoPlaybackMode.PLAY_IN_ORDER)
+        )
+    }
     val playbackModeState = rememberUpdatedState(playbackMode)
     var currentPositionMs by remember { mutableIntStateOf(0) }
     var durationMs by remember { mutableIntStateOf(0) }
@@ -269,7 +280,11 @@ fun VideoViewerScreen(
                 ) {
                     VideoPlaybackControls(
                         playbackMode = playbackMode,
-                        onPlaybackModeSelected = { playbackMode = it },
+                        onPlaybackModeSelected = { mode ->
+                            playbackMode = mode
+                            appSettingsStore.setVideoPlaybackModeName(mode.name)
+                            onPlaybackModeChanged?.invoke(mode)
+                        },
                         isPlaying = isPlaying,
                         currentPositionMs = currentPositionMs,
                         durationMs = durationMs,
@@ -333,11 +348,6 @@ fun VideoViewerScreen(
                         onDelete = {
                             videoViewRef?.stopPlayback()
                             onDelete(it)
-                            if (videos.size <= 1) {
-                                onDismiss()
-                            } else if (currentIndex >= videos.size - 1) {
-                                currentIndex = (videos.size - 2).coerceAtLeast(0)
-                            }
                         }
                     )
                 }

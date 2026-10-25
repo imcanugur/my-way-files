@@ -202,4 +202,5 @@
     <string name="operation_completed_count">%1$s %2$d öğe için tamamlandı</string>
     <string name="operation_add_favorite">Favorilere ekleme</string>
     <string name="operation_remove_favorite">Favorilerden kaldırma</string>
+    <string name="settings_video_playback_mode_description">Video bittiğinde ne olacağını seç. Seçimin videolar ve uygulama yeniden açıldığında da korunur.</string>
 </resources>

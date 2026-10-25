@@ -49,10 +49,13 @@ import kotlin.math.roundToInt
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.core.constants.ProjectLinks
 import tr.canugur.mywayfiles.data.preferences.SavedLocationLimits
+import tr.canugur.mywayfiles.data.preferences.AppSettingsStore
 import tr.canugur.mywayfiles.domain.model.FileViewMode
 import tr.canugur.mywayfiles.domain.model.GridTileSize
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
+import tr.canugur.mywayfiles.ui.viewer.components.VideoPlaybackMode
+import tr.canugur.mywayfiles.ui.viewer.components.labelResource
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -92,6 +95,14 @@ fun AppSettingsScreen(
     }
     var viewModeMenuExpanded by remember { mutableStateOf(false) }
     var gridSizeMenuExpanded by remember { mutableStateOf(false) }
+    var playbackModeMenuExpanded by remember { mutableStateOf(false) }
+    val appSettingsStore = remember(context) { AppSettingsStore(context) }
+    var playbackMode by remember(appSettingsStore) {
+        mutableStateOf(
+            runCatching { VideoPlaybackMode.valueOf(appSettingsStore.videoPlaybackModeName()) }
+                .getOrDefault(VideoPlaybackMode.PLAY_IN_ORDER)
+        )
+    }
     BackHandler(enabled = !isDrawerOpen, onBack = onNavigateBack)
 
     Scaffold(
@@ -245,6 +256,34 @@ fun AppSettingsScreen(
                             checked = autoHideViewerControls,
                             onCheckedChange = onAutoHideViewerControlsChange
                         )
+                    }
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.playback_mode)) },
+                    supportingContent = { Text(stringResource(R.string.settings_video_playback_mode_description)) },
+                    trailingContent = {
+                        Box {
+                            TextButton(onClick = { playbackModeMenuExpanded = true }) {
+                                Text(stringResource(playbackMode.labelResource()))
+                            }
+                            DropdownMenu(
+                                expanded = playbackModeMenuExpanded,
+                                onDismissRequest = { playbackModeMenuExpanded = false }
+                            ) {
+                                VideoPlaybackMode.values().forEach { mode ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(mode.labelResource())) },
+                                        onClick = {
+                                            playbackModeMenuExpanded = false
+                                            playbackMode = mode
+                                            appSettingsStore.setVideoPlaybackModeName(mode.name)
+                                        }
+                                    )
+                                }
+                            }
+                        }
                     }
                 )
             }

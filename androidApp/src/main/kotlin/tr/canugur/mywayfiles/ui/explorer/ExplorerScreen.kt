@@ -487,7 +487,6 @@ fun ExplorerScreen(
                         if (permanentlyDeleteInsteadOfTrashing) ExplorerUiEvent.Delete(trashItem)
                         else ExplorerUiEvent.MoveToTrash(trashItem)
                     )
-                    if (activeMediaIndex != null) activeMediaIndex = null
                     itemToMoveToTrash = null
                 },
                 onDismiss = { itemToMoveToTrash = null }

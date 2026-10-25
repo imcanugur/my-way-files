@@ -28,6 +28,14 @@ class AppSettingsStore(context: Context) {
         preferences.edit().putBoolean(KEY_PERMANENT_DELETE_MODE, enabled).apply()
     }
 
+    fun videoPlaybackModeName(): String =
+        preferences.getString(KEY_VIDEO_PLAYBACK_MODE, DEFAULT_VIDEO_PLAYBACK_MODE)
+            ?: DEFAULT_VIDEO_PLAYBACK_MODE
+
+    fun setVideoPlaybackModeName(modeName: String) {
+        preferences.edit().putString(KEY_VIDEO_PLAYBACK_MODE, modeName).apply()
+    }
+
     fun autoHideViewerControls(): Boolean = preferences.getBoolean(KEY_AUTO_HIDE_VIEWER_CONTROLS, true)
 
     fun setAutoHideViewerControls(enabled: Boolean) {
@@ -46,6 +54,8 @@ class AppSettingsStore(context: Context) {
         const val KEY_CONFIRM_TRASH = "confirm_before_trash"
         const val KEY_PERMANENT_DELETE_MODE = "permanent_delete_mode"
         const val KEY_AUTO_HIDE_VIEWER_CONTROLS = "auto_hide_viewer_controls"
+        const val KEY_VIDEO_PLAYBACK_MODE = "video_playback_mode"
+        const val DEFAULT_VIDEO_PLAYBACK_MODE = "PLAY_IN_ORDER"
         const val KEY_PREFER_LAST_MOVE_TARGET = "prefer_last_move_target"
     }
 }
