@@ -315,11 +315,18 @@ class ExplorerViewModel(
         }
     }
 
-    fun canNavigateUp(): Boolean {
-        val rootNormalized = File(rootPath).canonicalPath
-        val activeNormalized = File(activePath).canonicalPath
-        return activeNormalized != rootNormalized && activeNormalized.startsWith(rootNormalized)
-    }
+    fun canNavigateUp(): Boolean = isStrictDescendant(rootPath, activePath)
+
+    private fun isAtOrBelowRoot(root: String, candidate: String): Boolean = runCatching {
+        val normalizedRoot = File(root).canonicalPath.trimEnd(File.separatorChar)
+        val normalizedCandidate = File(candidate).canonicalPath
+        val rootPrefix = if (normalizedRoot.isEmpty()) File.separator else "$normalizedRoot${File.separator}"
+        normalizedCandidate == normalizedRoot || normalizedCandidate.startsWith(rootPrefix)
+    }.getOrDefault(false)
+
+    private fun isStrictDescendant(root: String, candidate: String): Boolean =
+        isAtOrBelowRoot(root, candidate) &&
+            runCatching { File(root).canonicalPath != File(candidate).canonicalPath }.getOrDefault(false)
 
     fun currentDirectoryPath(): String = activePath
 
@@ -357,12 +364,9 @@ class ExplorerViewModel(
     fun navigateUp(): Boolean {
         if (!canNavigateUp()) return false
         val parent = File(activePath).parentFile ?: return false
-        val rootCanonical = File(rootPath).canonicalPath
-        if (parent.canonicalPath.startsWith(rootCanonical)) {
-            loadDirectory(parent.canonicalPath)
-            return true
-        }
-        return false
+        if (!isAtOrBelowRoot(rootPath, parent.path)) return false
+        loadDirectory(parent.canonicalPath)
+        return true
     }
 
     fun loadDirectory(
@@ -370,6 +374,7 @@ class ExplorerViewModel(
         isRefreshing: Boolean = false,
         operationError: String? = null
     ) {
+        if (fileRepository.hasStoragePermission()) activePath = path
         val requestId = ++directoryRequestId
         viewModelScope.launch {
             if (!fileRepository.hasStoragePermission()) {
