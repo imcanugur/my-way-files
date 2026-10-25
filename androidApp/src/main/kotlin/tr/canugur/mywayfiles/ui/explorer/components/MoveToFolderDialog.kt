@@ -1,6 +1,5 @@
 package tr.canugur.mywayfiles.ui.explorer.components
 
-import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -44,6 +43,9 @@ import tr.canugur.mywayfiles.data.preferences.SavedLocation
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 import tr.canugur.mywayfiles.ui.common.AppModalBottomSheet
+import tr.canugur.mywayfiles.ui.common.showOperationFeedback
+import tr.canugur.mywayfiles.ui.explorer.FileOperation
+import tr.canugur.mywayfiles.ui.explorer.OperationFeedback
 import java.io.File
 
 data class MoveTargetRoot(val name: String, val path: String)
@@ -394,12 +396,6 @@ fun MoveToFolderDialog(
                             val succeeded = results.count { it.isSuccess }
                             val failed = results.size - succeeded
                             if (failed == 0 && results.isNotEmpty()) {
-                                val message = context.getString(
-                                    R.string.move_completed_count,
-                                    succeeded,
-                                    results.size
-                                )
-                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                                 moving = false
                                 onDismiss()
                                 return@launch
@@ -472,6 +468,7 @@ fun MoveToFolderDialog(
                                 Result.failure(failure)
                             }
                             result.onSuccess {
+                                context.showOperationFeedback(OperationFeedback(FileOperation.CREATE_FOLDER, 1, 0))
                                 val newPath = File(currentPath, folderName.trim()).path
                                 showCreateFolder = false
                                 selectedDestinationPath = newPath
@@ -483,6 +480,9 @@ fun MoveToFolderDialog(
                                 resultMessage = null
                                 error = null
                             }.onFailure {
+                                context.showOperationFeedback(
+                                    OperationFeedback(FileOperation.CREATE_FOLDER, 0, 1, it.localizedMessage)
+                                )
                                 error = it.localizedMessage ?: ""
                                 showCreateFolder = false
                             }

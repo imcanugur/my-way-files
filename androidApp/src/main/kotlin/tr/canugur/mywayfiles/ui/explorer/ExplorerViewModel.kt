@@ -6,8 +6,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -45,6 +47,8 @@ class ExplorerViewModel(
     val uiState: StateFlow<ExplorerUiState> = _uiState.asStateFlow()
 
     private val _searchState = MutableStateFlow(ExplorerSearchState())
+    private val _operationFeedback = MutableSharedFlow<OperationFeedback>(extraBufferCapacity = 8)
+    val operationFeedback = _operationFeedback.asSharedFlow()
     val searchState: StateFlow<ExplorerSearchState> = _searchState.asStateFlow()
 
     private var activePath: String = rootPath
@@ -82,21 +86,25 @@ class ExplorerViewModel(
             is ExplorerUiEvent.Copy -> {
                 activeClipboard = Clipboard(item = event.item, isCut = false)
                 updateStateClipboard()
+                _operationFeedback.tryEmit(OperationFeedback(FileOperation.COPY, 1, 0))
             }
             is ExplorerUiEvent.Cut -> {
                 activeClipboard = Clipboard(item = event.item, isCut = true)
                 updateStateClipboard()
+                _operationFeedback.tryEmit(OperationFeedback(FileOperation.CUT, 1, 0))
             }
             is ExplorerUiEvent.BatchCopy -> {
                 if (event.items.isNotEmpty()) {
                     activeClipboard = Clipboard(items = event.items, isCut = false)
                     updateStateClipboard()
+                    _operationFeedback.tryEmit(OperationFeedback(FileOperation.COPY, event.items.size, 0))
                 }
             }
             is ExplorerUiEvent.BatchCut -> {
                 if (event.items.isNotEmpty()) {
                     activeClipboard = Clipboard(items = event.items, isCut = true)
                     updateStateClipboard()
+                    _operationFeedback.tryEmit(OperationFeedback(FileOperation.CUT, event.items.size, 0))
                 }
             }
             is ExplorerUiEvent.ClearClipboard -> {
@@ -200,7 +208,7 @@ class ExplorerViewModel(
             if (results.all { it.isSuccess } && clip.isCut) {
                 activeClipboard = null
             }
-            finishMutation(results, "Unable to paste the selected items")
+            finishMutation(results, FileOperation.PASTE, "Unable to paste the selected items")
         }
     }
 
@@ -208,6 +216,7 @@ class ExplorerViewModel(
         viewModelScope.launch {
             finishMutation(
                 listOf(fileRepository.rename(item.path, newName)),
+                FileOperation.RENAME,
                 "Unable to rename ${item.name}"
             )
         }
@@ -217,6 +226,7 @@ class ExplorerViewModel(
         viewModelScope.launch {
             finishMutation(
                 listOf(recycleBinRepository.moveToTrash(item)),
+                FileOperation.MOVE_TO_TRASH,
                 "Unable to move ${item.name} to Recycle Bin"
             )
         }
@@ -227,7 +237,7 @@ class ExplorerViewModel(
             val results = items.map { item ->
                 recycleBinRepository.moveToTrash(item)
             }
-            finishMutation(results, "Unable to move all selected items to Recycle Bin")
+            finishMutation(results, FileOperation.MOVE_TO_TRASH, "Unable to move all selected items to Recycle Bin")
         }
     }
 
@@ -235,6 +245,7 @@ class ExplorerViewModel(
         viewModelScope.launch {
             finishMutation(
                 listOf(fileRepository.delete(item.path)),
+                FileOperation.DELETE,
                 "Unable to delete ${item.name}"
             )
         }
@@ -245,7 +256,7 @@ class ExplorerViewModel(
             val results = items.map { item ->
                 fileRepository.delete(item.path)
             }
-            finishMutation(results, "Unable to delete all selected items")
+            finishMutation(results, FileOperation.DELETE, "Unable to delete all selected items")
         }
     }
 
@@ -253,12 +264,13 @@ class ExplorerViewModel(
         viewModelScope.launch {
             finishMutation(
                 listOf(fileRepository.createFolder(activePath, name)),
+                FileOperation.CREATE_FOLDER,
                 "Unable to create folder $name"
             )
         }
     }
 
-    private fun finishMutation(results: List<Result<Unit>>, fallbackError: String) {
+    private fun finishMutation(results: List<Result<Unit>>, operation: FileOperation, fallbackError: String) {
         val failedCount = results.count { it.isFailure }
         val succeededCount = results.size - failedCount
         val detail = results.firstNotNullOfOrNull { result ->
@@ -269,6 +281,7 @@ class ExplorerViewModel(
             succeededCount > 0 -> "$succeededCount of ${results.size} items completed. $detail"
             else -> detail
         }
+        _operationFeedback.tryEmit(OperationFeedback(operation, succeededCount, failedCount, detail))
         loadDirectory(activePath, isRefreshing = true, operationError = failureMessage)
     }
 
@@ -315,7 +328,7 @@ class ExplorerViewModel(
             if (alreadyAtTarget) Result.success(Unit)
             else fileRepository.move(item.path, targetPath)
         }
-        finishMutation(results, "Unable to move the selected media")
+        finishMutation(results, FileOperation.MOVE_MEDIA, "Unable to move the selected media")
         return results
     }
 

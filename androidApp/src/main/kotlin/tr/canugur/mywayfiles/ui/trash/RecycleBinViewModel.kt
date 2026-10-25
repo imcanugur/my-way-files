@@ -4,12 +4,16 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import tr.canugur.mywayfiles.data.repository.RecycleBinRepositoryImpl
 import tr.canugur.mywayfiles.domain.model.TrashedItem
+import tr.canugur.mywayfiles.ui.explorer.FileOperation
+import tr.canugur.mywayfiles.ui.explorer.OperationFeedback
 import tr.canugur.mywayfiles.domain.repository.RecycleBinRepository
 
 /**
@@ -21,6 +25,8 @@ class RecycleBinViewModel(
 
     private val _uiState = MutableStateFlow<RecycleBinUiState>(RecycleBinUiState.Loading)
     val uiState: StateFlow<RecycleBinUiState> = _uiState.asStateFlow()
+    private val _operationFeedback = MutableSharedFlow<OperationFeedback>(extraBufferCapacity = 8)
+    val operationFeedback = _operationFeedback.asSharedFlow()
     private var loadRequestId = 0L
 
     fun onEvent(event: RecycleBinUiEvent) {
@@ -68,46 +74,56 @@ class RecycleBinViewModel(
 
     private fun restore(item: TrashedItem) {
         viewModelScope.launch {
-            repository.restore(item).fold(
-                onSuccess = { loadItems() },
-                onFailure = { loadItems(it.localizedMessage ?: "Unable to restore item") }
-            )
+            val result = repository.restore(item)
+            _operationFeedback.tryEmit(OperationFeedback(
+                FileOperation.RESTORE, if (result.isSuccess) 1 else 0, if (result.isFailure) 1 else 0,
+                result.exceptionOrNull()?.localizedMessage
+            ))
+            result.fold(onSuccess = { loadItems() }, onFailure = { loadItems(it.localizedMessage ?: "Unable to restore item") })
         }
     }
 
     private fun deletePermanently(item: TrashedItem) {
         viewModelScope.launch {
-            repository.deletePermanently(item).fold(
-                onSuccess = { loadItems() },
-                onFailure = { loadItems(it.localizedMessage ?: "Unable to delete item") }
-            )
+            val result = repository.deletePermanently(item)
+            _operationFeedback.tryEmit(OperationFeedback(
+                FileOperation.PERMANENT_DELETE, if (result.isSuccess) 1 else 0, if (result.isFailure) 1 else 0,
+                result.exceptionOrNull()?.localizedMessage
+            ))
+            result.fold(onSuccess = { loadItems() }, onFailure = { loadItems(it.localizedMessage ?: "Unable to delete item") })
         }
     }
 
     private fun restoreSelected(items: List<TrashedItem>) {
         viewModelScope.launch {
-            val failures = items.mapNotNull { item ->
-                repository.restore(item).exceptionOrNull()?.let { "${item.name}: ${it.localizedMessage}" }
-            }
-            loadItems(failures.takeIf { it.isNotEmpty() }?.joinToString("\n"))
+            val results = items.map { repository.restore(it) }
+            val failures = results.count { it.isFailure }
+            val succeeded = results.size - failures
+            _operationFeedback.tryEmit(OperationFeedback(FileOperation.RESTORE, succeeded, failures))
+            val detail = results.firstNotNullOfOrNull { it.exceptionOrNull()?.localizedMessage }
+            loadItems(if (failures == 0) null else detail ?: "Unable to restore selected items")
         }
     }
 
     private fun deleteSelectedPermanently(items: List<TrashedItem>) {
         viewModelScope.launch {
-            val failures = items.mapNotNull { item ->
-                repository.deletePermanently(item).exceptionOrNull()?.let { "${item.name}: ${it.localizedMessage}" }
-            }
-            loadItems(failures.takeIf { it.isNotEmpty() }?.joinToString("\n"))
+            val results = items.map { repository.deletePermanently(it) }
+            val failures = results.count { it.isFailure }
+            val succeeded = results.size - failures
+            _operationFeedback.tryEmit(OperationFeedback(FileOperation.PERMANENT_DELETE, succeeded, failures))
+            val detail = results.firstNotNullOfOrNull { it.exceptionOrNull()?.localizedMessage }
+            loadItems(if (failures == 0) null else detail ?: "Unable to permanently delete selected items")
         }
     }
 
     private fun emptyTrash() {
         viewModelScope.launch {
-            repository.emptyTrash().fold(
-                onSuccess = { loadItems() },
-                onFailure = { loadItems(it.localizedMessage ?: "Unable to empty Recycle Bin") }
-            )
+            val result = repository.emptyTrash()
+            _operationFeedback.tryEmit(OperationFeedback(
+                FileOperation.EMPTY_TRASH, if (result.isSuccess) 1 else 0, if (result.isFailure) 1 else 0,
+                result.exceptionOrNull()?.localizedMessage
+            ))
+            result.fold(onSuccess = { loadItems() }, onFailure = { loadItems(it.localizedMessage ?: "Unable to empty Recycle Bin") })
         }
     }
 

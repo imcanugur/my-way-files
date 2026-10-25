@@ -18,10 +18,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.flow.collect
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.domain.model.TrashedItem
 import tr.canugur.mywayfiles.ui.common.RetryErrorState
 import tr.canugur.mywayfiles.ui.common.OperationErrorBanner
+import tr.canugur.mywayfiles.ui.common.showOperationFeedback
 import tr.canugur.mywayfiles.ui.common.AppModalBottomSheet
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
@@ -45,6 +47,9 @@ fun RecycleBinScreen(
         factory = RecycleBinViewModel.provideFactory(context)
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(viewModel) {
+        viewModel.operationFeedback.collect(context::showOperationFeedback)
+    }
 
     var showEmptyTrashConfirm by remember { mutableStateOf(false) }
     var itemToDeletePermanently by remember { mutableStateOf<TrashedItem?>(null) }

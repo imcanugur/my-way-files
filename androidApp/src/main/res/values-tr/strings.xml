@@ -186,4 +186,20 @@
     <string name="drawer_favorite_folders">Favori klasörler</string>
     <string name="drawer_favorite_files">Favori dosyalar</string>
     <string name="drawer_open_locations">Konumlara göz at</string>
+    <string name="operation_completed">%1$s tamamlandı</string>
+    <string name="operation_partial">%1$s: %2$d başarılı, %3$d başarısız</string>
+    <string name="operation_failed">%1$s başarısız</string>
+    <string name="operation_copy">Panoya kopyalama</string>
+    <string name="operation_cut">Panoya kesme</string>
+    <string name="operation_paste">Yapıştırma</string>
+    <string name="operation_rename">Yeniden adlandırma</string>
+    <string name="operation_move_to_trash">Geri Dönüşüm Kutusu’na taşıma</string>
+    <string name="operation_delete">Kalıcı silme</string>
+    <string name="operation_create_folder">Klasör oluşturma</string>
+    <string name="operation_move">Taşıma</string>
+    <string name="operation_restore">Geri yükleme</string>
+    <string name="operation_empty_trash">Geri Dönüşüm Kutusu’nu boşaltma</string>
+    <string name="operation_completed_count">%1$s %2$d öğe için tamamlandı</string>
+    <string name="operation_add_favorite">Favorilere ekleme</string>
+    <string name="operation_remove_favorite">Favorilerden kaldırma</string>
 </resources>

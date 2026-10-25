@@ -200,4 +200,20 @@
     <string name="drawer_favorite_folders">Favorite folders</string>
     <string name="drawer_favorite_files">Favorite files</string>
     <string name="drawer_open_locations">Browse locations</string>
+    <string name="operation_completed">%1$s completed</string>
+    <string name="operation_partial">%1$s: %2$d succeeded, %3$d failed</string>
+    <string name="operation_failed">%1$s failed</string>
+    <string name="operation_copy">Copy to clipboard</string>
+    <string name="operation_cut">Cut to clipboard</string>
+    <string name="operation_paste">Paste</string>
+    <string name="operation_rename">Rename</string>
+    <string name="operation_move_to_trash">Move to Recycle Bin</string>
+    <string name="operation_delete">Permanent delete</string>
+    <string name="operation_create_folder">Create folder</string>
+    <string name="operation_move">Move</string>
+    <string name="operation_restore">Restore</string>
+    <string name="operation_empty_trash">Empty Recycle Bin</string>
+    <string name="operation_completed_count">%1$s completed for %2$d items</string>
+    <string name="operation_add_favorite">Add to favorites</string>
+    <string name="operation_remove_favorite">Remove from favorites</string>
 </resources>

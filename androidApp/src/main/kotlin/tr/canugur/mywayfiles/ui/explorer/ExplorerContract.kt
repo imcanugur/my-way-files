@@ -5,6 +5,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.domain.model.SortOption
 
+enum class FileOperation {
+    COPY, CUT, PASTE, RENAME, MOVE_TO_TRASH, DELETE, CREATE_FOLDER, MOVE_MEDIA,
+    RESTORE, PERMANENT_DELETE, EMPTY_TRASH, ADD_FAVORITE, REMOVE_FAVORITE
+}
+
+data class OperationFeedback(
+    val operation: FileOperation,
+    val succeeded: Int,
+    val failed: Int,
+    val detail: String? = null
+)
+
 data class Breadcrumb(
     val title: String,
     val path: String

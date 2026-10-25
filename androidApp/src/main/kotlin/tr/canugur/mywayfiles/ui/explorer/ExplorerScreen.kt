@@ -42,6 +42,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import java.io.File
 import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.core.constants.SearchTiming
@@ -52,6 +53,7 @@ import tr.canugur.mywayfiles.domain.model.FileViewMode
 import tr.canugur.mywayfiles.domain.model.SortOption
 import tr.canugur.mywayfiles.data.preferences.SavedLocation
 import tr.canugur.mywayfiles.ui.common.RetryErrorState
+import tr.canugur.mywayfiles.ui.common.showOperationFeedback
 import tr.canugur.mywayfiles.ui.common.OperationErrorBanner
 import tr.canugur.mywayfiles.ui.common.AppModalBottomSheet
 import tr.canugur.mywayfiles.ui.explorer.components.*
@@ -109,6 +111,11 @@ fun ExplorerScreen(
         if (viewModel.currentDirectoryPath() != initialPath) viewModel.loadDirectory(initialPath)
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(viewModel) {
+        viewModel.operationFeedback.collect { feedback ->
+            context.showOperationFeedback(feedback)
+        }
+    }
     val searchState by viewModel.searchState.collectAsStateWithLifecycle()
 
     var isSelectionMode by remember { mutableStateOf(false) }
@@ -260,7 +267,17 @@ fun ExplorerScreen(
             searchError = searchState.error,
             onOpenDrawer = onOpenDrawer,
             favoritePaths = favoritePaths,
-            onToggleFavorite = { item -> onToggleFavorite(SavedLocation(item.path, item.name, item.isDirectory)) },
+            onToggleFavorite = { item ->
+                val wasFavorite = item.path in favoritePaths
+                onToggleFavorite(SavedLocation(item.path, item.name, item.isDirectory))
+                context.showOperationFeedback(
+                    OperationFeedback(
+                        if (wasFavorite) FileOperation.REMOVE_FAVORITE else FileOperation.ADD_FAVORITE,
+                        1,
+                        0
+                    )
+                )
+            },
             onBackClick = {
                 if (isSelectionMode) {
                     isSelectionMode = false
