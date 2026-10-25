@@ -70,8 +70,6 @@ fun ExplorerTopBar(
     onRefreshClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var optionsMenuExpanded by remember { mutableStateOf(false) }
-    var sortMenuExpanded by remember { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     LaunchedEffect(isSearchActive) {
@@ -225,29 +223,6 @@ fun ExplorerTopBar(
                             tint = AppColors.textSecondary
                         )
                     }
-                    if (!compactToolbar) {
-                        SortMenuAnchor(
-                            expanded = sortMenuExpanded,
-                            onExpand = { sortMenuExpanded = true },
-                            onDismiss = { sortMenuExpanded = false },
-                            sortOption = sortOption,
-                            onCreateFolderClick = onCreateFolderClick,
-                            onEnterSelectionMode = onEnterSelectionMode,
-                            onSortOptionSelected = onSortOptionSelected,
-                            onRefreshClick = onRefreshClick
-                        )
-                    }
-                    ExplorerOverflowAnchor(
-                        expanded = optionsMenuExpanded,
-                        onExpand = { optionsMenuExpanded = true },
-                        onDismiss = { optionsMenuExpanded = false },
-                        sortOption = sortOption,
-                        onCreateFolderClick = onCreateFolderClick,
-                        onEnterSelectionMode = onEnterSelectionMode,
-                        onSortOptionSelected = onSortOptionSelected,
-                        onRefreshClick = onRefreshClick,
-                        onOpenDrawer = onOpenDrawer
-                    )
                 },
                 modifier = Modifier.fillMaxWidth(),
                 windowInsets = WindowInsets(0, 0, 0, 0),
@@ -258,70 +233,5 @@ fun ExplorerTopBar(
         }
         }
         }
-    }
-}
-
-@Composable
-private fun ExplorerOverflowAnchor(
-    expanded: Boolean,
-    onExpand: () -> Unit,
-    onDismiss: () -> Unit,
-    sortOption: SortOption,
-    onCreateFolderClick: () -> Unit,
-    onEnterSelectionMode: () -> Unit,
-    onSortOptionSelected: (SortOption) -> Unit,
-    onRefreshClick: () -> Unit,
-    onOpenDrawer: () -> Unit
-) {
-    androidx.compose.foundation.layout.Box {
-        IconButton(onClick = onExpand) {
-            Icon(
-                painter = painterResource(R.drawable.ic_more_vert),
-                contentDescription = stringResource(R.string.options_menu),
-                tint = AppColors.textPrimary
-            )
-        }
-        ExplorerOptionsMenu(
-            expanded = expanded,
-            currentSortOption = sortOption,
-            onDismissRequest = onDismiss,
-            onCreateFolderClick = onCreateFolderClick,
-            onEnterSelectionMode = onEnterSelectionMode,
-            onSortOptionSelected = onSortOptionSelected,
-            onRefreshClick = onRefreshClick,
-            onOpenDrawer = onOpenDrawer
-        )
-    }
-}
-
-@Composable
-private fun SortMenuAnchor(
-    expanded: Boolean,
-    onExpand: () -> Unit,
-    onDismiss: () -> Unit,
-    sortOption: SortOption,
-    onCreateFolderClick: () -> Unit,
-    onEnterSelectionMode: () -> Unit,
-    onSortOptionSelected: (SortOption) -> Unit,
-    onRefreshClick: () -> Unit
-) {
-    androidx.compose.foundation.layout.Box {
-        IconButton(onClick = onExpand) {
-            Icon(
-                painter = painterResource(R.drawable.ic_sort),
-                contentDescription = stringResource(R.string.sort_by),
-                tint = AppColors.textSecondary
-            )
-        }
-        ExplorerOptionsMenu(
-            expanded = expanded,
-            currentSortOption = sortOption,
-            onDismissRequest = onDismiss,
-            onCreateFolderClick = onCreateFolderClick,
-            onEnterSelectionMode = onEnterSelectionMode,
-            onSortOptionSelected = onSortOptionSelected,
-            onRefreshClick = onRefreshClick,
-            sortOnly = true
-        )
     }
 }

@@ -1012,6 +1012,14 @@ fun ExplorerScreenContent(
                 onProperties = { singleSelected?.let(onProperties) },
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
+        } else if (activeClipboard == null && !isSearchActive) {
+            ExplorerFloatingActionBar(
+                onCreateFolder = onCreateFolderClick,
+                onEnterSelectionMode = onEnterSelectionMode,
+                sortOption = sortOption,
+                onSortOptionSelected = onSortOptionSelected,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         }
         }
     }
