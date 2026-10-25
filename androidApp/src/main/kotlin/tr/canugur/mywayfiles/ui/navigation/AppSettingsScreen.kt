@@ -75,8 +75,10 @@ fun AppSettingsScreen(
     onRecentMoveTargetLimitChange: (Int) -> Unit,
     confirmBeforeMovingToTrash: Boolean,
     onConfirmBeforeMovingToTrashChange: (Boolean) -> Unit,
-    confirmBeforePermanentDelete: Boolean,
-    onConfirmBeforePermanentDeleteChange: (Boolean) -> Unit,
+    permanentlyDeleteInsteadOfTrashing: Boolean,
+    onPermanentlyDeleteInsteadOfTrashingChange: (Boolean) -> Unit,
+
+
     isDrawerOpen: Boolean,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
@@ -269,27 +271,31 @@ fun AppSettingsScreen(
             }
             item {
                 ListItem(
-                    headlineContent = { Text(stringResource(R.string.settings_confirm_trash)) },
-                    supportingContent = { Text(stringResource(R.string.settings_confirm_trash_description)) },
+                    headlineContent = { Text(stringResource(R.string.settings_permanent_delete_mode)) },
+                    supportingContent = {
+                        Text(stringResource(R.string.settings_permanent_delete_mode_description))
+                    },
                     trailingContent = {
                         Switch(
-                            checked = confirmBeforeMovingToTrash,
-                            onCheckedChange = onConfirmBeforeMovingToTrashChange
+                            checked = permanentlyDeleteInsteadOfTrashing,
+                            onCheckedChange = onPermanentlyDeleteInsteadOfTrashingChange
                         )
                     }
                 )
             }
-            item {
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.settings_confirm_permanent_delete)) },
-                    supportingContent = { Text(stringResource(R.string.settings_confirm_permanent_delete_description)) },
-                    trailingContent = {
-                        Switch(
-                            checked = confirmBeforePermanentDelete,
-                            onCheckedChange = onConfirmBeforePermanentDeleteChange
-                        )
-                    }
-                )
+            if (!permanentlyDeleteInsteadOfTrashing) {
+                item {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.settings_confirm_trash)) },
+                        supportingContent = { Text(stringResource(R.string.settings_confirm_trash_description)) },
+                        trailingContent = {
+                            Switch(
+                                checked = confirmBeforeMovingToTrash,
+                                onCheckedChange = onConfirmBeforeMovingToTrashChange
+                            )
+                        }
+                    )
+                }
             }
             item {
                 HorizontalDivider(

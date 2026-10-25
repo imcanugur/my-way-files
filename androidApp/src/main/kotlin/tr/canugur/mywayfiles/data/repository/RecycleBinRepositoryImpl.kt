@@ -1,7 +1,9 @@
 package tr.canugur.mywayfiles.data.repository
 
 import android.content.Context
+import android.os.Build
 import android.os.Environment
+import android.os.storage.StorageManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -25,50 +27,59 @@ class RecycleBinRepositoryImpl private constructor(
 
     private val directoryCache = DirectoryCache.getInstance(context)
 
-    private val trashRoot: File
-        get() {
-            val extDir = Environment.getExternalStorageDirectory()
-            if (extDir != null && extDir.exists()) {
-                val candidate = File(extDir, ".myway_trash")
-                if (candidate.exists() || candidate.mkdirs()) {
-                    return candidate
-                }
-            }
-            val fallback = File(context.filesDir, ".myway_trash")
-            if (!fallback.exists()) fallback.mkdirs()
-            return fallback
-        }
-
     private val allTrashRoots: List<File>
         get() {
-            val roots = LinkedHashSet<File>()
-            val extDir = Environment.getExternalStorageDirectory()
-            if (extDir != null && extDir.exists()) {
-                val candidate = File(extDir, ".myway_trash")
-                if (candidate.exists() || candidate.mkdirs()) {
-                    roots.add(candidate)
-                }
-            }
-            val internal = File(context.filesDir, ".myway_trash")
-            if (internal.exists()) {
-                roots.add(internal)
-            }
-            if (roots.isEmpty()) {
-                if (!internal.exists()) internal.mkdirs()
-                roots.add(internal)
-            }
-            return roots.toList()
+            val roots = storageRoots().map { File(it, TRASH_DIRECTORY) } +
+                File(context.filesDir, TRASH_DIRECTORY) // Read the legacy app-private fallback bin.
+            return roots.distinctBy(::canonicalPath).filter { it.isDirectory }
         }
 
-    private val filesDir: File
-        get() {
-            val dir = File(trashRoot, "files")
-            if (!dir.exists()) dir.mkdirs()
-            return dir
+    /** Returns mounted storage roots that this app can address, including removable volumes. */
+    private fun storageRoots(): List<File> {
+        val roots = LinkedHashMap<String, File>()
+        fun add(path: String?) {
+            if (path.isNullOrBlank()) return
+            val directory = File(path)
+            if (directory.exists() && directory.isDirectory) roots[canonicalPath(directory)] = directory
         }
 
-    private val manifestFile: File
-        get() = File(trashRoot, "manifest.json")
+        add(Environment.getExternalStorageDirectory().absolutePath)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val manager = context.getSystemService(Context.STORAGE_SERVICE) as? StorageManager
+            manager?.storageVolumes?.forEach { volume ->
+                runCatching { volume.directory?.absolutePath }.getOrNull()?.let(::add)
+            }
+        }
+        context.getExternalFilesDirs(null).forEach { appDirectory ->
+            val path = appDirectory?.absolutePath ?: return@forEach
+            val appDataMarker = "${File.separator}Android${File.separator}data${File.separator}"
+            val markerIndex = path.indexOf(appDataMarker)
+            if (markerIndex > 0) add(path.substring(0, markerIndex))
+        }
+        add(context.filesDir.absolutePath)
+        return roots.values.toList()
+    }
+
+    /** Find the deepest mounted volume containing the file, so trash stays on that volume. */
+    private fun storageRootFor(file: File): File? {
+        val path = canonicalPath(file)
+        return storageRoots()
+            .filter { isSameOrInside(path, canonicalPath(it)) }
+            .maxByOrNull { canonicalPath(it).length }
+    }
+
+    private fun trashFilesDirectoryFor(source: File): File {
+        val volumeRoot = storageRootFor(source)
+            ?: throw IOException("Unable to determine the storage volume for ${source.path}")
+        if (isSameOrInside(canonicalPath(source), canonicalPath(File(volumeRoot, TRASH_DIRECTORY)))) {
+            throw IOException("Items already in the recycle bin cannot be moved to trash again")
+        }
+        val directory = File(File(volumeRoot, TRASH_DIRECTORY), TRASH_FILES_DIRECTORY)
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw IOException("Unable to create a recycle bin on ${volumeRoot.path}")
+        }
+        return directory
+    }
 
     override suspend fun getTrashedItems(): Result<List<TrashedItem>> = withContext(Dispatchers.IO) {
         synchronized(this@RecycleBinRepositoryImpl) {
@@ -94,7 +105,7 @@ class RecycleBinRepositoryImpl private constructor(
                 }
 
                 val id = UUID.randomUUID().toString()
-                val trashFile = File(filesDir, "${id}_${item.name}")
+                val trashFile = File(trashFilesDirectoryFor(source), "${id}_${item.name}")
                 val trashedItem = TrashedItem(
                     id = id,
                     name = item.name,
@@ -288,7 +299,7 @@ class RecycleBinRepositoryImpl private constructor(
         val results = mutableListOf<TrashedItem>()
         val seenIds = mutableSetOf<String>()
         for (root in allTrashRoots) {
-            val file = File(root, "manifest.json")
+            val file = File(root, MANIFEST_FILE)
             if (!file.exists()) continue
             try {
                 val jsonString = file.readText()
@@ -318,25 +329,33 @@ class RecycleBinRepositoryImpl private constructor(
     }
 
     private fun writeManifest(items: List<TrashedItem>) {
-        val array = JSONArray()
-        for (item in items) {
-            val obj = JSONObject().apply {
-                put("id", item.id)
-                put("name", item.name)
-                put("trashPath", item.trashPath)
-                put("originalPath", item.originalPath)
-                put("deletedAtMs", item.deletedAtMs)
-                put("sizeBytes", item.sizeBytes)
-                put("isDirectory", item.isDirectory)
+        val roots = LinkedHashMap<String, File>()
+        (allTrashRoots + items.mapNotNull { item ->
+            File(item.trashPath).parentFile?.parentFile
+        }).forEach { root -> roots[canonicalPath(root)] = root }
+
+        roots.values.forEach { root ->
+            val filesDirectory = File(root, TRASH_FILES_DIRECTORY)
+            val volumeItems = items.filter { isSameOrInside(it.trashPath, canonicalPath(filesDirectory)) }
+            val array = JSONArray()
+            volumeItems.forEach { item ->
+                array.put(
+                    JSONObject().apply {
+                        put("id", item.id)
+                        put("name", item.name)
+                        put("trashPath", item.trashPath)
+                        put("originalPath", item.originalPath)
+                        put("deletedAtMs", item.deletedAtMs)
+                        put("sizeBytes", item.sizeBytes)
+                        put("isDirectory", item.isDirectory)
+                    }
+                )
             }
-            array.put(obj)
-        }
-        val content = array.toString(2)
-        allTrashRoots.forEach { root ->
+            val content = array.toString(2)
             if (!root.exists() && !root.mkdirs()) throw IOException("Unable to access the recycle bin")
-            val destination = File(root, "manifest.json")
-            val temporary = File(root, "manifest.json.tmp")
-            val backup = File(root, "manifest.json.bak")
+            val destination = File(root, MANIFEST_FILE)
+            val temporary = File(root, "$MANIFEST_FILE.tmp")
+            val backup = File(root, "$MANIFEST_FILE.bak")
             temporary.writeText(content)
             backup.delete()
             if (destination.exists() && !destination.renameTo(backup)) {
@@ -352,7 +371,19 @@ class RecycleBinRepositoryImpl private constructor(
         }
     }
 
+    private fun canonicalPath(file: File): String =
+        runCatching { file.canonicalPath }.getOrDefault(file.absolutePath)
+
+    private fun isSameOrInside(candidatePath: String, parentPath: String): Boolean {
+        val normalizedParent = parentPath.trimEnd(File.separatorChar)
+        return candidatePath == normalizedParent || candidatePath.startsWith(normalizedParent + File.separator)
+    }
+
     companion object {
+        private const val TRASH_DIRECTORY = ".myway_trash"
+        private const val TRASH_FILES_DIRECTORY = "files"
+        private const val MANIFEST_FILE = "manifest.json"
+
         @Volatile
         private var instance: RecycleBinRepositoryImpl? = null
 

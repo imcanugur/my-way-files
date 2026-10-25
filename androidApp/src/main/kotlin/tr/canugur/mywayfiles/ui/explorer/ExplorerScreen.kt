@@ -75,6 +75,7 @@ fun ExplorerScreen(
     startInSearch: Boolean = false,
     showHiddenFilesSetting: Boolean,
     confirmBeforeMovingToTrash: Boolean,
+    permanentlyDeleteInsteadOfTrashing: Boolean,
     autoHideViewerControls: Boolean,
     viewMode: FileViewMode,
     gridTileSize: Int,
@@ -189,14 +190,18 @@ fun ExplorerScreen(
     var itemsToMoveToFolder by remember { mutableStateOf<List<FileItem>?>(null) }
 
     fun requestMoveToTrash(item: FileItem) {
-        if (confirmBeforeMovingToTrash) itemToMoveToTrash = item
-        else viewModel.onEvent(ExplorerUiEvent.MoveToTrash(item))
+        if (permanentlyDeleteInsteadOfTrashing || confirmBeforeMovingToTrash) {
+            itemToMoveToTrash = item
+        } else {
+            viewModel.onEvent(ExplorerUiEvent.MoveToTrash(item))
+        }
     }
 
     fun requestBatchMoveToTrash(items: List<FileItem>) {
-        if (confirmBeforeMovingToTrash) itemsToMoveToTrash = items
-        else viewModel.onEvent(ExplorerUiEvent.BatchMoveToTrash(items))
-        if (!confirmBeforeMovingToTrash) {
+        if (permanentlyDeleteInsteadOfTrashing || confirmBeforeMovingToTrash) {
+            itemsToMoveToTrash = items
+        } else {
+            viewModel.onEvent(ExplorerUiEvent.BatchMoveToTrash(items))
             isSelectionMode = false
             selectedPaths = emptySet()
         }
@@ -459,8 +464,12 @@ fun ExplorerScreen(
         if (trashItem != null) {
             DeleteConfirmDialog(
                 fileName = trashItem.name,
+                permanentlyDelete = permanentlyDeleteInsteadOfTrashing,
                 onConfirm = {
-                    viewModel.onEvent(ExplorerUiEvent.MoveToTrash(trashItem))
+                    viewModel.onEvent(
+                        if (permanentlyDeleteInsteadOfTrashing) ExplorerUiEvent.Delete(trashItem)
+                        else ExplorerUiEvent.MoveToTrash(trashItem)
+                    )
                     if (activeMediaIndex != null) activeMediaIndex = null
                     itemToMoveToTrash = null
                 },
@@ -476,19 +485,40 @@ fun ExplorerScreen(
                         .padding(bottom = Dimensions.SpacingLarge),
                     verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingMedium)
                 ) {
-                    Text(stringResource(R.string.dialog_move_to_trash_title), style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
-                    Text(stringResource(R.string.batch_delete_confirm, trashItems.size))
+                    Text(
+                        stringResource(
+                            if (permanentlyDeleteInsteadOfTrashing) R.string.dialog_permanent_delete_title
+                            else R.string.dialog_move_to_trash_title
+                        ),
+                        style = androidx.compose.material3.MaterialTheme.typography.titleLarge
+                    )
+                    Text(
+                        stringResource(
+                            if (permanentlyDeleteInsteadOfTrashing) R.string.dialog_batch_permanent_delete_confirm
+                            else R.string.batch_delete_confirm,
+                            trashItems.size
+                        )
+                    )
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         androidx.compose.material3.TextButton(onClick = { itemsToMoveToTrash = null }) {
                             Text(stringResource(R.string.action_cancel))
                         }
                         androidx.compose.material3.TextButton(onClick = {
-                            viewModel.onEvent(ExplorerUiEvent.BatchMoveToTrash(trashItems))
+                            viewModel.onEvent(
+                                if (permanentlyDeleteInsteadOfTrashing) ExplorerUiEvent.BatchDelete(trashItems)
+                                else ExplorerUiEvent.BatchMoveToTrash(trashItems)
+                            )
                             itemsToMoveToTrash = null
                             isSelectionMode = false
                             selectedPaths = emptySet()
                         }) {
-                            Text(stringResource(R.string.action_move_to_trash), color = AppColors.statusCritical)
+                            Text(
+                                stringResource(
+                                    if (permanentlyDeleteInsteadOfTrashing) R.string.action_delete_permanently
+                                    else R.string.action_move_to_trash
+                                ),
+                                color = AppColors.statusCritical
+                            )
                         }
                     }
                 }

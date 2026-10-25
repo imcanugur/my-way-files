@@ -185,12 +185,14 @@
     <string name="about_developer">Developer profile</string>
     <string name="about_developer_description">More projects by Can Ugur</string>
     <string name="about_link_open_failed">No app is available to open this link.</string>
+    <string name="settings_permanent_delete_mode">Permanently delete instead of using Recycle Bin</string>
+    <string name="settings_permanent_delete_mode_description">Bypass the Recycle Bin. Every permanent deletion requires confirmation.</string>
+    <string name="dialog_permanent_delete_title">Permanently delete?</string>
+    <string name="dialog_permanent_delete_confirm">Permanently delete "%1$s"? This cannot be undone.</string>
     <string name="settings_confirm_trash">Confirm before moving to Recycle Bin</string>
     <string name="dialog_move_to_trash_title">Move to Recycle Bin?</string>
     <string name="action_move_to_trash">Move to Recycle Bin</string>
     <string name="settings_confirm_trash_description">Ask before moving files and folders to the Recycle Bin. Deleted items remain recoverable there.</string>
-    <string name="settings_confirm_permanent_delete">Confirm permanent deletion</string>
-    <string name="settings_confirm_permanent_delete_description">Ask before permanently deleting an item or selection. Emptying the entire Recycle Bin always requires confirmation.</string>
     <string name="navigate_back">Back</string>
     <string name="drawer_favorites_section">Favorites</string>
     <string name="add_favorite">Add to favorites</string>

@@ -59,9 +59,10 @@ fun App() {
     var confirmBeforeMovingToTrash by remember(appSettingsStore) {
         mutableStateOf(appSettingsStore.confirmBeforeMovingToTrash())
     }
-    var confirmBeforePermanentDelete by remember(appSettingsStore) {
-        mutableStateOf(appSettingsStore.confirmBeforePermanentDelete())
+    var permanentlyDeleteInsteadOfTrashing by remember(appSettingsStore) {
+        mutableStateOf(appSettingsStore.permanentlyDeleteInsteadOfTrashing())
     }
+
     var autoHideViewerControls by remember(appSettingsStore) {
         mutableStateOf(appSettingsStore.autoHideViewerControls())
     }
@@ -228,6 +229,7 @@ fun App() {
                         startInSearch = destination.startInSearch,
                         showHiddenFilesSetting = showHiddenFiles,
                         confirmBeforeMovingToTrash = confirmBeforeMovingToTrash,
+                        permanentlyDeleteInsteadOfTrashing = permanentlyDeleteInsteadOfTrashing,
                         autoHideViewerControls = autoHideViewerControls,
                         viewMode = explorerViewMode,
                         gridTileSize = gridTileSize.minWidthDp,
@@ -270,7 +272,7 @@ fun App() {
 
                 is NavigationDestination.RecycleBin -> {
                     RecycleBinScreen(
-                        confirmBeforePermanentDelete = confirmBeforePermanentDelete,
+
                         onNavigateBack = { currentDestination = NavigationDestination.Home }
                     )
                 }
@@ -319,10 +321,10 @@ fun App() {
                             appSettingsStore.setConfirmBeforeMovingToTrash(enabled)
                             confirmBeforeMovingToTrash = enabled
                         },
-                        confirmBeforePermanentDelete = confirmBeforePermanentDelete,
-                        onConfirmBeforePermanentDeleteChange = { enabled ->
-                            appSettingsStore.setConfirmBeforePermanentDelete(enabled)
-                            confirmBeforePermanentDelete = enabled
+                        permanentlyDeleteInsteadOfTrashing = permanentlyDeleteInsteadOfTrashing,
+                        onPermanentlyDeleteInsteadOfTrashingChange = { enabled ->
+                            appSettingsStore.setPermanentlyDeleteInsteadOfTrashing(enabled)
+                            permanentlyDeleteInsteadOfTrashing = enabled
                         },
                         onRecentFolderLimitChange = { limit ->
                             locationStore.setRecentFolderLimit(limit)

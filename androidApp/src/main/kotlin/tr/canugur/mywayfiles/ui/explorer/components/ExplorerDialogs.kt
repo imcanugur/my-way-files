@@ -103,15 +103,28 @@ fun CreateFolderDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
 }
 
 @Composable
-fun DeleteConfirmDialog(fileName: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun DeleteConfirmDialog(fileName: String, permanentlyDelete: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AppModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Dimensions.SpacingLarge)
                 .padding(bottom = Dimensions.SpacingLarge),
             verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingMedium)
         ) {
-            Text(stringResource(R.string.dialog_move_to_trash_title), style = MaterialTheme.typography.titleLarge)
-            Text(stringResource(R.string.dialog_move_to_trash_confirm, fileName), color = AppColors.textSecondary)
+            Text(
+                stringResource(
+                    if (permanentlyDelete) R.string.dialog_permanent_delete_title
+                    else R.string.dialog_move_to_trash_title
+                ),
+                style = MaterialTheme.typography.titleLarge
+            )
+            Text(
+                stringResource(
+                    if (permanentlyDelete) R.string.dialog_permanent_delete_confirm
+                    else R.string.dialog_move_to_trash_confirm,
+                    fileName
+                ),
+                color = AppColors.textSecondary
+            )
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
                 Button(
@@ -121,7 +134,14 @@ fun DeleteConfirmDialog(fileName: String, onConfirm: () -> Unit, onDismiss: () -
                         contentColor = AppColors.textPrimary
                     ),
                     shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
-                ) { Text(stringResource(R.string.action_move_to_trash)) }
+                ) {
+                    Text(
+                        stringResource(
+                            if (permanentlyDelete) R.string.action_delete_permanently
+                            else R.string.action_move_to_trash
+                        )
+                    )
+                }
             }
         }
     }

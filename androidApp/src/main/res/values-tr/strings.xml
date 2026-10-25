@@ -172,11 +172,13 @@
     <string name="about_developer">Geliştirici profili</string>
     <string name="about_developer_description">Can Ugur’un diğer projeleri</string>
     <string name="about_link_open_failed">Bağlantıyı açabilecek bir uygulama bulunamadı.</string>
+    <string name="settings_permanent_delete_mode">Geri Dönüşüm Kutusu yerine kalıcı sil</string>
+    <string name="settings_permanent_delete_mode_description">Dosyaları Geri Dönüşüm Kutusunu atlayarak sil. Kalıcı silme öncesinde her zaman onay istenir.</string>
+    <string name="dialog_permanent_delete_title">Kalıcı olarak silinsin mi?</string>
+    <string name="dialog_permanent_delete_confirm">"%1$s" kalıcı olarak silinsin mi? Bu işlem geri alınamaz.</string>
     <string name="settings_confirm_trash">Geri Dönüşüm Kutusuna taşımadan önce sor</string>
     <string name="dialog_move_to_trash_title">Geri Dönüşüm Kutusuna taşınsın mı?</string>
     <string name="settings_confirm_trash_description">Dosya ve klasörler Geri Dönüşüm Kutusuna taşınırken onay iste. Silinen öğeler burada geri yüklenebilir.</string>
-    <string name="settings_confirm_permanent_delete">Kalıcı silmeden önce onay iste</string>
-    <string name="settings_confirm_permanent_delete_description">Bir öğe veya seçili öğeler kalıcı silinirken onay iste. Geri Dönüşüm Kutusunun tamamını boşaltmak her zaman onay gerektirir.</string>
     <string name="navigate_back">Geri</string>
     <string name="drawer_favorites_section">Favoriler</string>
     <string name="add_favorite">Favorilere ekle</string>
