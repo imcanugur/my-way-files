@@ -57,6 +57,7 @@ fun ExplorerTopBar(
     onOpenSearch: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onCloseSearch: () -> Unit,
+    onNavigateUp: () -> Unit,
     onOpenDrawer: () -> Unit,
     onCreateFolderClick: () -> Unit,
     onEnterSelectionMode: () -> Unit,
@@ -168,12 +169,22 @@ fun ExplorerTopBar(
                 val compactToolbar = maxWidth < Dimensions.CompactActionBreakpoint
                 TopAppBar(
                 navigationIcon = {
-                    IconButton(onClick = onOpenDrawer) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_menu),
-                            contentDescription = stringResource(R.string.open_navigation),
-                            tint = AppColors.textPrimary
-                        )
+                    if (breadcrumbs.size > 1) {
+                        IconButton(onClick = onNavigateUp) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_arrow_back),
+                                contentDescription = stringResource(R.string.navigate_up),
+                                tint = AppColors.textPrimary
+                            )
+                        }
+                    } else {
+                        IconButton(onClick = onOpenDrawer) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_menu),
+                                contentDescription = stringResource(R.string.open_navigation),
+                                tint = AppColors.textPrimary
+                            )
+                        }
                     }
                 },
                 title = {

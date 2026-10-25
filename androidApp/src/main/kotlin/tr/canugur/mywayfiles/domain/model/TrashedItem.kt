@@ -10,5 +10,7 @@ data class TrashedItem(
     val originalPath: String,
     val deletedAtMs: Long,
     val sizeBytes: Long,
-    val isDirectory: Boolean
+    val isDirectory: Boolean,
+    /** Display-only volume label derived from the original path. */
+    val storageName: String? = null
 )

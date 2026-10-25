@@ -84,6 +84,15 @@ fun TrashedItemRow(
 
             Spacer(modifier = Modifier.height(Dimensions.SpacingMicro))
 
+            item.storageName?.let { storageName ->
+                Text(
+                    text = stringResource(R.string.trash_storage, storageName),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppColors.textMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
             Text(
                 text = "${stringResource(R.string.original_location)}: ${item.originalPath}",
                 style = MaterialTheme.typography.bodySmall,

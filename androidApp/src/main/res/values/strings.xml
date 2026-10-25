@@ -222,4 +222,20 @@
     <string name="operation_progress_item">%1$s · item %2$d of %3$d: %4$s</string>
     <string name="move_progress_item">Moving item %1$d of %2$d: %3$s</string>
     <string name="move_progress_bytes">%1$s of %2$s • %3$d%%</string>
+    <string name="accessibility_selected">Selected</string>
+    <string name="accessibility_not_selected">Not selected</string>
+    <string name="search_results_heading">Search results</string>
+    <string name="search_scope">Searching in %1$s</string>
+    <string name="operation_clipboard_ready_one">1 item ready to %1$s</string>
+    <string name="operation_clipboard_ready_many">%1$d items ready to %2$s</string>
+    <string name="operation_copy_verb">copy</string>
+    <string name="operation_move_verb">move</string>
+    <string name="file_location">In %1$s</string>
+    <string name="storage_internal">Internal storage</string>
+    <string name="storage_unknown">Storage device</string>
+    <string name="trash_storage">Storage: %1$s</string>
+    <string name="operation_cancel">Cancel</string>
+    <string name="operation_cancelled_with_progress">%1$s stopped. %2$d completed; %3$d not processed.</string>
+    <string name="operation_cancelled_partial">%1$s stopped. %2$d completed, %3$d failed; %4$d not processed.</string>
+    <string name="operation_cancelled_short">Operation cancelled.</string>
 </resources>

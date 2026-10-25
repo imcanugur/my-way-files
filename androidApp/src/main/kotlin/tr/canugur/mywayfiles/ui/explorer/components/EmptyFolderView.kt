@@ -1,14 +1,15 @@
 package tr.canugur.mywayfiles.ui.explorer.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.sp
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
@@ -18,7 +19,8 @@ import tr.canugur.mywayfiles.ui.theme.Dimensions
  */
 @Composable
 fun EmptyFolderView(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onCreateFolder: (() -> Unit)? = null
 ) {
     Column(
         modifier = modifier
@@ -36,8 +38,13 @@ fun EmptyFolderView(
 
         Text(
             text = stringResource(R.string.folder_empty),
-            fontSize = 13.sp,
-            color = AppColors.textMuted
+            style = MaterialTheme.typography.bodyMedium,
+            color = AppColors.textSecondary
         )
+        if (onCreateFolder != null) {
+            Button(onClick = onCreateFolder) {
+                Text(stringResource(R.string.action_new_folder))
+            }
+        }
     }
 }

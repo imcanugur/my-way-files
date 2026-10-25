@@ -14,4 +14,6 @@ interface RecycleBinRepository {
     suspend fun restore(trashedItem: TrashedItem, onProgress: (Long, Long) -> Unit): Result<Unit> = restore(trashedItem)
     suspend fun deletePermanently(trashedItem: TrashedItem): Result<Unit>
     suspend fun emptyTrash(): Result<Unit>
+    suspend fun emptyTrash(onItemProgress: (itemName: String, itemIndex: Int, itemCount: Int) -> Unit): Result<Unit> =
+        emptyTrash()
 }

@@ -23,14 +23,17 @@ data class FileOperationProgress(
     val itemIndex: Int,
     val itemCount: Int,
     val copiedBytes: Long = 0L,
-    val totalBytes: Long = 0L
+    val totalBytes: Long = 0L,
+    val canCancel: Boolean = false
 )
 
 data class OperationFeedback(
     val operation: FileOperation,
     val succeeded: Int,
     val failed: Int,
-    val detail: String? = null
+    val detail: String? = null,
+    val cancelled: Boolean = false,
+    val notProcessed: Int = 0
 )
 
 data class Breadcrumb(

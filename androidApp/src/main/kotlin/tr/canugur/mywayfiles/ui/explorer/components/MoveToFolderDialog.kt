@@ -39,6 +39,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
@@ -46,6 +48,7 @@ import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
@@ -124,12 +127,15 @@ fun MoveToFolderDialog(
     var enterCreatedFolder by remember { mutableStateOf(false) }
     var creatingFolder by remember { mutableStateOf(false) }
     var moving by remember { mutableStateOf(false) }
+    var moveJob by remember { mutableStateOf<Job?>(null) }
     val moveProgressFlow = remember(itemsToMove) { MutableStateFlow<MoveProgress?>(null) }
     val moveProgress by moveProgressFlow.collectAsState()
     var resultMessage by remember { mutableStateOf<String?>(null) }
     var resultIsError by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    val folderListMaxHeight = minOf(Dimensions.MoveFolderListMaxHeight, screenHeight * 0.32f)
 
     LaunchedEffect(currentPath, reloadToken) {
         loading = true
@@ -241,6 +247,8 @@ fun MoveToFolderDialog(
                                 text = selectedDestinationPath ?: currentPath,
                                 modifier = Modifier.weight(1f),
                                 softWrap = true,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
                                 color = AppColors.textPrimary
                             )
                             if (selectedDestinationPath != null) {
@@ -331,7 +339,7 @@ fun MoveToFolderDialog(
                         resultMessage.orEmpty(),
                         color = if (resultIsError) AppColors.statusCritical else AppColors.textPrimary
                     )
-                    else -> LazyColumn(modifier = Modifier.heightIn(max = Dimensions.MoveFolderListMaxHeight)) {
+                    else -> LazyColumn(modifier = Modifier.heightIn(max = folderListMaxHeight)) {
                         if (availableRecentTargets.isNotEmpty()) {
                             item(key = "recent_targets_header") {
                                 Text(
@@ -356,7 +364,8 @@ fun MoveToFolderDialog(
                                     supportingContent = {
                                         Text(
                                             text = target.storageName?.let { "$it • ${target.path}" } ?: target.path,
-                                            softWrap = true,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
                                             color = AppColors.textSecondary
                                         )
                                     },
@@ -435,12 +444,17 @@ fun MoveToFolderDialog(
                 }
             }
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                if (resultMessage != null) {
-                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_done)) }
-                } else {
-                    TextButton(onClick = onDismiss, enabled = !moving && !creatingFolder) {
+                when {
+                    moving -> TextButton(onClick = { moveJob?.cancel() }) {
+                        Text(stringResource(R.string.operation_cancel))
+                    }
+                    resultMessage != null -> TextButton(onClick = onDismiss) {
+                        Text(stringResource(R.string.action_done))
+                    }
+                    else -> TextButton(onClick = onDismiss, enabled = !creatingFolder) {
                         Text(stringResource(R.string.action_cancel))
                     }
+                }
                 val destinationToMove = selectedDestinationPath ?: currentPath
                 val isMovingInsideSelf = itemsToMove.any { isInsideRoot(it.path, destinationToMove) }
                 TextButton(
@@ -449,33 +463,38 @@ fun MoveToFolderDialog(
                         if (!moving && !loading) {
                             moving = true
                             moveProgressFlow.value = MoveProgress(0, itemsToMove.size, 0L, 0L)
-                            scope.launch {
-                                val results = try {
-                                    onMove(itemsToMove, destinationToMove) { progress ->
-                                        moveProgressFlow.value = progress
+                            moveJob = scope.launch {
+                                try {
+                                    val results = try {
+                                        onMove(itemsToMove, destinationToMove) { progress ->
+                                            moveProgressFlow.value = progress
+                                        }
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (failure: Exception) {
+                                        listOf(Result.failure(failure))
+                                    }
+                                    val succeeded = results.count { it.isSuccess }
+                                    val failed = results.size - succeeded
+                                    if (failed == 0 && results.isNotEmpty()) {
+                                        onDismiss()
+                                    } else {
+                                        val detail = results.firstNotNullOfOrNull { it.exceptionOrNull()?.localizedMessage }
+                                        resultMessage = context.getString(
+                                            R.string.move_partial_result,
+                                            succeeded,
+                                            results.size,
+                                            detail ?: context.getString(R.string.error_unknown)
+                                        )
+                                        resultIsError = true
                                     }
                                 } catch (cancelled: CancellationException) {
-                                    throw cancelled
-                                } catch (failure: Exception) {
-                                    listOf(Result.failure(failure))
-                                }
-                                val succeeded = results.count { it.isSuccess }
-                                val failed = results.size - succeeded
-                                if (failed == 0 && results.isNotEmpty()) {
-                                    moving = false
-                                    onDismiss()
-                                    return@launch
-                                } else {
-                                    val detail = results.firstNotNullOfOrNull { it.exceptionOrNull()?.localizedMessage }
-                                    resultMessage = context.getString(
-                                        R.string.move_partial_result,
-                                        succeeded,
-                                        results.size,
-                                        detail ?: context.getString(R.string.error_unknown)
-                                    )
+                                    resultMessage = context.getString(R.string.operation_cancelled_short)
                                     resultIsError = true
+                                } finally {
+                                    moving = false
+                                    moveJob = null
                                 }
-                                moving = false
                             }
                         }
                     }
@@ -485,7 +504,6 @@ fun MoveToFolderDialog(
             }
             }
         }
-    }
     }
 
     if (showCreateFolder) {

@@ -115,15 +115,7 @@ fun VideoViewerScreen(
 
     Surface(
         color = AppColors.mediaCanvas,
-        modifier = modifier
-            .fillMaxSize()
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = {
-                        controlsVisible = !controlsVisible
-                    }
-                )
-            }
+        modifier = modifier.fillMaxSize()
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             // Hardware Video Surface: Isolated per video path to eliminate MediaPlayer state corruption
@@ -217,7 +209,11 @@ fun VideoViewerScreen(
                         videoViewRef = vv
                         localVv = vv
                     },
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(currentItem.path) {
+                            detectTapGestures(onTap = { controlsVisible = !controlsVisible })
+                        }
                 )
             }
 

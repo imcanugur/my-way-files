@@ -101,6 +101,7 @@ fun RecycleBinScreen(
                 activeOperation?.let { progress ->
                     tr.canugur.mywayfiles.ui.common.FileOperationProgressBanner(
                         progress = progress,
+                        onCancel = viewModel::cancelCurrentOperation,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }

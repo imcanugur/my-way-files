@@ -12,17 +12,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.core.util.ByteFormatter
 import tr.canugur.mywayfiles.core.util.DateTimeFormatter
-import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
@@ -39,6 +40,7 @@ fun FileItemRow(
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     compact: Boolean = false,
+    locationLabel: String? = null,
     onClick: (FileItem) -> Unit,
     onLongClick: ((FileItem) -> Unit)? = null,
     onToggleSelect: ((FileItem) -> Unit)? = null,
@@ -52,6 +54,7 @@ fun FileItemRow(
     onToggleFavorite: (FileItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val shape = RoundedCornerShape(Dimensions.CornerRadiusMedium)
     val rowBackground = if (isSelected) AppColors.brandAccentSubtle else androidx.compose.ui.graphics.Color.Transparent
 
@@ -75,10 +78,17 @@ fun FileItemRow(
                         onLongClick?.invoke(item)
                     }
                 },
-                role = Role.Button
+                role = if (isSelectionMode) Role.Checkbox else Role.Button
             )
             .semantics {
-                if (isSelectionMode) selected = isSelected
+                if (isSelectionMode) {
+                    selected = isSelected
+                    stateDescription = if (isSelected) {
+                        context.getString(R.string.accessibility_selected)
+                    } else {
+                        context.getString(R.string.accessibility_not_selected)
+                    }
+                }
             }
             .padding(horizontal = Dimensions.SpacingSmall, vertical = if (compact) Dimensions.SpacingSmall else Dimensions.SpacingMedium)
             .alpha(if (item.isHidden) 0.62f else 1f),
@@ -149,22 +159,18 @@ fun FileItemRow(
                     )
                 }
             }
+            locationLabel?.let { location ->
+                Text(
+                    text = location,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppColors.textMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
 
         if (!isSelectionMode) {
-            if (FileTypeClassifier.isImage(item) || FileTypeClassifier.isVideo(item)) {
-                IconButton(
-                    onClick = { onMoveToFolder(item) },
-                    modifier = Modifier.size(Dimensions.ActionButtonSize)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_folder),
-                        contentDescription = stringResource(R.string.action_move_to_folder),
-                        tint = AppColors.brandAccent,
-                        modifier = Modifier.size(Dimensions.IconSizeMedium)
-                    )
-                }
-            }
             FileItemActionsMenu(
                 item = item,
                 isFavorite = isFavorite,

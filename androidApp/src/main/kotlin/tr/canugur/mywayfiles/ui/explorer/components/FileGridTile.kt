@@ -21,6 +21,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -39,6 +41,7 @@ fun FileGridTile(
     isFavorite: Boolean,
     isSelectionMode: Boolean,
     isSelected: Boolean,
+    locationLabel: String? = null,
     onClick: (FileItem) -> Unit,
     onLongClick: (FileItem) -> Unit,
     onToggleSelect: (FileItem) -> Unit,
@@ -52,17 +55,25 @@ fun FileGridTile(
     onToggleFavorite: (FileItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val tileShape = RoundedCornerShape(Dimensions.CornerRadiusMedium)
     Column(
         modifier = modifier
             .clip(tileShape)
             .background(if (isSelected) AppColors.brandAccentSubtle else androidx.compose.ui.graphics.Color.Transparent)
             .combinedClickable(
-                role = Role.Button,
+                role = if (isSelectionMode) Role.Checkbox else Role.Button,
                 onClick = { if (isSelectionMode) onToggleSelect(item) else onClick(item) },
                 onLongClick = { if (isSelectionMode) onToggleSelect(item) else onLongClick(item) }
             )
-            .semantics { if (isSelectionMode) selected = isSelected }
+            .semantics {
+                if (isSelectionMode) {
+                    selected = isSelected
+                    stateDescription = context.getString(
+                        if (isSelected) R.string.accessibility_selected else R.string.accessibility_not_selected
+                    )
+                }
+            }
             .padding(Dimensions.SpacingSmall),
         verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall)
     ) {
@@ -123,6 +134,15 @@ fun FileGridTile(
                 style = MaterialTheme.typography.bodySmall,
                 color = AppColors.textMuted,
                 maxLines = 1
+            )
+        }
+        locationLabel?.let { location ->
+            Text(
+                text = location,
+                style = MaterialTheme.typography.bodySmall,
+                color = AppColors.textMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

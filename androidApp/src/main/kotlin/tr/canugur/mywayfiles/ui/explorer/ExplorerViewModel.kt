@@ -64,6 +64,10 @@ class ExplorerViewModel(
     private var searchJob: Job? = null
     private var activeMutationJob: Job? = null
 
+    fun cancelCurrentOperation() {
+        activeMutationJob?.cancel()
+    }
+
     init {
         activePath = initialPath
         viewModelScope.launch {
@@ -248,10 +252,24 @@ class ExplorerViewModel(
             val results = mutableListOf<Result<Unit>>()
             try {
                 items.forEachIndexed { index, item ->
-                    _activeOperation.value = FileOperationProgress(operation, item.name, index, items.size, 0L, 0L)
+                    _activeOperation.value = FileOperationProgress(
+                        operation = operation,
+                        itemName = item.name,
+                        itemIndex = index,
+                        itemCount = items.size,
+                        canCancel = !item.isDirectory && operation in setOf(FileOperation.PASTE, FileOperation.MOVE_TO_TRASH)
+                    )
                     results += try {
                         action(item) { copied, total ->
-                            _activeOperation.value = FileOperationProgress(operation, item.name, index, items.size, copied, total)
+                            _activeOperation.value = FileOperationProgress(
+                                operation = operation,
+                                itemName = item.name,
+                                itemIndex = index,
+                                itemCount = items.size,
+                                copiedBytes = copied,
+                                totalBytes = total,
+                                canCancel = !item.isDirectory && operation in setOf(FileOperation.PASTE, FileOperation.MOVE_TO_TRASH)
+                            )
                         }
                     } catch (cancelled: kotlinx.coroutines.CancellationException) {
                         throw cancelled
@@ -263,6 +281,20 @@ class ExplorerViewModel(
                     activeClipboard = null
                 }
                 finishMutation(results, operation, "Unable to complete ${operation.name.lowercase(Locale.ROOT)}")
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                val clip = activeClipboard
+                if (operation == FileOperation.PASTE && clip?.isCut == true) {
+                    val remaining = clip.items.filterIndexed { index, _ -> results.getOrNull(index)?.isSuccess != true }
+                    activeClipboard = remaining.takeIf { it.isNotEmpty() }?.let { clip.copy(items = it) }
+                }
+                finishMutation(
+                    results,
+                    operation,
+                    "Unable to complete ${operation.name.lowercase(Locale.ROOT)}",
+                    cancelled = true,
+                    notProcessed = items.size - results.size
+                )
+                throw cancelled
             } finally {
                 _activeOperation.value = null
             }
@@ -280,7 +312,13 @@ class ExplorerViewModel(
         }
     }
 
-    private fun finishMutation(results: List<Result<Unit>>, operation: FileOperation, fallbackError: String) {
+    private fun finishMutation(
+        results: List<Result<Unit>>,
+        operation: FileOperation,
+        fallbackError: String,
+        cancelled: Boolean = false,
+        notProcessed: Int = 0
+    ) {
         val failedCount = results.count { it.isFailure }
         val succeededCount = results.size - failedCount
         val detail = results.firstNotNullOfOrNull { result ->
@@ -291,7 +329,16 @@ class ExplorerViewModel(
             succeededCount > 0 -> "$succeededCount of ${results.size} items completed. $detail"
             else -> detail
         }
-        _operationFeedback.tryEmit(OperationFeedback(operation, succeededCount, failedCount, detail))
+        _operationFeedback.tryEmit(
+            OperationFeedback(
+                operation = operation,
+                succeeded = succeededCount,
+                failed = failedCount,
+                detail = detail,
+                cancelled = cancelled,
+                notProcessed = notProcessed
+            )
+        )
         loadDirectory(activePath, isRefreshing = true, operationError = failureMessage)
     }
 
@@ -340,23 +387,47 @@ class ExplorerViewModel(
     suspend fun moveItemsToFolder(
         items: List<FileItem>,
         targetPath: String,
-        onProgress: (MoveProgress) -> Unit = {}
+        onProgress: (MoveProgress) -> Unit = {},
+        onItemsMoved: (List<Pair<FileItem, String>>, String) -> Unit = { _, _ -> }
     ): List<Result<Unit>> {
         val results = mutableListOf<Result<Unit>>()
-        items.forEachIndexed { index, item ->
-            val alreadyAtTarget = runCatching {
-                File(item.path).parentFile?.canonicalPath == File(targetPath).canonicalPath
-            }.getOrDefault(false)
-            val result = if (alreadyAtTarget) {
-                Result.success(Unit)
-            } else {
-                onProgress(MoveProgress(index, items.size, 0L, item.sizeBytes))
-                fileRepository.move(item.path, targetPath) { copied, total ->
-                    onProgress(MoveProgress(index, items.size, copied, total))
+        try {
+            items.forEachIndexed { index, item ->
+                val alreadyAtTarget = runCatching {
+                    File(item.path).parentFile?.canonicalPath == File(targetPath).canonicalPath
+                }.getOrDefault(false)
+                val result = if (alreadyAtTarget) {
+                    Result.success(Unit)
+                } else {
+                    onProgress(MoveProgress(index, items.size, 0L, item.sizeBytes))
+                    fileRepository.move(item.path, targetPath) { copied, total ->
+                        onProgress(MoveProgress(index, items.size, copied, total))
+                    }
                 }
+                results += result
             }
-            results += result
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            onItemsMoved(
+                items.zip(results)
+                    .filter { (_, result) -> result.isSuccess }
+                    .map { (item, _) -> item to File(targetPath, item.name).path },
+                targetPath
+            )
+            finishMutation(
+                results,
+                FileOperation.MOVE_MEDIA,
+                "Unable to move the selected media",
+                cancelled = true,
+                notProcessed = items.size - results.size
+            )
+            throw cancelled
         }
+        onItemsMoved(
+            items.zip(results)
+                .filter { (_, result) -> result.isSuccess }
+                .map { (item, _) -> item to File(targetPath, item.name).path },
+            targetPath
+        )
         finishMutation(results, FileOperation.MOVE_MEDIA, "Unable to move the selected media")
         return results
     }

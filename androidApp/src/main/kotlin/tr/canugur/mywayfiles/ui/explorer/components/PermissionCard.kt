@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -21,7 +22,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.sp
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
@@ -62,7 +62,7 @@ fun PermissionCard(
 
             Text(
                 text = stringResource(R.string.permission_title),
-                fontSize = 16.sp,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = AppColors.textPrimary,
                 textAlign = TextAlign.Center
@@ -70,7 +70,7 @@ fun PermissionCard(
 
             Text(
                 text = stringResource(R.string.permission_message),
-                fontSize = 13.sp,
+                style = MaterialTheme.typography.bodyMedium,
                 color = AppColors.textSecondary,
                 textAlign = TextAlign.Center
             )
@@ -104,7 +104,7 @@ fun PermissionCard(
                 Text(
                     text = stringResource(R.string.permission_button),
                     fontWeight = FontWeight.Medium,
-                    fontSize = 13.sp
+                    style = MaterialTheme.typography.labelLarge
                 )
             }
         }

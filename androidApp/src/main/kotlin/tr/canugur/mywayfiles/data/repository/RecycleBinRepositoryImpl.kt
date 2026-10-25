@@ -5,7 +5,10 @@ import android.os.Build
 import android.os.Environment
 import android.os.SystemClock
 import android.os.storage.StorageManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -17,6 +20,7 @@ import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.util.UUID
+import kotlin.coroutines.CoroutineContext
 
 /**
  * Enterprise implementation of RecycleBinRepository with on-volume trash support,
@@ -61,6 +65,30 @@ class RecycleBinRepositoryImpl private constructor(
         return roots.values.toList()
     }
 
+    private fun storageNameFor(originalPath: String): String {
+        val sourcePath = canonicalPath(File(originalPath))
+        val manager = context.getSystemService(Context.STORAGE_SERVICE) as? StorageManager
+        val volumes = manager?.storageVolumes.orEmpty()
+        for (volume in volumes) {
+            val volumeRoot = when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ->
+                    runCatching { volume.directory }.getOrNull()
+                volume.isPrimary -> Environment.getExternalStorageDirectory()
+                !volume.uuid.isNullOrBlank() -> context.getExternalFilesDirs(null)
+                    .firstOrNull { it?.absolutePath?.contains(volume.uuid!!, ignoreCase = true) == true }
+                    ?.absolutePath
+                    ?.substringBefore("${File.separator}Android${File.separator}data")
+                    ?.let(::File)
+                else -> null
+            } ?: continue
+            if (isSameOrInside(sourcePath, canonicalPath(volumeRoot))) {
+                return volume.getDescription(context)
+                    ?: context.getString(tr.canugur.mywayfiles.R.string.storage_unknown)
+            }
+        }
+        return context.getString(tr.canugur.mywayfiles.R.string.storage_unknown)
+    }
+
     /** Find the deepest mounted volume containing the file, so trash stays on that volume. */
     private fun storageRootFor(file: File): File? {
         val path = canonicalPath(file)
@@ -90,7 +118,10 @@ class RecycleBinRepositoryImpl private constructor(
                 if (valid.size != list.size) {
                     writeManifest(valid)
                 }
-                Result.success(valid.sortedByDescending { it.deletedAtMs })
+                Result.success(
+                    valid.sortedByDescending { it.deletedAtMs }
+                        .map { item -> item.copy(storageName = storageNameFor(item.originalPath)) }
+                )
             } catch (e: Exception) {
                 Result.failure(e)
             }
@@ -103,6 +134,7 @@ class RecycleBinRepositoryImpl private constructor(
         item: FileItem,
         onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        val operationContext = currentCoroutineContext()
         val result = synchronized(this@RecycleBinRepositoryImpl) {
             try {
                 val source = File(item.path)
@@ -140,7 +172,7 @@ class RecycleBinRepositoryImpl private constructor(
                                 throw IOException("Copied ${item.name}, but could not remove the original")
                             }
                         } else {
-                            copyFileWithProgress(source, trashFile, onProgress)
+                            copyFileWithProgress(source, trashFile, operationContext, onProgress)
                             if (!trashFile.isFile || trashFile.length() != source.length()) {
                                 trashFile.delete()
                                 throw IOException("Trash copy was incomplete")
@@ -184,8 +216,11 @@ class RecycleBinRepositoryImpl private constructor(
                     if (!keepRecoveryRecord) {
                         runCatching { writeManifest(readManifest().filterNot { it.id == id }) }
                     }
+                    if (error is CancellationException) throw error
                     Result.failure(error)
                 }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 Result.failure(e)
             }
@@ -200,6 +235,7 @@ class RecycleBinRepositoryImpl private constructor(
         trashedItem: TrashedItem,
         onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        val operationContext = currentCoroutineContext()
         val result = synchronized(this@RecycleBinRepositoryImpl) {
             try {
                 val trashFile = File(trashedItem.trashPath)
@@ -230,7 +266,12 @@ class RecycleBinRepositoryImpl private constructor(
                             return@withContext Result.failure(IOException("Restored ${trashedItem.name}, but could not remove the trash copy"))
                         }
                     } else {
-                        copyFileWithProgress(trashFile, dest, onProgress)
+                        try {
+                            copyFileWithProgress(trashFile, dest, operationContext, onProgress)
+                        } catch (cancelled: CancellationException) {
+                            dest.delete()
+                            throw cancelled
+                        }
                         if (!dest.isFile || dest.length() != trashFile.length()) {
                             dest.delete()
                             return@withContext Result.failure(IOException("Restore copy was incomplete"))
@@ -250,6 +291,8 @@ class RecycleBinRepositoryImpl private constructor(
                 val list = readManifest().filterNot { it.id == trashedItem.id }
                 writeManifest(list)
                 Result.success(Unit)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 Result.failure(e)
             }
@@ -277,23 +320,30 @@ class RecycleBinRepositoryImpl private constructor(
         }
     }
 
-    override suspend fun emptyTrash(): Result<Unit> = withContext(Dispatchers.IO) {
+    override suspend fun emptyTrash(): Result<Unit> = emptyTrash { _, _, _ -> }
+
+    override suspend fun emptyTrash(
+        onItemProgress: (itemName: String, itemIndex: Int, itemCount: Int) -> Unit
+    ): Result<Unit> = withContext(Dispatchers.IO) {
         synchronized(this@RecycleBinRepositoryImpl) {
             try {
                 val list = readManifest()
                 val failures = mutableListOf<TrashedItem>()
-                for (item in list) {
-                    val f = File(item.trashPath)
-                    if (f.exists()) {
-                        val deleted = if (f.isDirectory) f.deleteRecursively() else f.delete()
-                        if (!deleted || f.exists()) failures.add(item)
+                list.forEachIndexed { index, item ->
+                    onItemProgress(item.name, index, list.size)
+                    val file = File(item.trashPath)
+                    if (file.exists()) {
+                        val deleted = if (file.isDirectory) file.deleteRecursively() else file.delete()
+                        if (!deleted || file.exists()) failures.add(item)
                     }
                 }
                 writeManifest(failures)
                 if (failures.isEmpty()) Result.success(Unit)
                 else Result.failure(IOException("Unable to permanently delete ${failures.size} item(s)"))
-            } catch (e: Exception) {
-                Result.failure(e)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Result.failure(error)
             }
         }
     }
@@ -301,6 +351,7 @@ class RecycleBinRepositoryImpl private constructor(
     private fun copyFileWithProgress(
         source: File,
         destination: File,
+        coroutineContext: CoroutineContext,
         onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
     ) {
         val totalBytes = source.length()
@@ -310,6 +361,7 @@ class RecycleBinRepositoryImpl private constructor(
             java.io.FileOutputStream(destination, false).use { output ->
                 val buffer = ByteArray(128 * 1024)
                 while (true) {
+                    coroutineContext.ensureActive()
                     val read = input.read(buffer)
                     if (read < 0) break
                     output.write(buffer, 0, read)

@@ -390,6 +390,7 @@ fun ExplorerScreen(
         activeOperation?.let { progress ->
             tr.canugur.mywayfiles.ui.common.FileOperationProgressBanner(
                 progress = progress,
+                onCancel = viewModel::cancelCurrentOperation,
                 modifier = Modifier.align(Alignment.TopCenter)
                     .windowInsetsPadding(WindowInsets.statusBars)
                     .padding(top = 64.dp, start = 16.dp, end = 16.dp, bottom = 8.dp)
@@ -467,12 +468,17 @@ fun ExplorerScreen(
                 onLoadFolders = viewModel::listMoveTargets,
                 onCreateFolder = viewModel::createMoveTargetFolder,
                 onMove = { items, targetPath, onProgress ->
-                    val results = viewModel.moveItemsToFolder(items, targetPath, onProgress)
-                    if (isSearchActive && searchQuery.isNotBlank()) viewModel.search(searchQuery)
-                    onItemsMoved(
-                        items.zip(results).filter { it.second.isSuccess }
-                            .map { (item, _) -> item to File(targetPath, item.name).path },
-                        targetPath
+                    val results = viewModel.moveItemsToFolder(
+                        items = items,
+                        targetPath = targetPath,
+                        onProgress = onProgress,
+                        onItemsMoved = { movedItems, destinationPath ->
+                            onItemsMoved(movedItems, destinationPath)
+                            if (isSearchActive && searchQuery.isNotBlank()) viewModel.search(searchQuery)
+                            val movedPathsFromCallback = movedItems.mapTo(mutableSetOf()) { it.first.path }
+                            selectedPaths = selectedPaths - movedPathsFromCallback
+                            if (selectedPaths.isEmpty()) isSelectionMode = false
+                        }
                     )
                     val movedPaths = items.zip(results).filter { it.second.isSuccess }.map { it.first.path }.toSet()
                     if (movedPaths.isNotEmpty()) selectedPaths = selectedPaths - movedPaths
@@ -606,8 +612,6 @@ fun ExplorerScreenContent(
     val context = LocalContext.current
     val density = LocalDensity.current
     val contentOffsetPx = with(density) { MotionTokens.NAVIGATION_OFFSET_DP.dp.roundToPx() }
-    val listState = rememberLazyListState()
-    val gridState = rememberLazyGridState()
     var lastVisibleDirectoryState by remember { mutableStateOf<ExplorerUiState?>(null) }
     LaunchedEffect(state) {
         if (state is ExplorerUiState.Success || state is ExplorerUiState.Empty) {
@@ -652,6 +656,7 @@ fun ExplorerScreenContent(
                 onOpenSearch = onOpenSearch,
                 onSearchQueryChange = onSearchQueryChange,
                 onCloseSearch = onCloseSearch,
+                onNavigateUp = onBackClick,
                 onOpenDrawer = onOpenDrawer,
                 onCreateFolderClick = onCreateFolderClick,
                 onEnterSelectionMode = onEnterSelectionMode,
@@ -675,7 +680,8 @@ fun ExplorerScreenContent(
             )
         }
     ) { innerPadding ->
-        PullToRefreshBox(
+        Box(modifier = Modifier.fillMaxSize()) {
+            PullToRefreshBox(
             isRefreshing = isSearchLoading ||
                 (state as? ExplorerUiState.Success)?.isRefreshing == true ||
                 (state is ExplorerUiState.Loading && contentState !== state),
@@ -706,7 +712,10 @@ fun ExplorerScreenContent(
                 modifier = Modifier.fillMaxSize(),
                 label = "directory-content"
             ) { state ->
-            when (state) {
+                // Keep outgoing and incoming directory pages from sharing scroll state.
+                val listState = rememberLazyListState()
+                val gridState = rememberLazyGridState()
+                when (state) {
                 is ExplorerUiState.Loading -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
@@ -750,7 +759,7 @@ fun ExplorerScreenContent(
                                 .weight(1f),
                             contentAlignment = Alignment.Center
                         ) {
-                            EmptyFolderView()
+                            EmptyFolderView(onCreateFolder = onCreateFolderClick)
                         }
                     }
                 }
@@ -802,6 +811,15 @@ fun ExplorerScreenContent(
                                 )
                                 Spacer(modifier = Modifier.height(Dimensions.SpacingSmall))
                                 Text(
+                                    text = stringResource(
+                                        R.string.search_scope,
+                                        state.breadcrumbs.lastOrNull()?.title ?: fallbackDriveName
+                                    ),
+                                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                                    color = AppColors.textMuted
+                                )
+                                Spacer(modifier = Modifier.height(Dimensions.SpacingSmall))
+                                Text(
                                     text = stringResource(tr.canugur.mywayfiles.R.string.search_no_results_hint),
                                     style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                                     color = AppColors.textSecondary
@@ -839,7 +857,11 @@ fun ExplorerScreenContent(
                                         }
                                     }
                                     item(key = "folder-content-heading", span = { GridItemSpan(maxLineSpan) }) {
-                                        FolderContentsHeading(state.items.size)
+                                        FolderContentsHeading(
+                                            itemCount = state.items.size,
+                                            isSearchActive = isSearchActive && searchQuery.isNotBlank(),
+                                            searchScope = state.breadcrumbs.lastOrNull()?.title ?: fallbackDriveName
+                                        )
                                     }
                                     items(
                                         items = state.items,
@@ -851,6 +873,12 @@ fun ExplorerScreenContent(
                                             isFavorite = item.path in favoritePaths,
                                             isSelectionMode = isSelectionMode,
                                             isSelected = item.path in selectedPaths,
+                                            locationLabel = if (isSearchActive && searchQuery.isNotBlank()) {
+                                                stringResource(
+                                                    R.string.file_location,
+                                                    File(item.path).parentFile?.name ?: fallbackDriveName
+                                                )
+                                            } else null,
                                             onClick = onItemClick,
                                             onLongClick = onLongClick,
                                             onToggleSelect = onToggleSelect,
@@ -894,7 +922,11 @@ fun ExplorerScreenContent(
                                         }
                                     }
                                     item(key = "folder-content-heading") {
-                                        FolderContentsHeading(state.items.size)
+                                        FolderContentsHeading(
+                                            itemCount = state.items.size,
+                                            isSearchActive = isSearchActive && searchQuery.isNotBlank(),
+                                            searchScope = state.breadcrumbs.lastOrNull()?.title ?: fallbackDriveName
+                                        )
                                     }
                                     itemsIndexed(
                                         items = state.items,
@@ -907,6 +939,12 @@ fun ExplorerScreenContent(
                                             isSelectionMode = isSelectionMode,
                                             isSelected = item.path in selectedPaths,
                                             compact = viewMode == FileViewMode.COMPACT,
+                                            locationLabel = if (isSearchActive && searchQuery.isNotBlank()) {
+                                                stringResource(
+                                                    R.string.file_location,
+                                                    File(item.path).parentFile?.name ?: fallbackDriveName
+                                                )
+                                            } else null,
                                             onClick = onItemClick,
                                             onLongClick = onLongClick,
                                             onToggleSelect = onToggleSelect,
@@ -951,28 +989,46 @@ fun ExplorerScreenContent(
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }
+        }
     }
 }
 
 @Composable
-private fun FolderContentsHeading(itemCount: Int) {
-    Row(
+private fun FolderContentsHeading(
+    itemCount: Int,
+    isSearchActive: Boolean,
+    searchScope: String
+) {
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = Dimensions.SpacingDefault, bottom = Dimensions.SpacingSmall),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(top = Dimensions.SpacingDefault, bottom = Dimensions.SpacingSmall)
     ) {
-        Text(
-            text = stringResource(R.string.folder_contents),
-            style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
-            color = AppColors.textPrimary
-        )
-        Text(
-            text = stringResource(R.string.items_count, itemCount),
-            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-            color = AppColors.textSecondary
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = stringResource(if (isSearchActive) R.string.search_results_heading else R.string.folder_contents),
+                style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
+                color = AppColors.textPrimary
+            )
+            Text(
+                text = stringResource(R.string.items_count, itemCount),
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                color = AppColors.textSecondary
+            )
+        }
+        if (isSearchActive) {
+            Text(
+                text = stringResource(R.string.search_scope, searchScope),
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                color = AppColors.textMuted,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        }
     }
 }
 

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +32,11 @@ class RecycleBinViewModel(
     val activeOperation: StateFlow<tr.canugur.mywayfiles.ui.explorer.FileOperationProgress?> = _activeOperation.asStateFlow()
     private var loadRequestId = 0L
     private var operationInProgress = false
+    private var activeOperationJob: Job? = null
+
+    fun cancelCurrentOperation() {
+        activeOperationJob?.cancel()
+    }
 
     fun onEvent(event: RecycleBinUiEvent) {
         when (event) {
@@ -96,12 +102,35 @@ class RecycleBinViewModel(
         )
         viewModelScope.launch {
             try {
-                val result = repository.emptyTrash()
-                _operationFeedback.tryEmit(OperationFeedback(
-                    FileOperation.EMPTY_TRASH, if (result.isSuccess) 1 else 0, if (result.isFailure) 1 else 0,
-                    result.exceptionOrNull()?.localizedMessage
-                ))
-                result.fold(onSuccess = { loadItems() }, onFailure = { loadItems(it.localizedMessage ?: "Unable to empty Recycle Bin") })
+                val beforeCount = (_uiState.value as? RecycleBinUiState.Success)?.items?.size ?: 0
+                val result = repository.emptyTrash { itemName, itemIndex, itemCount ->
+                    _activeOperation.value = tr.canugur.mywayfiles.ui.explorer.FileOperationProgress(
+                        operation = FileOperation.EMPTY_TRASH,
+                        itemName = itemName,
+                        itemIndex = itemIndex,
+                        itemCount = itemCount
+                    )
+                }
+                val remainingCount = repository.getTrashedItems().getOrNull()?.size
+                    ?: if (result.isFailure) beforeCount else 0
+                val succeededCount = (beforeCount - remainingCount).coerceAtLeast(0)
+                val failedCount = when {
+                    result.isSuccess -> 0
+                    remainingCount > 0 -> remainingCount
+                    else -> 1 // The storage query failed; never turn an unknown result into a success toast.
+                }
+                _operationFeedback.tryEmit(
+                    OperationFeedback(
+                        operation = FileOperation.EMPTY_TRASH,
+                        succeeded = if (failedCount == 0) beforeCount else succeededCount,
+                        failed = failedCount,
+                        detail = result.exceptionOrNull()?.localizedMessage
+                    )
+                )
+                result.fold(
+                    onSuccess = { loadItems() },
+                    onFailure = { loadItems(it.localizedMessage ?: "Unable to empty Recycle Bin") }
+                )
             } finally {
                 _activeOperation.value = null
                 operationInProgress = false
@@ -116,17 +145,27 @@ class RecycleBinViewModel(
     ) {
         if (operationInProgress || items.isEmpty()) return
         operationInProgress = true
-        viewModelScope.launch {
+        activeOperationJob = viewModelScope.launch {
             val results = mutableListOf<Result<Unit>>()
             try {
                 items.forEachIndexed { index, item ->
                     _activeOperation.value = tr.canugur.mywayfiles.ui.explorer.FileOperationProgress(
-                        operation, item.name, index, items.size
+                        operation,
+                        item.name,
+                        index,
+                        items.size,
+                        canCancel = operation == FileOperation.RESTORE && !item.isDirectory
                     )
                     results += try {
                         action(item) { copied, total ->
                             _activeOperation.value = tr.canugur.mywayfiles.ui.explorer.FileOperationProgress(
-                                operation, item.name, index, items.size, copied, total
+                                operation,
+                                item.name,
+                                index,
+                                items.size,
+                                copied,
+                                total,
+                                canCancel = operation == FileOperation.RESTORE && !item.isDirectory
                             )
                         }
                     } catch (cancelled: kotlinx.coroutines.CancellationException) {
@@ -142,9 +181,24 @@ class RecycleBinViewModel(
                 val fallback = if (operation == FileOperation.RESTORE) "Unable to restore selected items"
                     else "Unable to permanently delete selected items"
                 loadItems(if (failures == 0) null else results.firstNotNullOfOrNull { it.exceptionOrNull()?.localizedMessage } ?: fallback)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                val failures = results.count { it.isFailure }
+                _operationFeedback.tryEmit(
+                    OperationFeedback(
+                        operation = operation,
+                        succeeded = results.size - failures,
+                        failed = failures,
+                        detail = results.firstNotNullOfOrNull { it.exceptionOrNull()?.localizedMessage },
+                        cancelled = true,
+                        notProcessed = items.size - results.size
+                    )
+                )
+                loadItems()
+                throw cancelled
             } finally {
                 _activeOperation.value = null
                 operationInProgress = false
+                activeOperationJob = null
             }
         }
     }

@@ -140,6 +140,7 @@ fun ImageViewerScreen(
             // Horizontal Pager for swiping between both photos and videos
             HorizontalPager(
                 state = pagerState,
+                key = { page -> images[page].path },
                 userScrollEnabled = !isCurrentZoomed,
                 modifier = Modifier.fillMaxSize()
             ) { page ->
