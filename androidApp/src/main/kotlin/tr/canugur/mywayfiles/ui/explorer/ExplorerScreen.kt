@@ -662,23 +662,10 @@ fun ExplorerScreenContent(
                 onEnterSelectionMode = onEnterSelectionMode,
                 onCloseSelectionMode = onCloseSelectionMode,
                 onToggleSelectAll = onToggleSelectAll,
-                onBatchCopy = onBatchCopy,
-                onBatchShare = onBatchShare,
-                canShareSelected = selectedPaths.size == 1 && currentItems.any {
-                    it.path in selectedPaths && !it.isDirectory
-                },
-                canMoveSelected = currentItems.filter { it.path in selectedPaths }.let { selected ->
-                    selected.isNotEmpty() && selected.all {
-                        FileTypeClassifier.isImage(it) || FileTypeClassifier.isVideo(it)
-                    }
-                },
-                onBatchMoveToFolder = onBatchMoveToFolder,
-                onBatchCut = onBatchCut,
-                onBatchDelete = onBatchDelete,
                 onSortOptionSelected = onSortOptionSelected,
                 onRefreshClick = onRefresh
             )
-        }
+        },
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
             PullToRefreshBox(
@@ -893,7 +880,7 @@ fun ExplorerScreenContent(
                                         )
                                     }
                                     item(key = "bottom-space", span = { GridItemSpan(maxLineSpan) }) {
-                                        Spacer(modifier = Modifier.height(Dimensions.SpacingHuge))
+                                        Spacer(modifier = Modifier.height(if (isSelectionMode) Dimensions.SpacingHuge + Dimensions.ActionButtonSize else Dimensions.SpacingHuge))
                                     }
                                 }
                             } else {
@@ -962,7 +949,7 @@ fun ExplorerScreenContent(
                                         }
                                     }
                                     item(key = "bottom-space") {
-                                        Spacer(modifier = Modifier.height(Dimensions.SpacingHuge))
+                                        Spacer(modifier = Modifier.height(if (isSelectionMode) Dimensions.SpacingHuge + Dimensions.ActionButtonSize else Dimensions.SpacingHuge))
                                     }
                                 }
                             }
@@ -979,13 +966,35 @@ fun ExplorerScreenContent(
             is ExplorerUiState.Empty -> contentState.clipboard
             else -> null
         }
-        if (activeClipboard != null) {
+        if (activeClipboard != null && !isSelectionMode) {
             ClipboardBar(
                 clipboard = activeClipboard,
                 destinationPath = contentState.directoryPathOrNull() ?: fallbackRootPath,
                 destinationName = breadcrumbs.lastOrNull()?.title ?: fallbackDriveName,
                 onPaste = onPaste,
                 onClear = onClearClipboard,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+        }
+
+        if (isSelectionMode) {
+            val selectedItems = currentItems.filter { it.path in selectedPaths }
+            val singleSelected = selectedItems.singleOrNull()
+            val canMoveSelected = selectedItems.isNotEmpty() && selectedItems.all {
+                FileTypeClassifier.isImage(it) || FileTypeClassifier.isVideo(it)
+            }
+            ExplorerSelectionActionBar(
+                selectedCount = selectedItems.size,
+                canShare = singleSelected != null && !singleSelected.isDirectory,
+                canMove = canMoveSelected,
+                canRename = singleSelected != null,
+                onCut = onBatchCut,
+                onCopy = onBatchCopy,
+                onMove = onBatchMoveToFolder,
+                onDelete = onBatchDelete,
+                onShare = onBatchShare,
+                onRename = { singleSelected?.let(onRename) },
+                onProperties = { singleSelected?.let(onProperties) },
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
         }

@@ -63,13 +63,6 @@ fun ExplorerTopBar(
     onEnterSelectionMode: () -> Unit,
     onCloseSelectionMode: () -> Unit,
     onToggleSelectAll: () -> Unit,
-    onBatchCopy: () -> Unit,
-    onBatchShare: () -> Unit,
-    canShareSelected: Boolean,
-    onBatchCut: () -> Unit,
-    onBatchDelete: () -> Unit,
-    onBatchMoveToFolder: () -> Unit,
-    canMoveSelected: Boolean,
     onSortOptionSelected: (SortOption) -> Unit,
     onRefreshClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -117,13 +110,6 @@ fun ExplorerTopBar(
                 isAllSelected = isAllSelected,
                 onCloseSelection = onCloseSelectionMode,
                 onToggleSelectAll = onToggleSelectAll,
-                onBatchCopy = onBatchCopy,
-                onBatchShare = onBatchShare,
-                canShareSelected = canShareSelected,
-                onBatchCut = onBatchCut,
-                onBatchDelete = onBatchDelete,
-                onBatchMoveToFolder = onBatchMoveToFolder,
-                canMoveSelected = canMoveSelected,
                 modifier = Modifier.fillMaxWidth()
             )
         }

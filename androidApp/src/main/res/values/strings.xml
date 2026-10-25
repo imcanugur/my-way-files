@@ -65,7 +65,9 @@
     <string name="action_properties">Properties</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_confirm">OK</string>
-    <string name="dialog_rename_title">Rename Item</string>
+    <string name="dialog_rename_title">Rename item</string>
+    <string name="dialog_rename_field_label">File name</string>
+    <string name="invalid_file_name">A file name cannot contain /.</string>
     <string name="dialog_new_folder_title">Create New Folder</string>
     <string name="dialog_new_folder_placeholder">Folder name</string>
     <string name="dialog_new_folder_enter">Enter folder after creating</string>

@@ -57,6 +57,7 @@ fun FileItemRow(
     val context = LocalContext.current
     val shape = RoundedCornerShape(Dimensions.CornerRadiusMedium)
     val rowBackground = if (isSelected) AppColors.brandAccentSubtle else androidx.compose.ui.graphics.Color.Transparent
+    val rowVerticalPadding = if (compact) Dimensions.SpacingSmall else Dimensions.SpacingMedium
 
     Row(
         modifier = modifier
@@ -90,26 +91,26 @@ fun FileItemRow(
                     }
                 }
             }
-            .padding(horizontal = Dimensions.SpacingSmall, vertical = if (compact) Dimensions.SpacingSmall else Dimensions.SpacingMedium)
+            .padding(horizontal = Dimensions.SpacingSmall, vertical = rowVerticalPadding)
+            .heightIn(min = Dimensions.ActionButtonSize + rowVerticalPadding + rowVerticalPadding)
             .alpha(if (item.isHidden) 0.62f else 1f),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Selection Checkbox in Selection Mode
+        // Use fixed 48 dp slots so selection never changes row height or trailing alignment.
         if (isSelectionMode) {
-            Box(
-                modifier = Modifier
-                    .size(Dimensions.SpacingLarge)
-                    .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
-                    .background(if (isSelected) AppColors.brandAccent else AppColors.cardSurfaceSubtle)
-                    .border(
-                        width = Dimensions.CardBorderWidth,
-                        color = if (isSelected) AppColors.brandAccent else AppColors.cardStroke,
-                        shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isSelected) {
-                    Icon(
+            Box(modifier = Modifier.size(Dimensions.ActionButtonSize), contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.size(Dimensions.SpacingLarge)
+                        .clip(RoundedCornerShape(Dimensions.CornerRadiusSmall))
+                        .background(if (isSelected) AppColors.brandAccent else AppColors.cardSurfaceSubtle)
+                        .border(
+                            width = Dimensions.CardBorderWidth,
+                            color = if (isSelected) AppColors.brandAccent else AppColors.cardStroke,
+                            shape = RoundedCornerShape(Dimensions.CornerRadiusSmall)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isSelected) Icon(
                         painter = painterResource(R.drawable.ic_check),
                         contentDescription = null,
                         tint = AppColors.canvasBackground,
@@ -117,7 +118,6 @@ fun FileItemRow(
                     )
                 }
             }
-
             Spacer(modifier = Modifier.width(Dimensions.SpacingMedium))
         }
 
@@ -183,6 +183,12 @@ fun FileItemRow(
                 onProperties = onProperties,
                 onToggleFavorite = onToggleFavorite
             )
+        } else {
+            Spacer(modifier = Modifier.size(Dimensions.ActionButtonSize))
         }
     }
 }
+
+
+
+

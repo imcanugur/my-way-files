@@ -1,5 +1,7 @@
 package tr.canugur.mywayfiles.ui.explorer.components
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -33,7 +34,7 @@ import tr.canugur.mywayfiles.ui.explorer.Clipboard
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 
-/** Destination-aware action surface for the active copy or cut operation. */
+/** Floating, destination-aware confirmation for a pending cut or copy operation. */
 @Composable
 fun ClipboardBar(
     clipboard: Clipboard,
@@ -47,33 +48,28 @@ fun ClipboardBar(
         val source = File(item.path).absolutePath.trimEnd(File.separatorChar)
         val destination = File(destinationPath).absolutePath.trimEnd(File.separatorChar)
         val sourceParent = File(source).parentFile?.absolutePath?.trimEnd(File.separatorChar)
-        val sameSourceFolder = sourceParent == destination
-        val destinationInsideSourceFolder = item.isDirectory &&
-            (destination == source || destination.startsWith(source + File.separator))
-        sameSourceFolder || destinationInsideSourceFolder
+        sourceParent == destination || (item.isDirectory &&
+            (destination == source || destination.startsWith(source + File.separator)))
     }
-    val shape = RoundedCornerShape(
-        topStart = Dimensions.CornerRadiusLarge,
-        topEnd = Dimensions.CornerRadiusLarge
-    )
+    val shape = RoundedCornerShape(Dimensions.CornerRadiusLarge)
 
     Surface(
         color = AppColors.cardSurface,
+        contentColor = AppColors.textPrimary,
         shape = shape,
-        shadowElevation = 3.dp,
+        shadowElevation = 4.dp,
+        border = BorderStroke(Dimensions.CardBorderWidth, AppColors.cardStroke),
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
+            .padding(horizontal = Dimensions.SpacingLarge, vertical = Dimensions.SpacingSmall)
             .clip(shape)
     ) {
-        Column {
-            HorizontalDivider(color = AppColors.divider)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = Dimensions.SpacingLarge, end = Dimensions.SpacingSmall, top = Dimensions.SpacingSmall),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(Dimensions.SpacingMedium),
+            verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     painter = painterResource(if (clipboard.isCut) R.drawable.ic_cut else R.drawable.ic_copy),
                     contentDescription = null,
@@ -81,17 +77,24 @@ fun ClipboardBar(
                     modifier = Modifier.size(Dimensions.IconSizeMedium)
                 )
                 Spacer(Modifier.width(Dimensions.SpacingMedium))
-                Text(
-                    text = stringResource(
-                        if (clipboard.isCut) R.string.clipboard_move_to else R.string.clipboard_copy_to
-                    ),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = AppColors.textPrimary,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(if (clipboard.isCut) R.string.clipboard_move_to else R.string.clipboard_copy_to),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = AppColors.textPrimary,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = if (clipboard.items.size == 1) clipboard.items.first().name
+                        else stringResource(R.string.items_count, clipboard.items.size),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AppColors.textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 IconButton(onClick = onClear, modifier = Modifier.size(Dimensions.ActionButtonSize)) {
                     Icon(
                         painter = painterResource(R.drawable.ic_close),
@@ -100,47 +103,24 @@ fun ClipboardBar(
                     )
                 }
             }
-
-            Text(
-                text = if (clipboard.items.size == 1) clipboard.items.first().name
-                else stringResource(R.string.items_count, clipboard.items.size),
-                style = MaterialTheme.typography.bodyMedium,
-                color = AppColors.textSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = Dimensions.SpacingLarge)
-            )
             Text(
                 text = stringResource(R.string.clipboard_destination, destinationName),
                 style = MaterialTheme.typography.bodySmall,
                 color = AppColors.textSecondary,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(
-                    horizontal = Dimensions.SpacingLarge,
-                    vertical = Dimensions.SpacingExtraSmall
-                )
+                overflow = TextOverflow.Ellipsis
             )
-
             if (isInvalidDestination) {
                 Text(
                     text = stringResource(R.string.clipboard_choose_different_folder),
                     style = MaterialTheme.typography.bodySmall,
-                    color = AppColors.statusWarning,
-                    modifier = Modifier.padding(horizontal = Dimensions.SpacingLarge)
+                    color = AppColors.statusWarning
                 )
             }
-
             Button(
                 onClick = onPaste,
                 enabled = !isInvalidDestination,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        horizontal = Dimensions.SpacingLarge,
-                        vertical = Dimensions.SpacingSmall
-                    )
-                    .heightIn(min = Dimensions.ActionButtonSize),
+                modifier = Modifier.fillMaxWidth().heightIn(min = Dimensions.ActionButtonSize),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = AppColors.brandAccent,
                     contentColor = AppColors.cardSurface
@@ -148,9 +128,7 @@ fun ClipboardBar(
                 shape = RoundedCornerShape(Dimensions.CornerRadiusPill)
             ) {
                 Text(
-                    text = stringResource(
-                        if (clipboard.isCut) R.string.action_move_here else R.string.action_copy_here
-                    ),
+                    text = stringResource(if (clipboard.isCut) R.string.action_move_here else R.string.action_copy_here),
                     style = MaterialTheme.typography.labelLarge
                 )
             }

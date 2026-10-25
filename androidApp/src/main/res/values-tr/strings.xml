@@ -65,7 +65,9 @@
     <string name="action_properties">Özellikler</string>
     <string name="action_cancel">İptal</string>
     <string name="action_confirm">Tamam</string>
-    <string name="dialog_rename_title">Yeniden Adlandır</string>
+    <string name="dialog_rename_title">Öğeyi yeniden adlandır</string>
+    <string name="dialog_rename_field_label">Dosya adı</string>
+    <string name="invalid_file_name">Dosya adı / içeremez.</string>
     <string name="dialog_new_folder_title">Yeni Klasör Oluştur</string>
     <string name="dialog_new_folder_placeholder">Klasör adı</string>
     <string name="dialog_new_folder_enter">Oluşturduktan sonra bu klasöre gir</string>

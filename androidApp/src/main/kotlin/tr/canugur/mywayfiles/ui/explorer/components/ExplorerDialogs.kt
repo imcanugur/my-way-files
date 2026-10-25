@@ -38,6 +38,10 @@ import tr.canugur.mywayfiles.ui.theme.Dimensions
 @Composable
 fun RenameDialog(initialName: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf(initialName) }
+    val trimmedName = text.trim()
+    val isValidName = trimmedName.isNotEmpty() && trimmedName != "." && trimmedName != ".." &&
+        !trimmedName.contains('/') && !trimmedName.contains('\\')
+    val hasInvalidInput = text.isNotEmpty() && !isValidName
     AppModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = Dimensions.SpacingLarge)
@@ -49,6 +53,11 @@ fun RenameDialog(initialName: String, onConfirm: (String) -> Unit, onDismiss: ()
                 value = text,
                 onValueChange = { text = it },
                 singleLine = true,
+                label = { Text(stringResource(R.string.dialog_rename_field_label)) },
+                supportingText = if (hasInvalidInput) {
+                    { Text(stringResource(R.string.invalid_file_name), color = AppColors.statusCritical) }
+                } else null,
+                isError = hasInvalidInput,
                 modifier = Modifier.fillMaxWidth(),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = AppColors.brandAccent,
@@ -58,16 +67,22 @@ fun RenameDialog(initialName: String, onConfirm: (String) -> Unit, onDismiss: ()
                 )
             )
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
-                TextButton(onClick = {
-                    if (text.isNotBlank() && text != initialName) onConfirm(text.trim())
-                    onDismiss()
-                }) { Text(stringResource(R.string.action_confirm), color = AppColors.brandAccent) }
+                TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = Dimensions.ActionButtonSize)) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+                Button(
+                    onClick = { if (trimmedName != initialName) onConfirm(trimmedName); onDismiss() },
+                    enabled = isValidName,
+                    modifier = Modifier.heightIn(min = Dimensions.ActionButtonSize),
+                    shape = RoundedCornerShape(Dimensions.CornerRadiusPill),
+                    colors = ButtonDefaults.buttonColors(containerColor = AppColors.brandAccent)
+                ) {
+                    Text(stringResource(R.string.action_rename))
+                }
             }
         }
     }
 }
-
 @Composable
 fun CreateFolderDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf("") }
