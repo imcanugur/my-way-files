@@ -234,7 +234,7 @@ fun ExplorerScreen(
             selectedPaths = emptySet()
         } else if (isSearchActive) {
             closeSearch()
-        } else if (!viewModel.navigateUp()) {
+        } else if (!viewModel.navigateBackWithinExplorer()) {
             onNavigateBack()
         }
     }
@@ -285,7 +285,7 @@ fun ExplorerScreen(
                     selectedPaths = emptySet()
                 } else if (isSearchActive) {
                     closeSearch()
-                } else if (!viewModel.navigateUp()) {
+                } else if (!viewModel.navigateBackWithinExplorer()) {
                     onNavigateBack()
                 }
             },

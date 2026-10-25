@@ -97,11 +97,15 @@ fun App() {
         MotionTokens.NAVIGATION_OFFSET_DP.dp.roundToPx()
     }
     var lastHomeBackPressAt by remember { mutableStateOf(0L) }
-    LaunchedEffect(currentDestination, drawerState.isOpen) {
-        lastHomeBackPressAt = 0L
+    var lastExplorerPath by remember { mutableStateOf<String?>(null) }
+    SideEffect {
+        if (currentDestination !is NavigationDestination.Home || drawerState.isOpen) {
+            lastHomeBackPressAt = 0L
+        }
     }
 
     fun openExplorer(drive: StorageDrive, path: String = drive.path, filePath: String? = null) {
+        lastExplorerPath = path
         currentDestination = NavigationDestination.Explorer(
             drive = drive,
             initialPath = path,
@@ -210,6 +214,40 @@ fun App() {
                 ).show()
             }
         }
+
+        BackHandler(enabled = currentDestination !is NavigationDestination.Home && !drawerState.isOpen) {
+            when (val destination = currentDestination) {
+                is NavigationDestination.Explorer -> {
+                    val rootPath = runCatching { File(destination.drive.path).canonicalPath }
+                        .getOrDefault(destination.drive.path)
+                    val visiblePath = lastExplorerPath ?: destination.initialPath
+                    val currentPath = runCatching { File(visiblePath).canonicalPath }
+                        .getOrDefault(visiblePath)
+                    val parentPath = File(currentPath).parentFile?.let { parent ->
+                        runCatching { parent.canonicalPath }.getOrDefault(parent.path)
+                    }
+                    val rootPrefix = rootPath.trimEnd(File.separatorChar) + File.separator
+                    val nextPath = when {
+                        currentPath == rootPath -> null
+                        parentPath == rootPath || parentPath?.startsWith(rootPrefix) == true -> parentPath
+                        else -> rootPath
+                    }
+                    if (nextPath == null) {
+                        currentDestination = NavigationDestination.Home
+                    } else {
+                        lastExplorerPath = nextPath
+                        currentDestination = destination.copy(
+                            startInSearch = false,
+                            initialPath = nextPath,
+                            initialFilePath = null
+                        )
+                    }
+                }
+                NavigationDestination.RecycleBin -> currentDestination = NavigationDestination.Home
+                NavigationDestination.Settings -> currentDestination = destinationBeforeSettings
+                NavigationDestination.Home -> Unit
+            }
+        }
         AnimatedContent(
             targetState = currentDestination,
             transitionSpec = {
@@ -232,8 +270,9 @@ fun App() {
             when (destination) {
                 is NavigationDestination.Home -> {
                     HomeScreen(
-                        onDriveClick = { drive -> currentDestination = NavigationDestination.Explorer(drive) },
+                        onDriveClick = { drive -> openExplorer(drive) },
                         onSearchDriveClick = { drive ->
+                            lastExplorerPath = drive.path
                             currentDestination = NavigationDestination.Explorer(drive, startInSearch = true)
                         },
                         onRecycleBinClick = { currentDestination = NavigationDestination.RecycleBin },
@@ -263,6 +302,9 @@ fun App() {
                         onNavigateBack = { currentDestination = NavigationDestination.Home },
                         onOpenDrawer = ::openDrawer,
                         onDirectoryVisited = { path, name, storageRoot, storageName ->
+                            if (runCatching { File(storageRoot).canonicalPath == File(destination.drive.path).canonicalPath }
+                                    .getOrDefault(storageRoot == destination.drive.path)
+                            ) lastExplorerPath = path
                             locationStore.recordVisit(path, name, true, storageRoot, storageName)
                             recentFolders = locationStore.recentFolders()
                         },

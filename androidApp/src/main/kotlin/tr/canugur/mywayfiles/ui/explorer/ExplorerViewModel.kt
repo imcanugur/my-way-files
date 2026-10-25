@@ -362,7 +362,18 @@ class ExplorerViewModel(
         }
     }
 
-    fun canNavigateUp(): Boolean = isStrictDescendant(rootPath, activePath)
+    private fun isAtExplorerRoot(): Boolean = runCatching {
+        File(rootPath).canonicalPath == File(activePath).canonicalPath
+    }.getOrDefault(rootPath == activePath)
+
+    fun canNavigateUp(): Boolean = !isAtExplorerRoot()
+
+    fun navigateBackWithinExplorer(): Boolean {
+        if (isAtExplorerRoot()) return false
+        if (navigateUp()) return true
+        loadDirectory(rootPath)
+        return true
+    }
 
     private fun isAtOrBelowRoot(root: String, candidate: String): Boolean = runCatching {
         val normalizedRoot = File(root).canonicalPath.trimEnd(File.separatorChar)
