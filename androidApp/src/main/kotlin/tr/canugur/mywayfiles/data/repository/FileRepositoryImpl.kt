@@ -3,6 +3,7 @@ package tr.canugur.mywayfiles.data.repository
 import tr.canugur.mywayfiles.data.cache.DirectoryCache
 import tr.canugur.mywayfiles.data.cache.DirectoryContentsCache
 import tr.canugur.mywayfiles.data.datasource.FileLocalDataSource
+import tr.canugur.mywayfiles.domain.model.ConflictResolution
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.domain.repository.FileRepository
 import kotlinx.coroutines.CancellationException
@@ -106,27 +107,41 @@ class FileRepositoryImpl(
     }
 
     override suspend fun copy(sourcePath: String, targetDirPath: String): Result<Unit> =
-        copy(sourcePath, targetDirPath) { _, _ -> }
+        copy(sourcePath, targetDirPath, ConflictResolution.AUTO_RENAME) { _, _ -> }
 
     override suspend fun copy(
         sourcePath: String,
         targetDirPath: String,
         onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
+    ): Result<Unit> = copy(sourcePath, targetDirPath, ConflictResolution.AUTO_RENAME, onProgress)
+
+    override suspend fun copy(
+        sourcePath: String,
+        targetDirPath: String,
+        conflictResolution: ConflictResolution,
+        onProgress: (Long, Long) -> Unit
     ): Result<Unit> {
-        val result = localDataSource.copy(sourcePath, targetDirPath, onProgress)
+        val result = localDataSource.copy(sourcePath, targetDirPath, conflictResolution, onProgress)
         result.onSuccess { directoryCache?.invalidate(targetDirPath) }
         return result
     }
 
     override suspend fun move(sourcePath: String, targetDirPath: String): Result<Unit> =
-        move(sourcePath, targetDirPath) { _, _ -> }
+        move(sourcePath, targetDirPath, ConflictResolution.AUTO_RENAME) { _, _ -> }
 
     override suspend fun move(
         sourcePath: String,
         targetDirPath: String,
         onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
+    ): Result<Unit> = move(sourcePath, targetDirPath, ConflictResolution.AUTO_RENAME, onProgress)
+
+    override suspend fun move(
+        sourcePath: String,
+        targetDirPath: String,
+        conflictResolution: ConflictResolution,
+        onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
     ): Result<Unit> {
-        val result = localDataSource.move(sourcePath, targetDirPath, onProgress)
+        val result = localDataSource.move(sourcePath, targetDirPath, conflictResolution, onProgress)
         result.onSuccess {
             directoryCache?.invalidate(sourcePath)
             directoryCache?.invalidate(targetDirPath)

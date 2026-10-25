@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -53,11 +55,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 import tr.canugur.mywayfiles.R
+import tr.canugur.mywayfiles.domain.model.ConflictResolution
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.data.preferences.SavedLocation
 import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 import tr.canugur.mywayfiles.ui.common.AppModalBottomSheet
+import tr.canugur.mywayfiles.ui.common.ConflictResolutionBottomSheet
 import tr.canugur.mywayfiles.ui.common.showOperationFeedback
 import tr.canugur.mywayfiles.ui.explorer.FileOperation
 import tr.canugur.mywayfiles.ui.explorer.MoveProgress
@@ -78,7 +82,7 @@ fun MoveToFolderDialog(
     initialDirectoryPath: String,
     onLoadFolders: suspend (String) -> Result<List<FileItem>>,
     onCreateFolder: suspend (String, String) -> Result<Unit>,
-    onMove: suspend (List<FileItem>, String, (MoveProgress) -> Unit) -> List<Result<Unit>>,
+    onMove: suspend (List<FileItem>, String, ConflictResolution, (MoveProgress) -> Unit) -> List<Result<Unit>>,
     onDismiss: () -> Unit
 ) {
     val safeRoots = remember(roots, initialRootPath) {
@@ -132,6 +136,7 @@ fun MoveToFolderDialog(
     val moveProgress by moveProgressFlow.collectAsState()
     var resultMessage by remember { mutableStateOf<String?>(null) }
     var resultIsError by remember { mutableStateOf(false) }
+    var conflictsToResolve by remember { mutableStateOf<List<FileItem>?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
@@ -457,44 +462,57 @@ fun MoveToFolderDialog(
                 }
                 val destinationToMove = selectedDestinationPath ?: currentPath
                 val isMovingInsideSelf = itemsToMove.any { isInsideRoot(it.path, destinationToMove) }
+
+                fun executeMove(targetDestination: String, resolution: ConflictResolution) {
+                    moving = true
+                    moveProgressFlow.value = MoveProgress(0, itemsToMove.size, 0L, 0L)
+                    moveJob = scope.launch {
+                        try {
+                            val results = try {
+                                onMove(itemsToMove, targetDestination, resolution) { progress ->
+                                    moveProgressFlow.value = progress
+                                }
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (failure: Exception) {
+                                listOf(Result.failure(failure))
+                            }
+                            val succeeded = results.count { it.isSuccess }
+                            val failed = results.size - succeeded
+                            if (failed == 0 && results.isNotEmpty()) {
+                                onDismiss()
+                            } else {
+                                val detail = results.firstNotNullOfOrNull { it.exceptionOrNull()?.localizedMessage }
+                                resultMessage = context.getString(
+                                    R.string.move_partial_result,
+                                    succeeded,
+                                    results.size,
+                                    detail ?: context.getString(R.string.error_unknown)
+                                )
+                                resultIsError = true
+                            }
+                        } catch (cancelled: CancellationException) {
+                            resultMessage = context.getString(R.string.operation_cancelled_short)
+                            resultIsError = true
+                        } finally {
+                            moving = false
+                            moveJob = null
+                        }
+                    }
+                }
+
                 TextButton(
                     enabled = !loading && !moving && error == null && !isMovingInsideSelf,
                     onClick = {
                         if (!moving && !loading) {
-                            moving = true
-                            moveProgressFlow.value = MoveProgress(0, itemsToMove.size, 0L, 0L)
-                            moveJob = scope.launch {
-                                try {
-                                    val results = try {
-                                        onMove(itemsToMove, destinationToMove) { progress ->
-                                            moveProgressFlow.value = progress
-                                        }
-                                    } catch (cancelled: CancellationException) {
-                                        throw cancelled
-                                    } catch (failure: Exception) {
-                                        listOf(Result.failure(failure))
-                                    }
-                                    val succeeded = results.count { it.isSuccess }
-                                    val failed = results.size - succeeded
-                                    if (failed == 0 && results.isNotEmpty()) {
-                                        onDismiss()
-                                    } else {
-                                        val detail = results.firstNotNullOfOrNull { it.exceptionOrNull()?.localizedMessage }
-                                        resultMessage = context.getString(
-                                            R.string.move_partial_result,
-                                            succeeded,
-                                            results.size,
-                                            detail ?: context.getString(R.string.error_unknown)
-                                        )
-                                        resultIsError = true
-                                    }
-                                } catch (cancelled: CancellationException) {
-                                    resultMessage = context.getString(R.string.operation_cancelled_short)
-                                    resultIsError = true
-                                } finally {
-                                    moving = false
-                                    moveJob = null
-                                }
+                            val conflicts = itemsToMove.filter { item ->
+                                val dest = File(destinationToMove, item.name)
+                                dest.exists() && runCatching { dest.canonicalPath != File(item.path).canonicalPath }.getOrDefault(true)
+                            }
+                            if (conflicts.isNotEmpty()) {
+                                conflictsToResolve = conflicts
+                            } else {
+                                executeMove(destinationToMove, ConflictResolution.AUTO_RENAME)
                             }
                         }
                     }
@@ -507,6 +525,22 @@ fun MoveToFolderDialog(
     }
 
     if (showCreateFolder) {
+        val existingFolderNames = remember(folders) { folders.map { it.name }.toSet() }
+        val trimmedFolderName = folderName.trim()
+        val isValidFolderName = trimmedFolderName.isNotEmpty() && trimmedFolderName != "." && trimmedFolderName != ".." &&
+            !trimmedFolderName.contains('/') && !trimmedFolderName.contains('\\')
+        val isDuplicateFolder = isValidFolderName && existingFolderNames.any { it.equals(trimmedFolderName, ignoreCase = true) }
+        val hasInvalidInput = folderName.isNotEmpty() && !isValidFolderName
+
+        val suggestedFolderName = remember(trimmedFolderName, existingFolderNames) {
+            val base = if (trimmedFolderName.isNotBlank()) trimmedFolderName else "New Folder"
+            var count = 1
+            while (existingFolderNames.any { it.equals("$base ($count)", ignoreCase = true) }) {
+                count++
+            }
+            "$base ($count)"
+        }
+
         AppModalBottomSheet(onDismissRequest = { if (!creatingFolder) showCreateFolder = false }) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = Dimensions.SpacingLarge)
@@ -518,9 +552,45 @@ fun MoveToFolderDialog(
                     value = folderName,
                     onValueChange = { folderName = it },
                     label = { Text(stringResource(R.string.dialog_new_folder_placeholder)) },
+                    supportingText = when {
+                        hasInvalidInput -> {
+                            { Text(stringResource(R.string.invalid_file_name), color = AppColors.statusCritical) }
+                        }
+                        isDuplicateFolder -> {
+                            { Text(stringResource(R.string.conflict_name_already_exists), color = AppColors.statusCritical) }
+                        }
+                        else -> null
+                    },
+                    isError = hasInvalidInput || isDuplicateFolder,
                     singleLine = true,
-                    enabled = !creatingFolder
+                    enabled = !creatingFolder,
+                    modifier = Modifier.fillMaxWidth()
                 )
+
+                if (isDuplicateFolder) {
+                    AssistChip(
+                        onClick = { folderName = suggestedFolderName },
+                        label = {
+                            Text(
+                                stringResource(R.string.conflict_suggestion, suggestedFolderName),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_new_folder),
+                                contentDescription = null,
+                                tint = AppColors.brandAccent
+                            )
+                        },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = AppColors.brandAccent.copy(alpha = 0.08f),
+                            labelColor = AppColors.brandAccent
+                        )
+                    )
+                }
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -542,44 +612,96 @@ fun MoveToFolderDialog(
                     TextButton(onClick = { showCreateFolder = false }, enabled = !creatingFolder) {
                         Text(stringResource(R.string.action_cancel))
                     }
-                TextButton(
-                    enabled = folderName.isNotBlank() && !creatingFolder,
-                    onClick = {
-                        scope.launch {
-                            creatingFolder = true
-                            val result = try {
-                                onCreateFolder(currentPath, folderName.trim())
-                            } catch (cancelled: CancellationException) {
-                                throw cancelled
-                            } catch (failure: Exception) {
-                                Result.failure(failure)
-                            }
-                            result.onSuccess {
-                                context.showOperationFeedback(OperationFeedback(FileOperation.CREATE_FOLDER, 1, 0))
-                                val newPath = File(currentPath, folderName.trim()).path
-                                showCreateFolder = false
-                                selectedDestinationPath = newPath
-                                if (enterCreatedFolder) {
-                                    currentPath = newPath
-                                } else {
-                                    reloadToken++
+                    TextButton(
+                        enabled = isValidFolderName && !isDuplicateFolder && !creatingFolder,
+                        onClick = {
+                            scope.launch {
+                                creatingFolder = true
+                                val result = try {
+                                    onCreateFolder(currentPath, folderName.trim())
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (failure: Exception) {
+                                    Result.failure(failure)
                                 }
-                                resultMessage = null
-                                error = null
-                            }.onFailure {
-                                context.showOperationFeedback(
-                                    OperationFeedback(FileOperation.CREATE_FOLDER, 0, 1, it.localizedMessage)
-                                )
-                                error = it.localizedMessage ?: ""
-                                showCreateFolder = false
+                                result.onSuccess {
+                                    context.showOperationFeedback(OperationFeedback(FileOperation.CREATE_FOLDER, 1, 0))
+                                    val newPath = File(currentPath, folderName.trim()).path
+                                    showCreateFolder = false
+                                    selectedDestinationPath = newPath
+                                    if (enterCreatedFolder) {
+                                        currentPath = newPath
+                                    } else {
+                                        reloadToken++
+                                    }
+                                    resultMessage = null
+                                    error = null
+                                }.onFailure {
+                                    context.showOperationFeedback(
+                                        OperationFeedback(FileOperation.CREATE_FOLDER, 0, 1, it.localizedMessage)
+                                    )
+                                    error = it.localizedMessage ?: ""
+                                    showCreateFolder = false
+                                }
+                                creatingFolder = false
                             }
-                            creatingFolder = false
                         }
-                    }
-                ) { Text(stringResource(R.string.action_create)) }
+                    ) { Text(stringResource(R.string.action_create)) }
                 }
             }
         }
+    }
+
+    val currentConflicts = conflictsToResolve
+    if (currentConflicts != null) {
+        ConflictResolutionBottomSheet(
+            conflictingNames = currentConflicts.map { it.name },
+            onResolve = { resolution ->
+                val destinationToMove = selectedDestinationPath ?: currentPath
+                fun exec(target: String, res: ConflictResolution) {
+                    moving = true
+                    moveProgressFlow.value = MoveProgress(0, itemsToMove.size, 0L, 0L)
+                    moveJob = scope.launch {
+                        try {
+                            val results = try {
+                                onMove(itemsToMove, target, res) { progress ->
+                                    moveProgressFlow.value = progress
+                                }
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (failure: Exception) {
+                                listOf(Result.failure(failure))
+                            }
+                            val succeeded = results.count { it.isSuccess }
+                            val failed = results.size - succeeded
+                            if (failed == 0 && results.isNotEmpty()) {
+                                onDismiss()
+                            } else {
+                                val detail = results.firstNotNullOfOrNull { it.exceptionOrNull()?.localizedMessage }
+                                resultMessage = context.getString(
+                                    R.string.move_partial_result,
+                                    succeeded,
+                                    results.size,
+                                    detail ?: context.getString(R.string.error_unknown)
+                                )
+                                resultIsError = true
+                            }
+                        } catch (cancelled: CancellationException) {
+                            resultMessage = context.getString(R.string.operation_cancelled_short)
+                            resultIsError = true
+                        } finally {
+                            moving = false
+                            moveJob = null
+                        }
+                    }
+                }
+                exec(destinationToMove, resolution)
+                conflictsToResolve = null
+            },
+            onDismiss = {
+                conflictsToResolve = null
+            }
+        )
     }
 }
 

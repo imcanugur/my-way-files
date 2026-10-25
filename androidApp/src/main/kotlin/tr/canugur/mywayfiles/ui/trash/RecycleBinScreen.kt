@@ -99,10 +99,9 @@ fun RecycleBinScreen(
                 onDeleteSelected = { showSelectedDeleteConfirm = true }
                 )
                 activeOperation?.let { progress ->
-                    tr.canugur.mywayfiles.ui.common.FileOperationProgressBanner(
+                    tr.canugur.mywayfiles.ui.common.FileOperationProgressBottomSheet(
                         progress = progress,
-                        onCancel = viewModel::cancelCurrentOperation,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                        onCancel = viewModel::cancelCurrentOperation
                     )
                 }
             }

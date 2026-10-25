@@ -13,6 +13,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import tr.canugur.mywayfiles.domain.model.ConflictResolution
 import tr.canugur.mywayfiles.domain.model.FileItem
 import java.io.File
 import java.io.FileInputStream
@@ -126,11 +127,18 @@ class AndroidFileLocalDataSource(
     }
 
     override suspend fun copy(sourcePath: String, targetDirPath: String): Result<Unit> =
-        copy(sourcePath, targetDirPath) { _, _ -> }
+        copy(sourcePath, targetDirPath, ConflictResolution.AUTO_RENAME) { _, _ -> }
 
     override suspend fun copy(
         sourcePath: String,
         targetDirPath: String,
+        onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
+    ): Result<Unit> = copy(sourcePath, targetDirPath, ConflictResolution.AUTO_RENAME, onProgress)
+
+    override suspend fun copy(
+        sourcePath: String,
+        targetDirPath: String,
+        conflictResolution: ConflictResolution,
         onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
     ): Result<Unit> = withContext(ioDispatcher) {
         var destination: File? = null
@@ -144,12 +152,30 @@ class AndroidFileLocalDataSource(
 
             var dest = File(targetDir, source.name)
             if (dest.exists()) {
-                val nameWithoutExt = source.nameWithoutExtension
-                val ext = if (source.extension.isNotEmpty()) ".${source.extension}" else ""
-                var counter = 1
-                while (dest.exists()) {
-                    dest = File(targetDir, "$nameWithoutExt ($counter)$ext")
-                    counter++
+                when (conflictResolution) {
+                    ConflictResolution.SKIP -> {
+                        val totalBytes = if (source.isDirectory) directorySize(source) else source.length()
+                        onProgress(totalBytes, totalBytes)
+                        return@withContext Result.success(Unit)
+                    }
+                    ConflictResolution.OVERWRITE -> {
+                        if (source.canonicalPath == dest.canonicalPath) {
+                            return@withContext Result.success(Unit)
+                        }
+                        val removed = if (dest.isDirectory) dest.deleteRecursively() else dest.delete()
+                        if (!removed && dest.exists()) {
+                            return@withContext Result.failure(IOException("Could not overwrite existing file: ${dest.name}"))
+                        }
+                    }
+                    ConflictResolution.AUTO_RENAME -> {
+                        val nameWithoutExt = source.nameWithoutExtension
+                        val ext = if (source.extension.isNotEmpty()) ".${source.extension}" else ""
+                        var counter = 1
+                        while (dest.exists()) {
+                            dest = File(targetDir, "$nameWithoutExt ($counter)$ext")
+                            counter++
+                        }
+                    }
                 }
             }
             destination = dest
@@ -186,11 +212,18 @@ class AndroidFileLocalDataSource(
     }
 
     override suspend fun move(sourcePath: String, targetDirPath: String): Result<Unit> =
-        move(sourcePath, targetDirPath) { _, _ -> }
+        move(sourcePath, targetDirPath, ConflictResolution.AUTO_RENAME) { _, _ -> }
 
     override suspend fun move(
         sourcePath: String,
         targetDirPath: String,
+        onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
+    ): Result<Unit> = move(sourcePath, targetDirPath, ConflictResolution.AUTO_RENAME, onProgress)
+
+    override suspend fun move(
+        sourcePath: String,
+        targetDirPath: String,
+        conflictResolution: ConflictResolution,
         onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
     ): Result<Unit> = withContext(ioDispatcher) {
         val source = File(sourcePath)
@@ -202,9 +235,35 @@ class AndroidFileLocalDataSource(
                 return@withContext Result.failure(IllegalArgumentException("Target is not a directory"))
             }
 
-            val dest = File(targetDir, source.name)
+            var dest = File(targetDir, source.name)
+            if (dest.exists()) {
+                when (conflictResolution) {
+                    ConflictResolution.SKIP -> {
+                        val totalBytes = if (source.isDirectory) directorySize(source) else source.length()
+                        onProgress(totalBytes, totalBytes)
+                        return@withContext Result.success(Unit)
+                    }
+                    ConflictResolution.OVERWRITE -> {
+                        if (source.canonicalPath == dest.canonicalPath) {
+                            return@withContext Result.success(Unit)
+                        }
+                        val removed = if (dest.isDirectory) dest.deleteRecursively() else dest.delete()
+                        if (!removed && dest.exists()) {
+                            return@withContext Result.failure(IOException("Could not overwrite existing file: ${dest.name}"))
+                        }
+                    }
+                    ConflictResolution.AUTO_RENAME -> {
+                        val nameWithoutExt = source.nameWithoutExtension
+                        val ext = if (source.extension.isNotEmpty()) ".${source.extension}" else ""
+                        var counter = 1
+                        while (dest.exists()) {
+                            dest = File(targetDir, "$nameWithoutExt ($counter)$ext")
+                            counter++
+                        }
+                    }
+                }
+            }
             destination = dest
-            if (dest.exists()) return@withContext Result.failure(IOException("Destination already exists: ${dest.name}"))
 
             // A same-volume rename is effectively instant. Cross-volume moves fall back to a
             // cancellable buffered copy that reports the bytes actually written.

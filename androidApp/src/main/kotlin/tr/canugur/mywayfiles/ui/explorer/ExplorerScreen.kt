@@ -48,6 +48,7 @@ import tr.canugur.mywayfiles.core.util.FileLaunchHelper
 import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.core.constants.SearchTiming
 import tr.canugur.mywayfiles.core.util.FileShareHelper
+import tr.canugur.mywayfiles.ui.common.ConflictResolutionBottomSheet
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.domain.model.FileViewMode
@@ -198,6 +199,7 @@ fun ExplorerScreen(
     var itemToMoveToTrash by remember { mutableStateOf<FileItem?>(null) }
     var itemsToMoveToTrash by remember { mutableStateOf<List<FileItem>?>(null) }
     var itemsToMoveToFolder by remember { mutableStateOf<List<FileItem>?>(null) }
+    var pasteConflictsToResolve by remember { mutableStateOf<List<FileItem>?>(null) }
 
     fun requestMoveToTrash(item: FileItem) {
         if (permanentlyDeleteInsteadOfTrashing || confirmBeforeMovingToTrash) {
@@ -342,6 +344,8 @@ fun ExplorerScreen(
             },
             onBatchMoveToFolder = {
                 itemsToMoveToFolder = currentItems.filter { it.path in selectedPaths }
+                isSelectionMode = false
+                selectedPaths = emptySet()
             },
             onSortOptionSelected = { viewModel.onEvent(ExplorerUiEvent.ChangeSortOption(it)) },
             viewMode = viewMode,
@@ -387,19 +391,34 @@ fun ExplorerScreen(
             onDelete = ::requestMoveToTrash,
             onMoveToFolder = { itemsToMoveToFolder = listOf(it) },
             onProperties = { itemForProperties = it },
-            onPaste = { viewModel.onEvent(ExplorerUiEvent.Paste) },
+            onPaste = {
+                if (activeOperation == null) {
+                    val clip = (displayedState as? ExplorerUiState.Success)?.clipboard
+                        ?: (displayedState as? ExplorerUiState.Empty)?.clipboard
+                    if (clip != null && currentPath.isNotBlank()) {
+                        val conflicts = clip.items.filter { item ->
+                            val dest = File(currentPath, item.name)
+                            dest.exists() && runCatching { dest.canonicalPath != File(item.path).canonicalPath }.getOrDefault(true)
+                        }
+                        if (conflicts.isNotEmpty()) {
+                            pasteConflictsToResolve = conflicts
+                        } else {
+                            viewModel.onEvent(ExplorerUiEvent.Paste)
+                        }
+                    } else {
+                        viewModel.onEvent(ExplorerUiEvent.Paste)
+                    }
+                }
+            },
             onClearClipboard = { viewModel.onEvent(ExplorerUiEvent.ClearClipboard) },
+            isOperating = activeOperation != null,
             onEvent = viewModel::onEvent
         )
 
         activeOperation?.let { progress ->
-            tr.canugur.mywayfiles.ui.common.FileOperationProgressBanner(
+            tr.canugur.mywayfiles.ui.common.FileOperationProgressBottomSheet(
                 progress = progress,
-                onCancel = viewModel::cancelCurrentOperation,
-                modifier = Modifier.align(Alignment.TopCenter)
-                    .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(top = 64.dp, start = 16.dp, end = 16.dp, bottom = 8.dp)
-                    .fillMaxWidth()
+                onCancel = viewModel::cancelCurrentOperation
             )
         }
 
@@ -438,8 +457,10 @@ fun ExplorerScreen(
         // Operation Dialogs
         val renameItem = itemToRename
         if (renameItem != null) {
+            val existingNames = remember(displayedItems) { displayedItems.map { it.name }.toSet() }
             RenameDialog(
                 initialName = renameItem.name,
+                existingNames = existingNames,
                 onConfirm = { viewModel.onEvent(ExplorerUiEvent.Rename(renameItem, it)) },
                 onDismiss = { itemToRename = null }
             )
@@ -454,7 +475,9 @@ fun ExplorerScreen(
         }
 
         if (showCreateFolderDialog) {
+            val existingNames = remember(displayedItems) { displayedItems.map { it.name }.toSet() }
             CreateFolderDialog(
+                existingNames = existingNames,
                 onConfirm = { viewModel.onEvent(ExplorerUiEvent.CreateFolder(it)) },
                 onDismiss = { showCreateFolderDialog = false }
             )
@@ -472,10 +495,11 @@ fun ExplorerScreen(
                 initialDirectoryPath = currentPath,
                 onLoadFolders = viewModel::listMoveTargets,
                 onCreateFolder = viewModel::createMoveTargetFolder,
-                onMove = { items, targetPath, onProgress ->
+                onMove = { items, targetPath, resolution, onProgress ->
                     val results = viewModel.moveItemsToFolder(
                         items = items,
                         targetPath = targetPath,
+                        conflictResolution = resolution,
                         onProgress = onProgress,
                         onItemsMoved = { movedItems, destinationPath ->
                             onItemsMoved(movedItems, destinationPath)
@@ -490,11 +514,26 @@ fun ExplorerScreen(
                     if (results.isNotEmpty() && results.all { it.isSuccess }) {
                         isSelectionMode = false
                         selectedPaths = emptySet()
+                        viewModel.onEvent(ExplorerUiEvent.ClearClipboard)
                     }
                     results
                 },
                 onDismiss = {
                     itemsToMoveToFolder = null
+                }
+            )
+        }
+
+        val pasteConflicts = pasteConflictsToResolve
+        if (pasteConflicts != null) {
+            ConflictResolutionBottomSheet(
+                conflictingNames = pasteConflicts.map { it.name },
+                onResolve = { resolution ->
+                    viewModel.onEvent(ExplorerUiEvent.PasteWithResolution(resolution))
+                    pasteConflictsToResolve = null
+                },
+                onDismiss = {
+                    pasteConflictsToResolve = null
                 }
             )
         }
@@ -613,6 +652,7 @@ fun ExplorerScreenContent(
     onProperties: (FileItem) -> Unit,
     onPaste: () -> Unit,
     onClearClipboard: () -> Unit,
+    isOperating: Boolean = false,
     onEvent: (ExplorerUiEvent) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -988,6 +1028,7 @@ fun ExplorerScreenContent(
                 clipboard = activeClipboard,
                 destinationPath = contentState.directoryPathOrNull() ?: fallbackRootPath,
                 destinationName = breadcrumbs.lastOrNull()?.title ?: fallbackDriveName,
+                isOperating = isOperating,
                 onPaste = onPaste,
                 onClear = onClearClipboard,
                 modifier = Modifier.align(Alignment.BottomCenter)

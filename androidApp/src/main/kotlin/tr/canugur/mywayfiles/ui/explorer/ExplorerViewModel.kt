@@ -18,6 +18,7 @@ import tr.canugur.mywayfiles.data.datasource.AndroidFileLocalDataSource
 import tr.canugur.mywayfiles.data.preferences.ExplorerPreferences
 import tr.canugur.mywayfiles.data.repository.FileRepositoryImpl
 import tr.canugur.mywayfiles.data.repository.RecycleBinRepositoryImpl
+import tr.canugur.mywayfiles.domain.model.ConflictResolution
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.domain.model.SortOption
 import tr.canugur.mywayfiles.domain.repository.FileRepository
@@ -120,6 +121,7 @@ class ExplorerViewModel(
             }
             is ExplorerUiEvent.ClearOperationError -> clearOperationError()
             is ExplorerUiEvent.Paste -> handlePaste()
+            is ExplorerUiEvent.PasteWithResolution -> handlePaste(event.conflictResolution)
             is ExplorerUiEvent.Rename -> handleRename(event.item, event.newName)
             is ExplorerUiEvent.MoveToTrash -> handleMoveToTrash(event.item)
             is ExplorerUiEvent.Delete -> handleDelete(event.item)
@@ -202,12 +204,17 @@ class ExplorerViewModel(
         }
     }
 
-    private fun handlePaste() {
+    private fun handlePaste(conflictResolution: ConflictResolution = ConflictResolution.AUTO_RENAME) {
         val clip = activeClipboard ?: return
+        if (activeMutationJob?.isActive == true || _activeOperation.value != null) return
         val destinationPath = activePath
+        // Clear active clipboard immediately so the bar is closed and cannot be double-tapped
+        activeClipboard = null
+        updateStateClipboard()
+
         runTrackedOperation(FileOperation.PASTE, clip.items) { item, report ->
-            if (clip.isCut) fileRepository.move(item.path, destinationPath, report)
-            else fileRepository.copy(item.path, destinationPath, report)
+            if (clip.isCut) fileRepository.move(item.path, destinationPath, conflictResolution, report)
+            else fileRepository.copy(item.path, destinationPath, conflictResolution, report)
         }
     }
 
@@ -277,15 +284,21 @@ class ExplorerViewModel(
                         Result.failure(error)
                     }
                 }
-                if (operation == FileOperation.PASTE && results.all { it.isSuccess } && activeClipboard?.isCut == true) {
-                    activeClipboard = null
+                if (operation == FileOperation.PASTE) {
+                    val clip = activeClipboard
+                    if (clip != null) {
+                        val remaining = clip.items.filterIndexed { index, _ -> results.getOrNull(index)?.isSuccess != true }
+                        activeClipboard = remaining.takeIf { it.isNotEmpty() }?.let { clip.copy(items = it) }
+                        updateStateClipboard()
+                    }
                 }
                 finishMutation(results, operation, "Unable to complete ${operation.name.lowercase(Locale.ROOT)}")
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 val clip = activeClipboard
-                if (operation == FileOperation.PASTE && clip?.isCut == true) {
+                if (operation == FileOperation.PASTE && clip != null) {
                     val remaining = clip.items.filterIndexed { index, _ -> results.getOrNull(index)?.isSuccess != true }
                     activeClipboard = remaining.takeIf { it.isNotEmpty() }?.let { clip.copy(items = it) }
+                    updateStateClipboard()
                 }
                 finishMutation(
                     results,
@@ -398,6 +411,7 @@ class ExplorerViewModel(
     suspend fun moveItemsToFolder(
         items: List<FileItem>,
         targetPath: String,
+        conflictResolution: ConflictResolution = ConflictResolution.AUTO_RENAME,
         onProgress: (MoveProgress) -> Unit = {},
         onItemsMoved: (List<Pair<FileItem, String>>, String) -> Unit = { _, _ -> }
     ): List<Result<Unit>> {
@@ -411,7 +425,7 @@ class ExplorerViewModel(
                     Result.success(Unit)
                 } else {
                     onProgress(MoveProgress(index, items.size, 0L, item.sizeBytes))
-                    fileRepository.move(item.path, targetPath) { copied, total ->
+                    fileRepository.move(item.path, targetPath, conflictResolution) { copied, total ->
                         onProgress(MoveProgress(index, items.size, copied, total))
                     }
                 }
@@ -433,12 +447,17 @@ class ExplorerViewModel(
             )
             throw cancelled
         }
-        onItemsMoved(
-            items.zip(results)
-                .filter { (_, result) -> result.isSuccess }
-                .map { (item, _) -> item to File(targetPath, item.name).path },
-            targetPath
-        )
+        val successfullyMoved = items.zip(results)
+            .filter { (_, result) -> result.isSuccess }
+            .map { (item, _) -> item to File(targetPath, item.name).path }
+        onItemsMoved(successfullyMoved, targetPath)
+        val movedPaths = successfullyMoved.map { it.first.path }.toSet()
+        val clip = activeClipboard
+        if (clip != null) {
+            val remaining = clip.items.filterNot { it.path in movedPaths }
+            activeClipboard = remaining.takeIf { it.isNotEmpty() }?.let { clip.copy(items = it) }
+            updateStateClipboard()
+        }
         finishMutation(results, FileOperation.MOVE_MEDIA, "Unable to move the selected media")
         return results
     }

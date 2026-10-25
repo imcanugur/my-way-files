@@ -256,4 +256,19 @@
     <string name="view_mode_grid">Izgara görünümüne geç</string>
     <string name="view_mode_list">Liste görünümüne geç</string>
     <string name="cannot_open_file">Bu dosyayı açabilecek bir uygulama bulunamadı</string>
+
+    <!-- Conflict Resolution -->
+    <string name="conflict_dialog_title">Dosya çakışması</string>
+    <string name="conflict_dialog_subtitle_single">\"%1$s\" bu konumda zaten var.</string>
+    <string name="conflict_dialog_subtitle_multiple">Bu konumda aynı isimde %1$d dosya veya klasör zaten var.</string>
+    <string name="conflict_auto_rename">Her ikisini de sakla (Yeniden adlandır)</string>
+    <string name="conflict_auto_rename_desc">Numara ekleyerek her iki dosyayı da korur</string>
+    <string name="conflict_overwrite">Üzerine yaz</string>
+    <string name="conflict_overwrite_desc">Hedefteki dosyanın yerine kaydeder</string>
+    <string name="conflict_skip">Atla</string>
+    <string name="conflict_skip_desc">Mevcut dosyayı koru, aktarma yapma</string>
+    <string name="conflict_apply_all">Tüm çakışmalara uygula</string>
+    <string name="conflict_apply_button">Uygula</string>
+    <string name="conflict_name_already_exists">Bu isimde bir öğe zaten mevcut</string>
+    <string name="conflict_suggestion">Öneriyi kullan: %1$s</string>
 </resources>

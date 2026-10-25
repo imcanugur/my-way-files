@@ -2,6 +2,7 @@ package tr.canugur.mywayfiles.ui.explorer
 
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import tr.canugur.mywayfiles.domain.model.ConflictResolution
 import tr.canugur.mywayfiles.domain.model.FileItem
 import tr.canugur.mywayfiles.domain.model.SortOption
 
@@ -108,6 +109,7 @@ sealed interface ExplorerUiEvent {
     data class BatchCopy(val items: List<FileItem>) : ExplorerUiEvent
     data class BatchCut(val items: List<FileItem>) : ExplorerUiEvent
     data object Paste : ExplorerUiEvent
+    data class PasteWithResolution(val conflictResolution: ConflictResolution) : ExplorerUiEvent
     data object ClearClipboard : ExplorerUiEvent
     data object ClearOperationError : ExplorerUiEvent
     data class Rename(val item: FileItem, val newName: String) : ExplorerUiEvent
