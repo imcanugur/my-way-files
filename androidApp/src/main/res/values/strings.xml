@@ -168,6 +168,8 @@
     <string name="settings_prefer_last_move_target_description">Preselect the most recently used destination when opening the move sheet.</string>
     <string name="settings_hidden_files">Show hidden files</string>
     <string name="settings_hidden_files_description">Include files and folders whose names start with a dot</string>
+    <string name="fast_scroll_description">Fast scroll through files</string>
+    <string name="fast_scroll_position">%1$d percent through the list</string>
     <string name="folder_scan_progress">Loading folder… %1$d items found</string>
     <string name="settings_performance">Performance</string>
     <string name="settings_scroll_position_history">Remember folder scroll positions</string>

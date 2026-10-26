@@ -167,6 +167,8 @@
     <string name="settings_prefer_last_move_target_description">Taşıma penceresi açıldığında en son kullanılan klasörü önceden seç.</string>
     <string name="settings_hidden_files">Gizli dosyaları göster</string>
     <string name="settings_hidden_files_description">Nokta ile başlayan dosya ve klasörleri listeye ekle</string>
+    <string name="fast_scroll_description">Dosyalar arasında hızlı kaydır</string>
+    <string name="fast_scroll_position">Listenin %%1$d%% konumu</string>
     <string name="folder_scan_progress">Klasör yükleniyor… %1$d öğe bulundu</string>
     <string name="settings_performance">Performans</string>
     <string name="settings_scroll_position_history">Klasör kaydırma konumlarını hatırla</string>

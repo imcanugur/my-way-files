@@ -42,8 +42,10 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 import java.io.File
+import kotlin.math.roundToInt
 import tr.canugur.mywayfiles.core.util.FileLaunchHelper
 import tr.canugur.mywayfiles.core.util.FileTypeClassifier
 import tr.canugur.mywayfiles.core.constants.SearchTiming
@@ -66,6 +68,8 @@ import tr.canugur.mywayfiles.ui.theme.MotionTokens
 import tr.canugur.mywayfiles.ui.viewer.ImageViewerScreen
 import tr.canugur.mywayfiles.ui.explorer.components.MoveTargetRoot
 import tr.canugur.mywayfiles.ui.explorer.components.MoveToFolderDialog
+
+private const val FAST_SCROLL_MIN_ITEMS = 80
 
 private data class DirectoryScrollPosition(
     val listIndex: Int,
@@ -954,6 +958,9 @@ fun ExplorerScreenContent(
                 }
 
                 is ExplorerUiState.Success -> {
+                    val showFastScroll = !isSearchActive && !isSelectionMode &&
+                        state.items.size >= FAST_SCROLL_MIN_ITEMS
+                    val fastScrollScope = rememberCoroutineScope()
                     when {
                         isSearchActive && searchQuery.isNotBlank() && searchError != null -> {
                             Box(
@@ -1004,13 +1011,16 @@ fun ExplorerScreenContent(
 
                         else -> {
                             if (viewMode == FileViewMode.GRID) {
+                                Box(modifier = Modifier.fillMaxSize()) {
                                 LazyVerticalGrid(
                                     columns = GridCells.Adaptive(minSize = gridTileSize.dp),
                                     state = gridState,
                                     modifier = Modifier.fillMaxSize(),
                                     contentPadding = PaddingValues(
-                                        horizontal = Dimensions.SpacingLarge,
-                                        vertical = Dimensions.SpacingSmall
+                                        start = Dimensions.SpacingLarge,
+                                        end = Dimensions.SpacingLarge,
+                                        top = Dimensions.SpacingSmall,
+                                        bottom = Dimensions.SpacingSmall
                                     ),
                                     horizontalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall),
                                     verticalArrangement = Arrangement.spacedBy(Dimensions.SpacingSmall)
@@ -1071,13 +1081,35 @@ fun ExplorerScreenContent(
                                         Spacer(modifier = Modifier.height(if (isSelectionMode) Dimensions.SpacingHuge + Dimensions.ActionButtonSize else Dimensions.SpacingHuge))
                                     }
                                 }
+                                if (showFastScroll) {
+                                    val headerCount = 1 + if (state.operationError != null) 1 else 0
+                                    val visibleFiles = gridState.layoutInfo.visibleItemsInfo.count {
+                                        it.index >= headerCount && it.index < headerCount + state.items.size
+                                    }
+                                    ExplorerFastScrollRail(
+                                        totalItemCount = state.items.size,
+                                        firstItemIndex = (gridState.firstVisibleItemIndex - headerCount).coerceAtLeast(0),
+                                        visibleItemCount = visibleFiles,
+                                        onSeek = { fraction ->
+                                            fastScrollScope.launch {
+                                                val itemOffset = (fraction * (state.items.size - 1).coerceAtLeast(0)).roundToInt()
+                                                gridState.scrollToItem((headerCount + itemOffset).coerceAtMost(headerCount + state.items.lastIndex))
+                                            }
+                                        },
+                                        modifier = Modifier.align(Alignment.CenterEnd)
+                                    )
+                                }
+                                }
                             } else {
+                                Box(modifier = Modifier.fillMaxSize()) {
                                 LazyColumn(
                                     state = listState,
                                     modifier = Modifier.fillMaxSize(),
                                     contentPadding = PaddingValues(
-                                        horizontal = Dimensions.SpacingLarge,
-                                        vertical = Dimensions.SpacingSmall
+                                        start = Dimensions.SpacingLarge,
+                                        end = Dimensions.SpacingLarge,
+                                        top = Dimensions.SpacingSmall,
+                                        bottom = Dimensions.SpacingSmall
                                     )
                                 ) {
                                     if (isSearchActive && isSearchLoading && currentItems.isNotEmpty()) {
@@ -1139,6 +1171,25 @@ fun ExplorerScreenContent(
                                     item(key = "bottom-space") {
                                         Spacer(modifier = Modifier.height(if (isSelectionMode) Dimensions.SpacingHuge + Dimensions.ActionButtonSize else Dimensions.SpacingHuge))
                                     }
+                                }
+                                if (showFastScroll) {
+                                    val headerCount = 1 + if (state.operationError != null) 1 else 0
+                                    val visibleFiles = listState.layoutInfo.visibleItemsInfo.count {
+                                        it.index >= headerCount && it.index < headerCount + state.items.size
+                                    }
+                                    ExplorerFastScrollRail(
+                                        totalItemCount = state.items.size,
+                                        firstItemIndex = (listState.firstVisibleItemIndex - headerCount).coerceAtLeast(0),
+                                        visibleItemCount = visibleFiles,
+                                        onSeek = { fraction ->
+                                            fastScrollScope.launch {
+                                                val itemOffset = (fraction * (state.items.size - 1).coerceAtLeast(0)).roundToInt()
+                                                listState.scrollToItem((headerCount + itemOffset).coerceAtMost(headerCount + state.items.lastIndex))
+                                            }
+                                        },
+                                        modifier = Modifier.align(Alignment.CenterEnd)
+                                    )
+                                }
                                 }
                             }
                         }
