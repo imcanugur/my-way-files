@@ -25,7 +25,8 @@ data class FileOperationProgress(
     val itemCount: Int,
     val copiedBytes: Long = 0L,
     val totalBytes: Long = 0L,
-    val canCancel: Boolean = false
+    val canCancel: Boolean = false,
+    val operationId: String = ""
 )
 
 data class OperationFeedback(

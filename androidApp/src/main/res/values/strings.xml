@@ -273,4 +273,5 @@
     <string name="conflict_apply_button">Apply</string>
     <string name="conflict_name_already_exists">An item with this name already exists</string>
     <string name="conflict_suggestion">Use suggestion: %1$s</string>
+    <string name="background_operations">%1$d file operations running</string>
 </resources>

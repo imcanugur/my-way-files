@@ -271,4 +271,5 @@
     <string name="conflict_apply_button">Uygula</string>
     <string name="conflict_name_already_exists">Bu isimde bir öğe zaten mevcut</string>
     <string name="conflict_suggestion">Öneriyi kullan: %1$s</string>
+    <string name="background_operations">%1$d dosya işlemi sürüyor</string>
 </resources>

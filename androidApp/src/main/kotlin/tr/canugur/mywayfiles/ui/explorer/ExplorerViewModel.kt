@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,7 @@ import tr.canugur.mywayfiles.domain.usecase.GetDirectoryContentsUseCase
 import tr.canugur.mywayfiles.domain.usecase.SearchFilesUseCase
 import java.io.File
 import java.util.Locale
+import java.util.UUID
 
 /**
  * Production-ready ViewModel governing file system browsing, breadcrumb navigation,
@@ -50,8 +52,9 @@ class ExplorerViewModel(
     private val _searchState = MutableStateFlow(ExplorerSearchState())
     private val _operationFeedback = MutableSharedFlow<OperationFeedback>(extraBufferCapacity = 8)
     val operationFeedback = _operationFeedback.asSharedFlow()
-    private val _activeOperation = MutableStateFlow<FileOperationProgress?>(null)
-    val activeOperation: StateFlow<FileOperationProgress?> = _activeOperation.asStateFlow()
+    private val _activeOperations = MutableStateFlow<List<FileOperationProgress>>(emptyList())
+    val activeOperations: StateFlow<List<FileOperationProgress>> = _activeOperations.asStateFlow()
+    private val operationJobs = mutableMapOf<String, Job>()
     val searchState: StateFlow<ExplorerSearchState> = _searchState.asStateFlow()
 
     private var activePath: String = rootPath
@@ -63,10 +66,12 @@ class ExplorerViewModel(
     private var directoryRequestId: Long = 0L
     private var searchRequestId: Long = 0L
     private var searchJob: Job? = null
-    private var activeMutationJob: Job? = null
+    fun cancelOperation(operationId: String) {
+        operationJobs[operationId]?.cancel()
+    }
 
     fun cancelCurrentOperation() {
-        activeMutationJob?.cancel()
+        operationJobs.values.toList().forEach(Job::cancel)
     }
 
     init {
@@ -206,20 +211,18 @@ class ExplorerViewModel(
 
     private fun handlePaste(conflictResolution: ConflictResolution = ConflictResolution.AUTO_RENAME) {
         val clip = activeClipboard ?: return
-        if (activeMutationJob?.isActive == true || _activeOperation.value != null) return
         val destinationPath = activePath
-        // Clear active clipboard immediately so the bar is closed and cannot be double-tapped
+        // Consume this clipboard snapshot so a later copy/cut can start another independent job.
         activeClipboard = null
         updateStateClipboard()
 
-        runTrackedOperation(FileOperation.PASTE, clip.items) { item, report ->
+        runTrackedOperation(FileOperation.PASTE, clip.items, clipboardSnapshot = clip) { item, report ->
             if (clip.isCut) fileRepository.move(item.path, destinationPath, conflictResolution, report)
             else fileRepository.copy(item.path, destinationPath, conflictResolution, report)
         }
     }
 
     private fun handleRename(item: FileItem, newName: String) {
-        if (_activeOperation.value != null || activeMutationJob?.isActive == true) return
         viewModelScope.launch {
             finishMutation(
                 listOf(fileRepository.rename(item.path, newName)),
@@ -252,30 +255,39 @@ class ExplorerViewModel(
     private fun runTrackedOperation(
         operation: FileOperation,
         items: List<FileItem>,
+        clipboardSnapshot: Clipboard? = null,
         action: suspend (FileItem, (Long, Long) -> Unit) -> Result<Unit>
     ) {
-        if (items.isEmpty() || activeMutationJob?.isActive == true) return
-        activeMutationJob = viewModelScope.launch {
+        if (items.isEmpty()) return
+        val operationId = UUID.randomUUID().toString()
+        val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
             val results = mutableListOf<Result<Unit>>()
             try {
                 items.forEachIndexed { index, item ->
-                    _activeOperation.value = FileOperationProgress(
-                        operation = operation,
-                        itemName = item.name,
-                        itemIndex = index,
-                        itemCount = items.size,
-                        canCancel = !item.isDirectory && operation in setOf(FileOperation.PASTE, FileOperation.MOVE_TO_TRASH)
+                    val canCancel = !item.isDirectory && operation in setOf(FileOperation.PASTE, FileOperation.MOVE_TO_TRASH)
+                    updateOperationProgress(
+                        FileOperationProgress(
+                            operation = operation,
+                            itemName = item.name,
+                            itemIndex = index,
+                            itemCount = items.size,
+                            canCancel = canCancel,
+                            operationId = operationId
+                        )
                     )
                     results += try {
                         action(item) { copied, total ->
-                            _activeOperation.value = FileOperationProgress(
-                                operation = operation,
-                                itemName = item.name,
-                                itemIndex = index,
-                                itemCount = items.size,
-                                copiedBytes = copied,
-                                totalBytes = total,
-                                canCancel = !item.isDirectory && operation in setOf(FileOperation.PASTE, FileOperation.MOVE_TO_TRASH)
+                            updateOperationProgress(
+                                FileOperationProgress(
+                                    operation = operation,
+                                    itemName = item.name,
+                                    itemIndex = index,
+                                    itemCount = items.size,
+                                    copiedBytes = copied,
+                                    totalBytes = total,
+                                    canCancel = canCancel,
+                                    operationId = operationId
+                                )
                             )
                         }
                     } catch (cancelled: kotlinx.coroutines.CancellationException) {
@@ -284,22 +296,10 @@ class ExplorerViewModel(
                         Result.failure(error)
                     }
                 }
-                if (operation == FileOperation.PASTE) {
-                    val clip = activeClipboard
-                    if (clip != null) {
-                        val remaining = clip.items.filterIndexed { index, _ -> results.getOrNull(index)?.isSuccess != true }
-                        activeClipboard = remaining.takeIf { it.isNotEmpty() }?.let { clip.copy(items = it) }
-                        updateStateClipboard()
-                    }
-                }
+                restoreFailedClipboardItems(clipboardSnapshot, items, results)
                 finishMutation(results, operation, "Unable to complete ${operation.name.lowercase(Locale.ROOT)}")
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                val clip = activeClipboard
-                if (operation == FileOperation.PASTE && clip != null) {
-                    val remaining = clip.items.filterIndexed { index, _ -> results.getOrNull(index)?.isSuccess != true }
-                    activeClipboard = remaining.takeIf { it.isNotEmpty() }?.let { clip.copy(items = it) }
-                    updateStateClipboard()
-                }
+                restoreFailedClipboardItems(clipboardSnapshot, items, results)
                 finishMutation(
                     results,
                     operation,
@@ -309,13 +309,31 @@ class ExplorerViewModel(
                 )
                 throw cancelled
             } finally {
-                _activeOperation.value = null
+                operationJobs.remove(operationId)
+                _activeOperations.value = _activeOperations.value.filterNot { it.operationId == operationId }
             }
         }
+        operationJobs[operationId] = job
+        job.start()
+    }
+
+    private fun updateOperationProgress(progress: FileOperationProgress) {
+        _activeOperations.value = _activeOperations.value
+            .filterNot { it.operationId == progress.operationId } + progress
+    }
+
+    private fun restoreFailedClipboardItems(
+        snapshot: Clipboard?,
+        items: List<FileItem>,
+        results: List<Result<Unit>>
+    ) {
+        if (snapshot == null || activeClipboard != null) return
+        val remaining = items.filterIndexed { index, _ -> results.getOrNull(index)?.isSuccess != true }
+        activeClipboard = remaining.takeIf { it.isNotEmpty() }?.let { snapshot.copy(items = it) }
+        updateStateClipboard()
     }
 
     private fun handleCreateFolder(name: String) {
-        if (_activeOperation.value != null || activeMutationJob?.isActive == true) return
         viewModelScope.launch {
             finishMutation(
                 listOf(fileRepository.createFolder(activePath, name)),

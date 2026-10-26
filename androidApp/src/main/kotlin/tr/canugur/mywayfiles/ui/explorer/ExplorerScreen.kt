@@ -120,7 +120,14 @@ fun ExplorerScreen(
         }
     }
     val searchState by viewModel.searchState.collectAsStateWithLifecycle()
-    val activeOperation by viewModel.activeOperation.collectAsStateWithLifecycle()
+    val activeOperations by viewModel.activeOperations.collectAsStateWithLifecycle()
+    var showOperationSheet by rememberSaveable(rootPath) { mutableStateOf(false) }
+    var hadRunningOperations by remember { mutableStateOf(false) }
+    LaunchedEffect(activeOperations.isNotEmpty()) {
+        val running = activeOperations.isNotEmpty()
+        if (running && !hadRunningOperations) showOperationSheet = true
+        hadRunningOperations = running
+    }
 
     var isSelectionMode by remember { mutableStateOf(false) }
     var selectedPaths by remember { mutableStateOf(setOf<String>()) }
@@ -392,33 +399,39 @@ fun ExplorerScreen(
             onMoveToFolder = { itemsToMoveToFolder = listOf(it) },
             onProperties = { itemForProperties = it },
             onPaste = {
-                if (activeOperation == null) {
-                    val clip = (displayedState as? ExplorerUiState.Success)?.clipboard
-                        ?: (displayedState as? ExplorerUiState.Empty)?.clipboard
-                    if (clip != null && currentPath.isNotBlank()) {
-                        val conflicts = clip.items.filter { item ->
-                            val dest = File(currentPath, item.name)
-                            dest.exists() && runCatching { dest.canonicalPath != File(item.path).canonicalPath }.getOrDefault(true)
-                        }
-                        if (conflicts.isNotEmpty()) {
-                            pasteConflictsToResolve = conflicts
-                        } else {
-                            viewModel.onEvent(ExplorerUiEvent.Paste)
-                        }
+                val clip = (displayedState as? ExplorerUiState.Success)?.clipboard
+                    ?: (displayedState as? ExplorerUiState.Empty)?.clipboard
+                if (clip != null && currentPath.isNotBlank()) {
+                    val conflicts = clip.items.filter { item ->
+                        val dest = File(currentPath, item.name)
+                        dest.exists() && runCatching { dest.canonicalPath != File(item.path).canonicalPath }.getOrDefault(true)
+                    }
+                    if (conflicts.isNotEmpty()) {
+                        pasteConflictsToResolve = conflicts
                     } else {
                         viewModel.onEvent(ExplorerUiEvent.Paste)
                     }
+                } else {
+                    viewModel.onEvent(ExplorerUiEvent.Paste)
                 }
             },
             onClearClipboard = { viewModel.onEvent(ExplorerUiEvent.ClearClipboard) },
-            isOperating = activeOperation != null,
+            isOperating = false,
             onEvent = viewModel::onEvent
         )
 
-        activeOperation?.let { progress ->
+        if (activeOperations.isNotEmpty() && showOperationSheet) {
             tr.canugur.mywayfiles.ui.common.FileOperationProgressBottomSheet(
-                progress = progress,
-                onCancel = viewModel::cancelCurrentOperation
+                progresses = activeOperations,
+                onCancel = viewModel::cancelOperation,
+                onDismiss = { showOperationSheet = false }
+            )
+        }
+        if (activeOperations.isNotEmpty() && !showOperationSheet) {
+            tr.canugur.mywayfiles.ui.common.FileOperationDock(
+                operationCount = activeOperations.size,
+                onClick = { showOperationSheet = true },
+                modifier = Modifier.align(Alignment.BottomEnd)
             )
         }
 
