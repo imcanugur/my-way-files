@@ -299,7 +299,6 @@ class ExplorerViewModel(
                 restoreFailedClipboardItems(clipboardSnapshot, items, results)
                 finishMutation(results, operation, "Unable to complete ${operation.name.lowercase(Locale.ROOT)}")
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                restoreFailedClipboardItems(clipboardSnapshot, items, results)
                 finishMutation(
                     results,
                     operation,

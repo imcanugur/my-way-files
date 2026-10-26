@@ -114,6 +114,11 @@ fun ExplorerScreen(
         if (viewModel.currentDirectoryPath() != initialPath) viewModel.loadDirectory(initialPath)
     }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val hasClipboardPending = when (val current = state) {
+        is ExplorerUiState.Success -> current.clipboard != null
+        is ExplorerUiState.Empty -> current.clipboard != null
+        else -> false
+    }
     LaunchedEffect(viewModel) {
         viewModel.operationFeedback.collect { feedback ->
             context.showOperationFeedback(feedback)
@@ -431,7 +436,15 @@ fun ExplorerScreen(
             tr.canugur.mywayfiles.ui.common.FileOperationDock(
                 operationCount = activeOperations.size,
                 onClick = { showOperationSheet = true },
-                modifier = Modifier.align(Alignment.BottomEnd)
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(
+                        bottom = when {
+                            hasClipboardPending && !isSelectionMode -> 148.dp
+                            isSelectionMode || !isSearchActive -> 76.dp
+                            else -> 0.dp
+                        }
+                    )
             )
         }
 
@@ -1044,7 +1057,9 @@ fun ExplorerScreenContent(
                 isOperating = isOperating,
                 onPaste = onPaste,
                 onClear = onClearClipboard,
-                modifier = Modifier.align(Alignment.BottomCenter)
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 76.dp)
             )
         }
 
@@ -1066,7 +1081,7 @@ fun ExplorerScreenContent(
                 onProperties = { singleSelected?.let(onProperties) },
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
-        } else if (activeClipboard == null && !isSearchActive) {
+        } else if (!isSearchActive) {
             ExplorerFloatingActionBar(
                 onCreateFolder = onCreateFolderClick,
                 onEnterSelectionMode = onEnterSelectionMode,
