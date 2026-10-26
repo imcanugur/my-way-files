@@ -243,8 +243,20 @@ class AndroidFileLocalDataSource(
         targetDirPath: String,
         conflictResolution: ConflictResolution,
         onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
+    ): Result<Unit> = copyWithNestedConflictResolver(
+        sourcePath, targetDirPath, conflictResolution, onProgress
+    ) { _, _, _ -> ConflictResolution.AUTO_RENAME }
+
+    override suspend fun copyWithNestedConflictResolver(
+        sourcePath: String,
+        targetDirPath: String,
+        conflictResolution: ConflictResolution,
+        onProgress: (Long, Long) -> Unit,
+        resolveNestedConflict: suspend (String, String, Boolean) -> ConflictResolution
     ): Result<Unit> = withContext(ioDispatcher) {
         var destination: File? = null
+        var mergingExistingDirectory = false
+        val createdMergePaths = mutableListOf<File>()
         try {
             val source = File(sourcePath)
             val targetDir = File(targetDirPath)
@@ -270,13 +282,29 @@ class AndroidFileLocalDataSource(
                             return@withContext Result.failure(IOException("Could not overwrite existing file: ${dest.name}"))
                         }
                     }
-                    ConflictResolution.AUTO_RENAME -> {
-                        val nameWithoutExt = source.nameWithoutExtension
-                        val ext = if (source.extension.isNotEmpty()) ".${source.extension}" else ""
-                        var counter = 1
-                        while (dest.exists()) {
-                            dest = File(targetDir, "$nameWithoutExt ($counter)$ext")
-                            counter++
+                    ConflictResolution.AUTO_RENAME -> dest = nextAvailableName(targetDir, source)
+                    ConflictResolution.MERGE -> {
+                        if (source.isDirectory && dest.isDirectory) {
+                            mergingExistingDirectory = true
+                        } else {
+                            // A merge only combines two folders. Ask before changing a
+                            // same-name file or file/folder collision; never suffix it silently.
+                            when (resolveNestedConflict(source.path, dest.path, false)) {
+                                ConflictResolution.SKIP -> {
+                                    val totalBytes = if (source.isDirectory) directorySize(source) else source.length()
+                                    onProgress(totalBytes, totalBytes)
+                                    return@withContext Result.success(Unit)
+                                }
+                                ConflictResolution.OVERWRITE -> {
+                                    val removed = if (dest.isDirectory) dest.deleteRecursively() else dest.delete()
+                                    if (!removed && dest.exists()) {
+                                        return@withContext Result.failure(IOException("Could not overwrite existing item: ${dest.name}"))
+                                    }
+                                }
+                                ConflictResolution.AUTO_RENAME, ConflictResolution.MERGE -> {
+                                    dest = nextAvailableName(targetDir, source)
+                                }
+                            }
                         }
                     }
                 }
@@ -294,7 +322,11 @@ class AndroidFileLocalDataSource(
                 }
             }
 
-            if (source.isDirectory) {
+            if (mergingExistingDirectory) {
+                mergeDirectoryWithProgress(
+                    source, dest, ::reportCopied, createdMergePaths, resolveNestedConflict = resolveNestedConflict
+                )
+            } else if (source.isDirectory) {
                 copyTreeWithProgress(source, dest, ::reportCopied)
             } else {
                 copyFileWithProgress(source, dest, ::reportCopied)
@@ -306,10 +338,12 @@ class AndroidFileLocalDataSource(
             onProgress(totalBytes, totalBytes)
             Result.success(Unit)
         } catch (cancelled: CancellationException) {
-            destination?.takeIf { it.exists() }?.deleteRecursively()
+            if (mergingExistingDirectory) removeCreatedMergePaths(createdMergePaths)
+            else destination?.takeIf { it.exists() }?.deleteRecursively()
             throw cancelled
         } catch (error: Exception) {
-            destination?.takeIf { it.exists() }?.deleteRecursively()
+            if (mergingExistingDirectory) removeCreatedMergePaths(createdMergePaths)
+            else destination?.takeIf { it.exists() }?.deleteRecursively()
             Result.failure(error)
         }
     }
@@ -328,9 +362,21 @@ class AndroidFileLocalDataSource(
         targetDirPath: String,
         conflictResolution: ConflictResolution,
         onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
+    ): Result<Unit> = moveWithNestedConflictResolver(
+        sourcePath, targetDirPath, conflictResolution, onProgress
+    ) { _, _, _ -> ConflictResolution.AUTO_RENAME }
+
+    override suspend fun moveWithNestedConflictResolver(
+        sourcePath: String,
+        targetDirPath: String,
+        conflictResolution: ConflictResolution,
+        onProgress: (Long, Long) -> Unit,
+        resolveNestedConflict: suspend (String, String, Boolean) -> ConflictResolution
     ): Result<Unit> = withContext(ioDispatcher) {
         val source = File(sourcePath)
         var destination: File? = null
+        var mergingExistingDirectory = false
+        val createdMergePaths = mutableListOf<File>()
         try {
             if (!source.exists()) return@withContext Result.failure(FileNotFoundException("Source not found: $sourcePath"))
             val targetDir = File(targetDirPath)
@@ -355,13 +401,29 @@ class AndroidFileLocalDataSource(
                             return@withContext Result.failure(IOException("Could not overwrite existing file: ${dest.name}"))
                         }
                     }
-                    ConflictResolution.AUTO_RENAME -> {
-                        val nameWithoutExt = source.nameWithoutExtension
-                        val ext = if (source.extension.isNotEmpty()) ".${source.extension}" else ""
-                        var counter = 1
-                        while (dest.exists()) {
-                            dest = File(targetDir, "$nameWithoutExt ($counter)$ext")
-                            counter++
+                    ConflictResolution.AUTO_RENAME -> dest = nextAvailableName(targetDir, source)
+                    ConflictResolution.MERGE -> {
+                        if (source.isDirectory && dest.isDirectory) {
+                            mergingExistingDirectory = true
+                        } else {
+                            // A merge only combines two folders. Ask before changing a
+                            // same-name file or file/folder collision; never suffix it silently.
+                            when (resolveNestedConflict(source.path, dest.path, false)) {
+                                ConflictResolution.SKIP -> {
+                                    val totalBytes = if (source.isDirectory) directorySize(source) else source.length()
+                                    onProgress(totalBytes, totalBytes)
+                                    return@withContext Result.success(Unit)
+                                }
+                                ConflictResolution.OVERWRITE -> {
+                                    val removed = if (dest.isDirectory) dest.deleteRecursively() else dest.delete()
+                                    if (!removed && dest.exists()) {
+                                        return@withContext Result.failure(IOException("Could not overwrite existing item: ${dest.name}"))
+                                    }
+                                }
+                                ConflictResolution.AUTO_RENAME, ConflictResolution.MERGE -> {
+                                    dest = nextAvailableName(targetDir, source)
+                                }
+                            }
                         }
                     }
                 }
@@ -370,7 +432,7 @@ class AndroidFileLocalDataSource(
 
             // A same-volume rename is effectively instant. Cross-volume moves fall back to a
             // cancellable buffered copy that reports the bytes actually written.
-            if (source.renameTo(dest)) {
+            if (!mergingExistingDirectory && source.renameTo(dest)) {
                 onProgress(0L, 0L)
                 return@withContext Result.success(Unit)
             }
@@ -388,7 +450,11 @@ class AndroidFileLocalDataSource(
                 }
             }
 
-            if (source.isDirectory) {
+            if (mergingExistingDirectory) {
+                mergeDirectoryWithProgress(
+                    source, dest, ::reportCopied, createdMergePaths, resolveNestedConflict = resolveNestedConflict
+                )
+            } else if (source.isDirectory) {
                 copyTreeWithProgress(source, dest, ::reportCopied)
             } else {
                 copyFileWithProgress(source, dest, ::reportCopied)
@@ -403,10 +469,12 @@ class AndroidFileLocalDataSource(
             if (!removed) throw IOException("Copied ${source.name}, but could not remove the original")
             Result.success(Unit)
         } catch (cancelled: CancellationException) {
-            destination?.takeIf { it.exists() }?.deleteRecursively()
+            if (mergingExistingDirectory) removeCreatedMergePaths(createdMergePaths)
+            else destination?.takeIf { it.exists() }?.deleteRecursively()
             throw cancelled
         } catch (error: Exception) {
-            destination?.takeIf { it.exists() }?.deleteRecursively()
+            if (mergingExistingDirectory) removeCreatedMergePaths(createdMergePaths)
+            else destination?.takeIf { it.exists() }?.deleteRecursively()
             Result.failure(error)
         }
     }
@@ -428,6 +496,78 @@ class AndroidFileLocalDataSource(
             }
         }
         return total
+    }
+
+    private fun nextAvailableName(targetDir: File, source: File): File {
+        val suffix = if (source.isDirectory || source.extension.isEmpty()) "" else ".${source.extension}"
+        val baseName = if (suffix.isEmpty()) source.name else source.nameWithoutExtension
+        var counter = 1
+        var candidate: File
+        do {
+            candidate = File(targetDir, "$baseName ($counter)$suffix")
+            counter++
+        } while (candidate.exists())
+        return candidate
+    }
+
+    private suspend fun mergeDirectoryWithProgress(
+        source: File,
+        destination: File,
+        onChunk: (Long) -> Unit,
+        createdPaths: MutableList<File>,
+        visitedDirectories: MutableSet<String> = mutableSetOf(),
+        resolveNestedConflict: suspend (String, String, Boolean) -> ConflictResolution
+    ) {
+        currentCoroutineContext().ensureActive()
+        if (!visitedDirectories.add(source.canonicalPath)) return
+        if (!destination.exists()) {
+            if (!destination.mkdir() && !destination.isDirectory) {
+                throw IOException("Unable to create ${destination.path}")
+            }
+            if (destination.isDirectory) createdPaths += destination
+        }
+        if (!destination.isDirectory) throw IOException("Cannot merge into ${destination.path}")
+        val children = source.listFiles() ?: throw IOException("Unable to read ${source.path}")
+        for (child in children) {
+            currentCoroutineContext().ensureActive()
+            var target = File(destination, child.name)
+            if (target.exists()) {
+                if (child.isDirectory && target.isDirectory) {
+                    mergeDirectoryWithProgress(
+                        child, target, onChunk, createdPaths, visitedDirectories, resolveNestedConflict
+                    )
+                    target.setLastModified(child.lastModified())
+                    continue
+                }
+                when (resolveNestedConflict(child.path, target.path, false)) {
+                    ConflictResolution.SKIP -> continue
+                    ConflictResolution.OVERWRITE -> {
+                        val removed = if (target.isDirectory) target.deleteRecursively() else target.delete()
+                        if (!removed && target.exists()) throw IOException("Unable to replace ${target.path}")
+                    }
+                    ConflictResolution.AUTO_RENAME, ConflictResolution.MERGE -> {
+                        target = nextAvailableName(destination, child)
+                    }
+                }
+            }
+            if (child.isDirectory) {
+                mergeDirectoryWithProgress(
+                        child, target, onChunk, createdPaths, visitedDirectories, resolveNestedConflict
+                    )
+                target.setLastModified(child.lastModified())
+            } else {
+                createdPaths += target
+                copyFileWithProgress(child, target, onChunk)
+                if (target.length() != child.length()) throw IOException("Copy was incomplete: ${target.name}")
+                target.setLastModified(child.lastModified())
+            }
+        }
+        destination.setLastModified(source.lastModified())
+    }
+
+    private fun removeCreatedMergePaths(paths: List<File>) {
+        // Remove only paths created by this merge. Never recursively delete the pre-existing target.
+        paths.asReversed().forEach { path -> runCatching { path.delete() } }
     }
 
     private suspend fun copyTreeWithProgress(

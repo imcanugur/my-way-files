@@ -29,6 +29,21 @@ data class FileOperationProgress(
     val operationId: String = ""
 )
 
+data class ConflictChoice(
+    val resolution: ConflictResolution,
+    val applyToRemaining: Boolean = false,
+    val cancelled: Boolean = false
+)
+
+data class NestedConflictPrompt(
+    val id: String,
+    val sourcePath: String,
+    val destinationPath: String,
+    val itemName: String,
+    val destinationName: String,
+    val allowMergeFolders: Boolean
+)
+
 data class OperationFeedback(
     val operation: FileOperation,
     val succeeded: Int,
@@ -111,6 +126,10 @@ sealed interface ExplorerUiEvent {
     data class BatchCut(val items: List<FileItem>) : ExplorerUiEvent
     data object Paste : ExplorerUiEvent
     data class PasteWithResolution(val conflictResolution: ConflictResolution) : ExplorerUiEvent
+    data class PasteWithResolutions(
+        val defaultResolution: ConflictResolution,
+        val resolutionsBySourcePath: Map<String, ConflictResolution>
+    ) : ExplorerUiEvent
     data object ClearClipboard : ExplorerUiEvent
     data object ClearOperationError : ExplorerUiEvent
     data class Rename(val item: FileItem, val newName: String) : ExplorerUiEvent

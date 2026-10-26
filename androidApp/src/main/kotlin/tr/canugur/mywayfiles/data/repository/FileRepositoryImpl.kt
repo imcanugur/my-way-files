@@ -142,6 +142,20 @@ class FileRepositoryImpl(
         return result
     }
 
+    override suspend fun copyWithNestedConflictResolver(
+        sourcePath: String,
+        targetDirPath: String,
+        conflictResolution: ConflictResolution,
+        onProgress: (Long, Long) -> Unit,
+        resolveNestedConflict: suspend (String, String, Boolean) -> ConflictResolution
+    ): Result<Unit> {
+        val result = localDataSource.copyWithNestedConflictResolver(
+            sourcePath, targetDirPath, conflictResolution, onProgress, resolveNestedConflict
+        )
+        result.onSuccess { directoryCache?.invalidate(targetDirPath) }
+        return result
+    }
+
     override suspend fun move(sourcePath: String, targetDirPath: String): Result<Unit> =
         move(sourcePath, targetDirPath, ConflictResolution.AUTO_RENAME) { _, _ -> }
 
@@ -158,6 +172,23 @@ class FileRepositoryImpl(
         onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit
     ): Result<Unit> {
         val result = localDataSource.move(sourcePath, targetDirPath, conflictResolution, onProgress)
+        result.onSuccess {
+            directoryCache?.invalidate(sourcePath)
+            directoryCache?.invalidate(targetDirPath)
+        }
+        return result
+    }
+
+    override suspend fun moveWithNestedConflictResolver(
+        sourcePath: String,
+        targetDirPath: String,
+        conflictResolution: ConflictResolution,
+        onProgress: (Long, Long) -> Unit,
+        resolveNestedConflict: suspend (String, String, Boolean) -> ConflictResolution
+    ): Result<Unit> {
+        val result = localDataSource.moveWithNestedConflictResolver(
+            sourcePath, targetDirPath, conflictResolution, onProgress, resolveNestedConflict
+        )
         result.onSuccess {
             directoryCache?.invalidate(sourcePath)
             directoryCache?.invalidate(targetDirPath)

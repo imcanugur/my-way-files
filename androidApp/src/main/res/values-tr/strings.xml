@@ -258,17 +258,28 @@
     <string name="cannot_open_file">Bu dosyayı açabilecek bir uygulama bulunamadı</string>
 
     <!-- Conflict Resolution -->
-    <string name="conflict_dialog_title">Dosya çakışması</string>
+    <string name="conflict_nested_context">%1$s içindeki öğe, %2$s konumundaki öğeyle çakışıyor.</string>
+    <string name="conflict_apply_remaining">Bu işlemdeki sonraki çakışmalarda da bu kararı kullan</string>
+    <string name="conflict_auto_rename_short">İkisini de koru</string>
+    <string name="conflict_individual_hint">Yukarıdaki her öğe için farklı işlem seçebilirsin.</string>
+    <string name="conflict_dialog_title">Aynı adlı öğeler bulundu</string>
     <string name="conflict_dialog_subtitle_single">\"%1$s\" bu konumda zaten var.</string>
-    <string name="conflict_dialog_subtitle_multiple">Bu konumda aynı isimde %1$d dosya veya klasör zaten var.</string>
+    <string name="conflict_dialog_subtitle_multiple">Bu konumda aynı adlı %1$d öğe zaten var.</string>
     <string name="conflict_auto_rename">Her ikisini de sakla (Yeniden adlandır)</string>
-    <string name="conflict_auto_rename_desc">Numara ekleyerek her iki dosyayı da korur</string>
+    <string name="conflict_auto_rename_desc">Yinelenen adlara numara ekleyerek tüm öğeleri korur</string>
     <string name="conflict_overwrite">Üzerine yaz</string>
-    <string name="conflict_overwrite_desc">Hedefteki dosyanın yerine kaydeder</string>
+    <string name="conflict_overwrite_desc">Hedefte eşleşen öğenin yerine yazar</string>
     <string name="conflict_skip">Atla</string>
-    <string name="conflict_skip_desc">Mevcut dosyayı koru, aktarma yapma</string>
-    <string name="conflict_apply_all">Tüm çakışmalara uygula</string>
-    <string name="conflict_apply_button">Uygula</string>
+    <string name="conflict_skip_desc">Hedeftekini korur ve kaynakta eşleşen öğeyi atlar</string>
+    <string name="conflict_choose_individually">Öğeleri ayrı ayrı seç</string>
+    <string name="conflict_use_one_choice">Tümüne tek karar uygula</string>
+    <string name="conflict_apply_all">%1$d çakışmanın tümü için tek karar</string>
+    <string name="conflict_merge_folders">Aynı adlı klasörleri birleştir</string>
+    <string name="conflict_merge_folders_desc">Klasörleri ada göre birleştirir; aynı adlı dosyaları numaralı kopya yapar. Dosya içerikleri karşılaştırılmaz.</string>
+    <string name="conflict_folder_count">%1$d klasör</string>
+    <string name="conflict_file_count">%1$d dosya</string>
+    <string name="conflict_more_items">+ %1$d öğe daha</string>
+    <string name="conflict_apply_button">Tümüne uygula</string>
     <string name="conflict_name_already_exists">Bu isimde bir öğe zaten mevcut</string>
     <string name="conflict_suggestion">Öneriyi kullan: %1$s</string>
     <string name="background_operations">%1$d dosya işlemi sürüyor</string>

@@ -51,6 +51,7 @@ import tr.canugur.mywayfiles.core.util.FileShareHelper
 import tr.canugur.mywayfiles.ui.common.ConflictResolutionBottomSheet
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.domain.model.FileItem
+import tr.canugur.mywayfiles.domain.model.ConflictResolution
 import tr.canugur.mywayfiles.domain.model.FileViewMode
 import tr.canugur.mywayfiles.domain.model.SortOption
 import tr.canugur.mywayfiles.data.preferences.SavedLocation
@@ -126,12 +127,16 @@ fun ExplorerScreen(
     }
     val searchState by viewModel.searchState.collectAsStateWithLifecycle()
     val activeOperations by viewModel.activeOperations.collectAsStateWithLifecycle()
+    val nestedConflictPrompt by viewModel.nestedConflictPrompt.collectAsStateWithLifecycle()
     var showOperationSheet by rememberSaveable(rootPath) { mutableStateOf(false) }
     var hadRunningOperations by remember { mutableStateOf(false) }
     LaunchedEffect(activeOperations.isNotEmpty()) {
         val running = activeOperations.isNotEmpty()
         if (running && !hadRunningOperations) showOperationSheet = true
         hadRunningOperations = running
+    }
+    LaunchedEffect(nestedConflictPrompt?.id) {
+        if (nestedConflictPrompt != null) showOperationSheet = false
     }
 
     var isSelectionMode by remember { mutableStateOf(false) }
@@ -425,14 +430,14 @@ fun ExplorerScreen(
             onEvent = viewModel::onEvent
         )
 
-        if (activeOperations.isNotEmpty() && showOperationSheet) {
+        if (activeOperations.isNotEmpty() && showOperationSheet && nestedConflictPrompt == null) {
             tr.canugur.mywayfiles.ui.common.FileOperationProgressBottomSheet(
                 progresses = activeOperations,
                 onCancel = viewModel::cancelOperation,
                 onDismiss = { showOperationSheet = false }
             )
         }
-        if (activeOperations.isNotEmpty() && !showOperationSheet) {
+        if (activeOperations.isNotEmpty() && (!showOperationSheet || nestedConflictPrompt != null)) {
             tr.canugur.mywayfiles.ui.common.FileOperationDock(
                 operationCount = activeOperations.size,
                 onClick = { showOperationSheet = true },
@@ -445,6 +450,34 @@ fun ExplorerScreen(
                             else -> 0.dp
                         }
                     )
+            )
+        }
+
+        nestedConflictPrompt?.let { prompt ->
+            val sourceParent = File(prompt.sourcePath).parentFile?.name ?: stringResource(R.string.storage_internal)
+            val destinationParent = File(prompt.destinationPath).parentFile?.name ?: stringResource(R.string.storage_internal)
+            val cancelChoice = ConflictChoice(ConflictResolution.SKIP, cancelled = true)
+            ConflictResolutionBottomSheet(
+                conflictingNames = listOf(prompt.itemName),
+                folderConflictCount = 0,
+                fileConflictCount = 1,
+                allowMergeFolders = prompt.allowMergeFolders,
+                contextDescription = stringResource(
+                    R.string.conflict_nested_context,
+                    sourceParent,
+                    destinationParent
+                ),
+                allowApplyToRemaining = true,
+                onResolveChoice = { resolution, applyToRemaining ->
+                    viewModel.resolveNestedConflict(
+                        prompt.id,
+                        ConflictChoice(resolution, applyToRemaining)
+                    )
+                },
+                onResolve = { resolution ->
+                    viewModel.resolveNestedConflict(prompt.id, ConflictChoice(resolution))
+                },
+                onDismiss = { viewModel.resolveNestedConflict(prompt.id, cancelChoice) }
             )
         }
 
@@ -521,12 +554,15 @@ fun ExplorerScreen(
                 initialDirectoryPath = currentPath,
                 onLoadFolders = viewModel::listMoveTargets,
                 onCreateFolder = viewModel::createMoveTargetFolder,
-                onMove = { items, targetPath, resolution, onProgress ->
+                nestedConflictResolver = viewModel::requestNestedConflict,
+                onMove = { items, targetPath, resolution, itemResolutions, onProgress, resolveNestedConflict ->
                     val results = viewModel.moveItemsToFolder(
                         items = items,
                         targetPath = targetPath,
                         conflictResolution = resolution,
+                        resolutionsBySourcePath = itemResolutions,
                         onProgress = onProgress,
+                        resolveNestedConflict = resolveNestedConflict,
                         onItemsMoved = { movedItems, destinationPath ->
                             onItemsMoved(movedItems, destinationPath)
                             if (isSearchActive && searchQuery.isNotBlank()) viewModel.search(searchQuery)
@@ -554,6 +590,16 @@ fun ExplorerScreen(
         if (pasteConflicts != null) {
             ConflictResolutionBottomSheet(
                 conflictingNames = pasteConflicts.map { it.name },
+                folderConflictCount = pasteConflicts.count { it.isDirectory },
+                fileConflictCount = pasteConflicts.count { !it.isDirectory },
+                allowMergeFolders = pasteConflicts.any { it.isDirectory },
+                allowIndividualChoices = pasteConflicts.size > 1,
+                itemKeys = pasteConflicts.map { it.path },
+                folderNames = pasteConflicts.filter { it.isDirectory }.map { it.name }.toSet(),
+                onResolveItems = { resolution, itemResolutions ->
+                    viewModel.onEvent(ExplorerUiEvent.PasteWithResolutions(resolution, itemResolutions))
+                    pasteConflictsToResolve = null
+                },
                 onResolve = { resolution ->
                     viewModel.onEvent(ExplorerUiEvent.PasteWithResolution(resolution))
                     pasteConflictsToResolve = null

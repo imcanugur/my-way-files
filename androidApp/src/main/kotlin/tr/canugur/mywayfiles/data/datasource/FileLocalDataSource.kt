@@ -33,6 +33,13 @@ interface FileLocalDataSource {
         conflictResolution: ConflictResolution,
         onProgress: (Long, Long) -> Unit = { _, _ -> }
     ): Result<Unit> = copy(sourcePath, targetDirPath)
+    suspend fun copyWithNestedConflictResolver(
+        sourcePath: String,
+        targetDirPath: String,
+        conflictResolution: ConflictResolution,
+        onProgress: (Long, Long) -> Unit,
+        resolveNestedConflict: suspend (sourcePath: String, destinationPath: String, allowMergeFolders: Boolean) -> ConflictResolution
+    ): Result<Unit> = copy(sourcePath, targetDirPath, conflictResolution, onProgress)
     suspend fun move(sourcePath: String, targetDirPath: String): Result<Unit>
     suspend fun move(
         sourcePath: String,
@@ -45,5 +52,12 @@ interface FileLocalDataSource {
         conflictResolution: ConflictResolution,
         onProgress: (copiedBytes: Long, totalBytes: Long) -> Unit = { _, _ -> }
     ): Result<Unit> = move(sourcePath, targetDirPath)
+    suspend fun moveWithNestedConflictResolver(
+        sourcePath: String,
+        targetDirPath: String,
+        conflictResolution: ConflictResolution,
+        onProgress: (Long, Long) -> Unit,
+        resolveNestedConflict: suspend (sourcePath: String, destinationPath: String, allowMergeFolders: Boolean) -> ConflictResolution
+    ): Result<Unit> = move(sourcePath, targetDirPath, conflictResolution, onProgress)
     suspend fun createFolder(parentDirPath: String, folderName: String): Result<Unit>
 }

@@ -5,6 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -56,6 +60,10 @@ class ExplorerViewModel(
     private val _activeOperations = MutableStateFlow<List<FileOperationProgress>>(emptyList())
     val activeOperations: StateFlow<List<FileOperationProgress>> = _activeOperations.asStateFlow()
     private val operationJobs = mutableMapOf<String, Job>()
+    private val nestedConflictMutex = Mutex()
+    private var nestedConflictAnswer: Pair<String, CompletableDeferred<ConflictChoice>>? = null
+    private val _nestedConflictPrompt = MutableStateFlow<NestedConflictPrompt?>(null)
+    val nestedConflictPrompt: StateFlow<NestedConflictPrompt?> = _nestedConflictPrompt.asStateFlow()
     val searchState: StateFlow<ExplorerSearchState> = _searchState.asStateFlow()
 
     private var activePath: String = rootPath
@@ -73,6 +81,43 @@ class ExplorerViewModel(
 
     fun cancelCurrentOperation() {
         operationJobs.values.toList().forEach(Job::cancel)
+    }
+
+    fun resolveNestedConflict(id: String, choice: ConflictChoice) {
+        val pending = nestedConflictAnswer
+        if (pending?.first == id) pending.second.complete(choice)
+    }
+
+    suspend fun requestNestedConflict(
+        sourcePath: String,
+        destinationPath: String,
+        allowMergeFolders: Boolean
+    ): ConflictChoice = awaitNestedConflict(sourcePath, destinationPath, allowMergeFolders)
+
+    private suspend fun awaitNestedConflict(
+        sourcePath: String,
+        destinationPath: String,
+        allowMergeFolders: Boolean
+    ): ConflictChoice = nestedConflictMutex.withLock {
+        val id = UUID.randomUUID().toString()
+        val answer = CompletableDeferred<ConflictChoice>()
+        nestedConflictAnswer = id to answer
+        _nestedConflictPrompt.value = NestedConflictPrompt(
+            id = id,
+            sourcePath = sourcePath,
+            destinationPath = destinationPath,
+            itemName = File(sourcePath).name,
+            destinationName = File(destinationPath).name,
+            allowMergeFolders = allowMergeFolders
+        )
+        try {
+            answer.await()
+        } finally {
+            if (nestedConflictAnswer?.first == id) {
+                nestedConflictAnswer = null
+                _nestedConflictPrompt.value = null
+            }
+        }
     }
 
     init {
@@ -128,6 +173,10 @@ class ExplorerViewModel(
             is ExplorerUiEvent.ClearOperationError -> clearOperationError()
             is ExplorerUiEvent.Paste -> handlePaste()
             is ExplorerUiEvent.PasteWithResolution -> handlePaste(event.conflictResolution)
+            is ExplorerUiEvent.PasteWithResolutions -> handlePaste(
+                event.defaultResolution,
+                event.resolutionsBySourcePath
+            )
             is ExplorerUiEvent.Rename -> handleRename(event.item, event.newName)
             is ExplorerUiEvent.MoveToTrash -> handleMoveToTrash(event.item)
             is ExplorerUiEvent.Delete -> handleDelete(event.item)
@@ -210,16 +259,35 @@ class ExplorerViewModel(
         }
     }
 
-    private fun handlePaste(conflictResolution: ConflictResolution = ConflictResolution.AUTO_RENAME) {
+    private fun handlePaste(
+        conflictResolution: ConflictResolution = ConflictResolution.AUTO_RENAME,
+        resolutionsBySourcePath: Map<String, ConflictResolution> = emptyMap()
+    ) {
         val clip = activeClipboard ?: return
         val destinationPath = activePath
+        var nestedResolutionForRemaining: ConflictResolution? = null
         // Consume this clipboard snapshot so a later copy/cut can start another independent job.
         activeClipboard = null
         updateStateClipboard()
 
         runTrackedOperation(FileOperation.PASTE, clip.items, clipboardSnapshot = clip) { item, report ->
-            if (clip.isCut) fileRepository.move(item.path, destinationPath, conflictResolution, report)
-            else fileRepository.copy(item.path, destinationPath, conflictResolution, report)
+            val resolveNested: suspend (String, String, Boolean) -> ConflictResolution = { source, destination, canMerge ->
+                nestedResolutionForRemaining ?: awaitNestedConflict(source, destination, canMerge).let { choice ->
+                    if (choice.cancelled) throw CancellationException("Conflict resolution cancelled")
+                    if (choice.applyToRemaining) nestedResolutionForRemaining = choice.resolution
+                    choice.resolution
+                }
+            }
+            val itemResolution = resolutionsBySourcePath[item.path] ?: conflictResolution
+            if (clip.isCut) {
+                fileRepository.moveWithNestedConflictResolver(
+                    item.path, destinationPath, itemResolution, report, resolveNested
+                )
+            } else {
+                fileRepository.copyWithNestedConflictResolver(
+                    item.path, destinationPath, itemResolution, report, resolveNested
+                )
+            }
         }
     }
 
@@ -430,10 +498,15 @@ class ExplorerViewModel(
         items: List<FileItem>,
         targetPath: String,
         conflictResolution: ConflictResolution = ConflictResolution.AUTO_RENAME,
+        resolutionsBySourcePath: Map<String, ConflictResolution> = emptyMap(),
         onProgress: (MoveProgress) -> Unit = {},
+        resolveNestedConflict: suspend (String, String, Boolean) -> ConflictChoice = {
+            _, _, _ -> ConflictChoice(ConflictResolution.AUTO_RENAME)
+        },
         onItemsMoved: (List<Pair<FileItem, String>>, String) -> Unit = { _, _ -> }
     ): List<Result<Unit>> {
         val results = mutableListOf<Result<Unit>>()
+        var nestedResolutionForRemaining: ConflictResolution? = null
         try {
             items.forEachIndexed { index, item ->
                 val alreadyAtTarget = runCatching {
@@ -443,9 +516,19 @@ class ExplorerViewModel(
                     Result.success(Unit)
                 } else {
                     onProgress(MoveProgress(index, items.size, 0L, item.sizeBytes))
-                    fileRepository.move(item.path, targetPath, conflictResolution) { copied, total ->
-                        onProgress(MoveProgress(index, items.size, copied, total))
-                    }
+                    fileRepository.moveWithNestedConflictResolver(
+                        item.path,
+                        targetPath,
+                        resolutionsBySourcePath[item.path] ?: conflictResolution,
+                        onProgress = { copied, total -> onProgress(MoveProgress(index, items.size, copied, total)) },
+                        resolveNestedConflict = { source, destination, allowMerge ->
+                            nestedResolutionForRemaining ?: resolveNestedConflict(source, destination, allowMerge).let { choice ->
+                                if (choice.cancelled) throw CancellationException("Conflict resolution cancelled")
+                                if (choice.applyToRemaining) nestedResolutionForRemaining = choice.resolution
+                                choice.resolution
+                            }
+                        }
+                    )
                 }
                 results += result
             }

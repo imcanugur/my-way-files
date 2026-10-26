@@ -260,17 +260,28 @@
     <string name="cannot_open_file">No app found to open this file</string>
 
     <!-- Conflict Resolution -->
-    <string name="conflict_dialog_title">File conflict</string>
+    <string name="conflict_nested_context">Incoming item in %1$s conflicts with an item in %2$s.</string>
+    <string name="conflict_apply_remaining">Use this choice for later conflicts in this operation</string>
+    <string name="conflict_auto_rename_short">Keep both</string>
+    <string name="conflict_individual_hint">Choose a different action for each item above.</string>
+    <string name="conflict_dialog_title">Items with the same name</string>
     <string name="conflict_dialog_subtitle_single">\"%1$s\" already exists in this folder.</string>
-    <string name="conflict_dialog_subtitle_multiple">%1$d files already exist in this folder.</string>
+    <string name="conflict_dialog_subtitle_multiple">%1$d items with these names already exist here.</string>
     <string name="conflict_auto_rename">Keep both (Auto rename)</string>
-    <string name="conflict_auto_rename_desc">Appends a number to keep both files</string>
+    <string name="conflict_auto_rename_desc">Keep every item by adding a number to duplicate names</string>
     <string name="conflict_overwrite">Replace (Overwrite)</string>
-    <string name="conflict_overwrite_desc">Replaces existing item in destination</string>
+    <string name="conflict_overwrite_desc">Replace the matching item in the destination</string>
     <string name="conflict_skip">Skip</string>
-    <string name="conflict_skip_desc">Keep existing file, do not copy or move</string>
-    <string name="conflict_apply_all">Apply to all conflicts</string>
-    <string name="conflict_apply_button">Apply</string>
+    <string name="conflict_skip_desc">Keep the destination item and skip its matching source item</string>
+    <string name="conflict_choose_individually">Choose per item</string>
+    <string name="conflict_use_one_choice">Use one choice for all</string>
+    <string name="conflict_apply_all">One choice for all %1$d conflicts</string>
+    <string name="conflict_merge_folders">Merge matching folders</string>
+    <string name="conflict_merge_folders_desc">Merge folders by name; duplicate file names become numbered copies. Contents are not compared.</string>
+    <string name="conflict_folder_count">%1$d folders</string>
+    <string name="conflict_file_count">%1$d files</string>
+    <string name="conflict_more_items">+ %1$d more items</string>
+    <string name="conflict_apply_button">Apply to all</string>
     <string name="conflict_name_already_exists">An item with this name already exists</string>
     <string name="conflict_suggestion">Use suggestion: %1$s</string>
     <string name="background_operations">%1$d file operations running</string>

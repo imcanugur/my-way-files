@@ -82,7 +82,13 @@ fun MoveToFolderDialog(
     initialDirectoryPath: String,
     onLoadFolders: suspend (String) -> Result<List<FileItem>>,
     onCreateFolder: suspend (String, String) -> Result<Unit>,
-    onMove: suspend (List<FileItem>, String, ConflictResolution, (MoveProgress) -> Unit) -> List<Result<Unit>>,
+    nestedConflictResolver: suspend (String, String, Boolean) -> tr.canugur.mywayfiles.ui.explorer.ConflictChoice = {
+        _, _, _ -> tr.canugur.mywayfiles.ui.explorer.ConflictChoice(ConflictResolution.AUTO_RENAME)
+    },
+    onMove: suspend (
+        List<FileItem>, String, ConflictResolution, Map<String, ConflictResolution>,
+        (MoveProgress) -> Unit, suspend (String, String, Boolean) -> tr.canugur.mywayfiles.ui.explorer.ConflictChoice
+    ) -> List<Result<Unit>>,
     onDismiss: () -> Unit
 ) {
     val safeRoots = remember(roots, initialRootPath) {
@@ -463,15 +469,24 @@ fun MoveToFolderDialog(
                 val destinationToMove = selectedDestinationPath ?: currentPath
                 val isMovingInsideSelf = itemsToMove.any { isInsideRoot(it.path, destinationToMove) }
 
-                fun executeMove(targetDestination: String, resolution: ConflictResolution) {
+                fun executeMove(
+                    targetDestination: String,
+                    resolution: ConflictResolution,
+                    itemResolutions: Map<String, ConflictResolution> = emptyMap()
+                ) {
                     moving = true
                     moveProgressFlow.value = MoveProgress(0, itemsToMove.size, 0L, 0L)
                     moveJob = scope.launch {
                         try {
                             val results = try {
-                                onMove(itemsToMove, targetDestination, resolution) { progress ->
-                                    moveProgressFlow.value = progress
-                                }
+                                onMove(
+                                    itemsToMove,
+                                    targetDestination,
+                                    resolution,
+                                    itemResolutions,
+                                    { progress -> moveProgressFlow.value = progress },
+                                    nestedConflictResolver
+                                )
                             } catch (cancelled: CancellationException) {
                                 throw cancelled
                             } catch (failure: Exception) {
@@ -656,17 +671,35 @@ fun MoveToFolderDialog(
     if (currentConflicts != null) {
         ConflictResolutionBottomSheet(
             conflictingNames = currentConflicts.map { it.name },
-            onResolve = { resolution ->
+            folderConflictCount = currentConflicts.count { it.isDirectory },
+            fileConflictCount = currentConflicts.count { !it.isDirectory },
+            allowMergeFolders = currentConflicts.any { it.isDirectory },
+            allowIndividualChoices = currentConflicts.size > 1,
+            itemKeys = currentConflicts.map { it.path },
+            folderNames = currentConflicts.filter { it.isDirectory }.map { it.name }.toSet(),
+            onResolveItems = { resolution, itemResolutions ->
                 val destinationToMove = selectedDestinationPath ?: currentPath
-                fun exec(target: String, res: ConflictResolution) {
+                fun exec(
+                    target: String,
+                    res: ConflictResolution,
+                    itemResolutions: Map<String, ConflictResolution> = emptyMap()
+                ) {
                     moving = true
                     moveProgressFlow.value = MoveProgress(0, itemsToMove.size, 0L, 0L)
                     moveJob = scope.launch {
                         try {
                             val results = try {
-                                onMove(itemsToMove, target, res) { progress ->
-                                    moveProgressFlow.value = progress
-                                }
+                                onMove(
+                                    itemsToMove,
+                                    target,
+                                    res,
+                                    itemResolutions,
+                                    { progress -> moveProgressFlow.value = progress },
+                                    { source, destination, allowMerge ->
+                                        // The parent Explorer owns the prompt state and resumes this move after a choice.
+                                        nestedConflictResolver(source, destination, allowMerge)
+                                    }
+                                )
                             } catch (cancelled: CancellationException) {
                                 throw cancelled
                             } catch (failure: Exception) {
@@ -695,9 +728,10 @@ fun MoveToFolderDialog(
                         }
                     }
                 }
-                exec(destinationToMove, resolution)
+                exec(destinationToMove, resolution, itemResolutions)
                 conflictsToResolve = null
             },
+            onResolve = { conflictsToResolve = null },
             onDismiss = {
                 conflictsToResolve = null
             }

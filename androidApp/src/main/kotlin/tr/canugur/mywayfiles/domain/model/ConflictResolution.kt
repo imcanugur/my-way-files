@@ -6,5 +6,6 @@ package tr.canugur.mywayfiles.domain.model
 enum class ConflictResolution {
     AUTO_RENAME,
     OVERWRITE,
-    SKIP
+    SKIP,
+    MERGE
 }
