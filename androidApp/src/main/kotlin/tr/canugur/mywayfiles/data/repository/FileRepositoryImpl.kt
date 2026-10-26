@@ -38,6 +38,22 @@ class FileRepositoryImpl(
         }
     }
 
+    override suspend fun getDirectoryContentsStreaming(
+        path: String,
+        showHidden: Boolean,
+        forceRefresh: Boolean,
+        onBatch: (List<FileItem>) -> Unit
+    ): Result<List<FileItem>> {
+        val generation = directoryCache?.beginRead(path)
+        val result = localDataSource.listFilesInBatches(path, showHidden = true) { batch ->
+            onBatch(if (showHidden) batch else batch.filterNot { it.isHidden })
+        }
+        return result.map { allItems ->
+            if (generation != null) directoryCache?.put(path, allItems, generation)
+            if (showHidden) allItems else allItems.filterNot { it.isHidden }
+        }
+    }
+
     override suspend fun searchFiles(
         path: String,
         query: String,

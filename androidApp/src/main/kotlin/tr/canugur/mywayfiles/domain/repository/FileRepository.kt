@@ -13,6 +13,16 @@ interface FileRepository {
         forceRefresh: Boolean = false
     ): Result<List<FileItem>>
     suspend fun getCachedContents(path: String, showHidden: Boolean = false): List<FileItem>? = null
+    suspend fun getDirectoryContentsStreaming(
+        path: String,
+        showHidden: Boolean = false,
+        forceRefresh: Boolean = false,
+        onBatch: (List<FileItem>) -> Unit
+    ): Result<List<FileItem>> {
+        val result = getDirectoryContents(path, showHidden, forceRefresh)
+        result.onSuccess(onBatch)
+        return result
+    }
     /** Searches the accessible descendants of [path], including nested folders. */
     suspend fun searchFiles(
         path: String,

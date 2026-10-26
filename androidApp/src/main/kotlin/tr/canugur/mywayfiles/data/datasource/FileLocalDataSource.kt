@@ -8,6 +8,16 @@ import tr.canugur.mywayfiles.domain.model.FileItem
  */
 interface FileLocalDataSource {
     suspend fun listFiles(path: String, showHidden: Boolean = false): Result<List<FileItem>>
+    suspend fun listFilesInBatches(
+        path: String,
+        showHidden: Boolean = false,
+        batchSize: Int = 128,
+        onBatch: (List<FileItem>) -> Unit
+    ): Result<List<FileItem>> {
+        val result = listFiles(path, showHidden)
+        result.onSuccess { items -> items.chunked(batchSize.coerceAtLeast(1)).forEach(onBatch) }
+        return result
+    }
     fun checkStoragePermission(): Boolean
     suspend fun delete(path: String): Result<Unit>
     suspend fun rename(path: String, newName: String): Result<Unit>

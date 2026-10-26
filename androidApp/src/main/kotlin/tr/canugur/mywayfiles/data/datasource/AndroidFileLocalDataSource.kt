@@ -88,6 +88,109 @@ class AndroidFileLocalDataSource(
         }
     }
 
+    override suspend fun listFilesInBatches(
+        path: String,
+        showHidden: Boolean,
+        batchSize: Int,
+        onBatch: (List<FileItem>) -> Unit
+    ): Result<List<FileItem>> = withContext(ioDispatcher) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            try {
+                val directory = File(path)
+                val names = directory.list()
+                    ?: return@withContext Result.failure(IOException("Unable to read directory: $path"))
+                val items = ArrayList<FileItem>(names.size)
+                val batch = ArrayList<FileItem>(batchSize.coerceAtLeast(1))
+                for (name in names) {
+                    currentCoroutineContext().ensureActive()
+                    val item = runCatching { legacyFileItem(File(directory, name)) }.getOrNull() ?: continue
+                    items += item
+                    batch += item
+                    if (batch.size >= batchSize.coerceAtLeast(1)) {
+                        onBatch(batch.toList())
+                        batch.clear()
+                    }
+                }
+                if (batch.isNotEmpty()) onBatch(batch.toList())
+                return@withContext Result.success(items)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                return@withContext Result.failure(error)
+            }
+        }
+
+        try {
+            val directory = File(path)
+            if (!directory.isDirectory) {
+                return@withContext Result.failure(IOException("Unable to read directory: $path"))
+            }
+            val items = ArrayList<FileItem>()
+            val batch = ArrayList<FileItem>(batchSize.coerceAtLeast(1))
+            java.nio.file.Files.newDirectoryStream(directory.toPath()).use { entries ->
+                for (entry in entries) {
+                    currentCoroutineContext().ensureActive()
+                    val item = runCatching {
+                        val name = entry.fileName.toString()
+                        if (name.isEmpty()) return@runCatching null
+                        val attributes = java.nio.file.Files.readAttributes(
+                            entry,
+                            java.nio.file.attribute.BasicFileAttributes::class.java
+                        )
+                        val isDirectory = attributes.isDirectory
+                        val dotIndex = name.lastIndexOf('.')
+                        val extension = if (!isDirectory && dotIndex > 0 && dotIndex < name.lastIndex) {
+                            name.substring(dotIndex + 1).lowercase()
+                        } else ""
+                        FileItem(
+                            id = entry.toString(),
+                            name = name,
+                            path = entry.toString(),
+                            isDirectory = isDirectory,
+                            sizeBytes = if (isDirectory) 0L else attributes.size(),
+                            lastModifiedMs = attributes.lastModifiedTime().toMillis(),
+                            extension = extension,
+                            childCount = null,
+                            isHidden = name.startsWith(".")
+                        )
+                    }.getOrNull() ?: continue
+                    items += item
+                    batch += item
+                    if (batch.size >= batchSize.coerceAtLeast(1)) {
+                        onBatch(batch.toList())
+                        batch.clear()
+                    }
+                }
+            }
+            if (batch.isNotEmpty()) onBatch(batch.toList())
+            Result.success(items)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    private fun legacyFileItem(file: File): FileItem? {
+        val name = file.name
+        if (name.isEmpty()) return null
+        val isDirectory = file.isDirectory
+        val dotIndex = name.lastIndexOf('.')
+        return FileItem(
+            id = file.path,
+            name = name,
+            path = file.path,
+            isDirectory = isDirectory,
+            sizeBytes = if (isDirectory) 0L else runCatching { file.length() }.getOrDefault(0L),
+            lastModifiedMs = runCatching { file.lastModified() }.getOrDefault(0L),
+            extension = if (!isDirectory && dotIndex > 0 && dotIndex < name.lastIndex) {
+                name.substring(dotIndex + 1).lowercase()
+            } else "",
+            childCount = null,
+            isHidden = name.startsWith(".") || (!isDirectory && runCatching { file.isHidden }.getOrDefault(false))
+        )
+    }
+
     override fun checkStoragePermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()

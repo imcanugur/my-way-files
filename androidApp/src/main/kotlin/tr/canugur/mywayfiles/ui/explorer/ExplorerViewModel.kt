@@ -4,8 +4,8 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import tr.canugur.mywayfiles.data.cache.DirectoryCache
 import tr.canugur.mywayfiles.data.datasource.AndroidFileLocalDataSource
 import tr.canugur.mywayfiles.data.preferences.ExplorerPreferences
@@ -63,7 +64,7 @@ class ExplorerViewModel(
         set(value) = clipboardStore.set(value)
     private var showHiddenFiles: Boolean = explorerPreferences.showHiddenFiles
     private var sortOption: SortOption = explorerPreferences.sortOption
-    private var directoryRequestId: Long = 0L
+    @Volatile private var directoryRequestId: Long = 0L
     private var searchRequestId: Long = 0L
     private var searchJob: Job? = null
     fun cancelOperation(operationId: String) {
@@ -503,12 +504,11 @@ class ExplorerViewModel(
 
             activePath = path
             val breadcrumbs = buildBreadcrumbs(path)
-
-            // Fast SWR Path: Instantly render cached directory contents if available (0ms cold wait)
             val cached = fileRepository.getCachedContents(path, showHiddenFiles)
             if (requestId != directoryRequestId) return@launch
             if (cached != null) {
-                val sortedCached = sortItems(cached, sortOption)
+                val sortedCached = withContext(Dispatchers.Default) { sortItems(cached, sortOption) }
+                if (requestId != directoryRequestId) return@launch
                 _uiState.value = if (sortedCached.isEmpty()) {
                     ExplorerUiState.Empty(
                         currentPath = path,
@@ -537,74 +537,87 @@ class ExplorerViewModel(
                 }
             }
 
-            getDirectoryContentsUseCase(
+            val streamedItems = ArrayList<FileItem>()
+            var lastPublishedSize = 0
+            val result = fileRepository.getDirectoryContentsStreaming(
                 path = path,
                 showHidden = showHiddenFiles,
-                sortOption = sortOption,
                 forceRefresh = isRefreshing
-            ).fold(
-                onSuccess = { items ->
-                    if (requestId != directoryRequestId) return@fold
-                    _uiState.value = if (items.isEmpty()) {
-                        ExplorerUiState.Empty(
-                            currentPath = path,
-                            breadcrumbs = breadcrumbs,
-                            clipboard = activeClipboard,
-                            showHiddenFiles = showHiddenFiles,
-                            sortOption = sortOption,
-                            operationError = operationError
-                        )
-                    } else {
-                        ExplorerUiState.Success(
-                            currentPath = path,
-                            breadcrumbs = breadcrumbs,
-                            items = items,
-                            isRefreshing = false,
-                            clipboard = activeClipboard,
-                            showHiddenFiles = showHiddenFiles,
-                            sortOption = sortOption,
-                            operationError = operationError
-                        )
-                    }
-                    prefetchSubdirectories(items)
-                },
-                onFailure = { error ->
-                    if (requestId != directoryRequestId) return@fold
-                    val currentState = _uiState.value
-                    if (currentState is ExplorerUiState.Success && currentState.currentPath == path) {
-                        _uiState.value = currentState.copy(
-                            isRefreshing = false,
-                            operationError = operationError
-                                ?: error.localizedMessage
-                                ?: "Failed to refresh this folder"
-                        )
-                    } else {
-                        _uiState.value = ExplorerUiState.Error(
-                            message = error.localizedMessage ?: "Failed to read directory",
-                            currentPath = path,
-                            breadcrumbs = breadcrumbs
-                        )
-                    }
+            ) { batch ->
+                if (requestId != directoryRequestId) return@getDirectoryContentsStreaming
+                streamedItems.addAll(batch)
+                val publishInterval = if (lastPublishedSize == 0) 128 else 512
+                if (streamedItems.size - lastPublishedSize >= publishInterval) {
+                    lastPublishedSize = streamedItems.size
+                    val partial = sortItems(streamedItems.toList(), sortOption)
+                    _uiState.value = ExplorerUiState.Success(
+                        currentPath = path,
+                        breadcrumbs = breadcrumbs,
+                        items = partial,
+                        isRefreshing = isRefreshing,
+                        clipboard = activeClipboard,
+                        showHiddenFiles = showHiddenFiles,
+                        sortOption = sortOption,
+                        operationError = operationError
+                    )
                 }
-            )
-        }
-    }
+            }
+            if (requestId != directoryRequestId) return@launch
 
-    private fun prefetchSubdirectories(items: List<FileItem>) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val subdirs = items.filter { it.isDirectory }.take(8)
-            for (dir in subdirs) {
-                if (fileRepository.getCachedContents(dir.path, showHiddenFiles) == null) {
-                    fileRepository.getDirectoryContents(dir.path, showHiddenFiles, forceRefresh = false)
+            if (result.isSuccess) {
+                val items = withContext(Dispatchers.Default) {
+                    sortItems(result.getOrThrow(), sortOption)
+                }
+                if (requestId != directoryRequestId) return@launch
+                _uiState.value = if (items.isEmpty()) {
+                    ExplorerUiState.Empty(
+                        currentPath = path,
+                        breadcrumbs = breadcrumbs,
+                        clipboard = activeClipboard,
+                        showHiddenFiles = showHiddenFiles,
+                        sortOption = sortOption,
+                        operationError = operationError
+                    )
+                } else {
+                    ExplorerUiState.Success(
+                        currentPath = path,
+                        breadcrumbs = breadcrumbs,
+                        items = items,
+                        isRefreshing = false,
+                        clipboard = activeClipboard,
+                        showHiddenFiles = showHiddenFiles,
+                        sortOption = sortOption,
+                        operationError = operationError
+                    )
+                }
+            } else {
+                val error = result.exceptionOrNull() ?: IllegalStateException("Failed to read directory")
+                val currentState = _uiState.value
+                if (currentState is ExplorerUiState.Success && currentState.currentPath == path) {
+                    _uiState.value = currentState.copy(
+                        isRefreshing = false,
+                        operationError = operationError ?: error.localizedMessage ?: "Failed to refresh this folder"
+                    )
+                } else {
+                    _uiState.value = ExplorerUiState.Error(
+                        message = error.localizedMessage ?: "Failed to read directory",
+                        currentPath = path,
+                        breadcrumbs = breadcrumbs
+                    )
                 }
             }
         }
     }
 
     private fun sortItems(items: List<FileItem>, sortOption: SortOption): List<FileItem> {
+        val normalizedNames = if (sortOption == SortOption.NAME_ASC || sortOption == SortOption.NAME_DESC) {
+            items.associate { it.id to it.name.lowercase(Locale.ROOT) }
+        } else {
+            emptyMap()
+        }
         val comparator = when (sortOption) {
-            SortOption.NAME_ASC -> compareBy<FileItem> { it.name.lowercase(Locale.ROOT) }
-            SortOption.NAME_DESC -> compareByDescending<FileItem> { it.name.lowercase(Locale.ROOT) }
+            SortOption.NAME_ASC -> compareBy<FileItem> { normalizedNames[it.id] }
+            SortOption.NAME_DESC -> compareByDescending<FileItem> { normalizedNames[it.id] }
             SortOption.DATE_DESC -> compareByDescending<FileItem> { it.lastModifiedMs }
             SortOption.DATE_ASC -> compareBy<FileItem> { it.lastModifiedMs }
             SortOption.SIZE_DESC -> compareByDescending<FileItem> { it.sizeBytes }
