@@ -167,6 +167,20 @@
     <string name="settings_prefer_last_move_target_description">Taşıma penceresi açıldığında en son kullanılan klasörü önceden seç.</string>
     <string name="settings_hidden_files">Gizli dosyaları göster</string>
     <string name="settings_hidden_files_description">Nokta ile başlayan dosya ve klasörleri listeye ekle</string>
+    <string name="folder_scan_progress">Klasör yükleniyor… %1$d öğe bulundu</string>
+    <string name="settings_performance">Performans</string>
+    <string name="settings_scroll_position_history">Klasör kaydırma konumlarını hatırla</string>
+    <string name="settings_scroll_position_history_description">Geri döndüğünde klasörü kaldığın yerde açar. Bu cihaz için önerilen: %1$d. 0 ile kapatabilir, 512’ye kadar seçebilirsin.</string>
+    <string name="settings_use_recommended">Önerileni kullan</string>
+    <string name="settings_cache_heap_share">Klasör önbelleği boyutu</string>
+    <string name="settings_cache_heap_share_description">Yüksek değerler son açılan daha fazla klasörü RAM’de tutar. Cihaz kararlılığı korumak için üst sınırı belirler.</string>
+    <string name="settings_extended_cache">Genişletilmiş önbellek alanını kullan</string>
+    <string name="settings_extended_cache_description">Uygulama başlarken Android’den daha geniş heap ister. Bu anahtar yalnızca klasör önbelleği bütçesinin hangi heap sınıfına göre hesaplanacağını seçer; çalışan sürecin heap’ini değiştiremez.</string>
+    <string name="settings_memory_cache">Klasör önbelleği belleği</string>
+    <string name="settings_memory_cache_description">Cihaz RAM’i: %1$s
+Normal uygulama heap’i: %2$d MB
+Genişletilmiş uygulama heap’i: %3$d MB
+Klasör önbelleği hedefi: %4$s (2–64 MiB ile sınırlı)</string>
     <string name="settings_viewer">Medya görüntüleyici</string>
     <string name="settings_auto_hide_viewer_controls">Görüntüleyici denetimlerini otomatik gizle</string>
     <string name="settings_auto_hide_viewer_controls_description">Görsel ve video panellerini 3,5 saniye sonra gizle. Kapatırsan medyaya dokunana kadar görünür kalırlar.</string>

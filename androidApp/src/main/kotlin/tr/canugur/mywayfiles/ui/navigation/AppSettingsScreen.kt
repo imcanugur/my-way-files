@@ -1,10 +1,14 @@
 package tr.canugur.mywayfiles.ui.navigation
 
+import android.app.ActivityManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import android.text.format.Formatter
+import java.text.NumberFormat
+import java.util.Locale
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +38,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -48,6 +53,7 @@ import androidx.compose.ui.semantics.stateDescription
 import kotlin.math.roundToInt
 import tr.canugur.mywayfiles.R
 import tr.canugur.mywayfiles.core.constants.ProjectLinks
+import tr.canugur.mywayfiles.data.cache.DirectoryCache
 import tr.canugur.mywayfiles.data.preferences.SavedLocationLimits
 import tr.canugur.mywayfiles.data.preferences.AppSettingsStore
 import tr.canugur.mywayfiles.domain.model.FileViewMode
@@ -56,6 +62,14 @@ import tr.canugur.mywayfiles.ui.theme.AppColors
 import tr.canugur.mywayfiles.ui.theme.Dimensions
 import tr.canugur.mywayfiles.ui.viewer.components.VideoPlaybackMode
 import tr.canugur.mywayfiles.ui.viewer.components.labelResource
+
+private data class CacheMemoryInfo(
+    val deviceRam: String,
+    val regularHeapMb: Int,
+    val extendedHeapMb: Int,
+    val cacheTarget: String,
+    val recommendedScrollHistoryLimit: Int
+)
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -97,6 +111,35 @@ fun AppSettingsScreen(
     var gridSizeMenuExpanded by remember { mutableStateOf(false) }
     var playbackModeMenuExpanded by remember { mutableStateOf(false) }
     val appSettingsStore = remember(context) { AppSettingsStore(context) }
+    var directoryCachePercent by remember(appSettingsStore) {
+        mutableIntStateOf(appSettingsStore.directoryCacheHeapPercent())
+    }
+    var useExtendedFolderCache by remember(appSettingsStore) {
+        mutableStateOf(appSettingsStore.useExtendedFolderCache())
+    }
+    var directoryScrollHistoryLimit by remember(appSettingsStore) {
+        mutableIntStateOf(appSettingsStore.directoryScrollHistoryLimit())
+    }
+    val memoryInfo = remember(context, directoryCachePercent, useExtendedFolderCache) {
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val info = ActivityManager.MemoryInfo().also(manager::getMemoryInfo)
+        val budgetMiB = DirectoryCache.memoryCacheBudgetBytes(
+            context,
+            directoryCachePercent,
+            useExtendedFolderCache
+        ).toDouble() / (1024.0 * 1024.0)
+        val preciseSize = NumberFormat.getNumberInstance(Locale.getDefault()).apply {
+            minimumFractionDigits = 1
+            maximumFractionDigits = 1
+        }.format(budgetMiB) + " MiB (${directoryCachePercent}%)"
+        CacheMemoryInfo(
+            deviceRam = Formatter.formatShortFileSize(context, info.totalMem),
+            regularHeapMb = manager.memoryClass,
+            extendedHeapMb = manager.largeMemoryClass,
+            cacheTarget = preciseSize,
+            recommendedScrollHistoryLimit = appSettingsStore.recommendedDirectoryScrollHistoryLimit(useExtendedFolderCache)
+        )
+    }
     var playbackMode by remember(appSettingsStore) {
         mutableStateOf(
             runCatching { VideoPlaybackMode.valueOf(appSettingsStore.videoPlaybackModeName()) }
@@ -235,6 +278,110 @@ fun AppSettingsScreen(
                     supportingContent = { Text(stringResource(R.string.settings_hidden_files_description)) },
                     trailingContent = {
                         Switch(checked = showHiddenFiles, onCheckedChange = onShowHiddenFilesChange)
+                    }
+                )
+            }
+            item {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = Dimensions.SpacingLarge),
+                    color = AppColors.divider
+                )
+            }
+            item { SettingsSectionTitle(stringResource(R.string.settings_performance)) }
+            item {
+                Column {
+                    IntegerSliderPreference(
+                        title = stringResource(R.string.settings_scroll_position_history),
+                        description = stringResource(
+                            R.string.settings_scroll_position_history_description,
+                            memoryInfo.recommendedScrollHistoryLimit
+                        ),
+                        value = directoryScrollHistoryLimit,
+                        valueRange = AppSettingsStore.MIN_DIRECTORY_SCROLL_HISTORY_LIMIT.toFloat()..
+                            AppSettingsStore.MAX_DIRECTORY_SCROLL_HISTORY_LIMIT.toFloat(),
+                        steps = AppSettingsStore.MAX_DIRECTORY_SCROLL_HISTORY_LIMIT / 16 - 1,
+                        onValueChange = { limit ->
+                            directoryScrollHistoryLimit = limit
+                            appSettingsStore.setDirectoryScrollHistoryLimit(limit)
+                        }
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = Dimensions.SpacingLarge),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(
+                            onClick = {
+                                val recommended = appSettingsStore.recommendedDirectoryScrollHistoryLimit(useExtendedFolderCache)
+                                directoryScrollHistoryLimit = recommended
+                                appSettingsStore.setDirectoryScrollHistoryLimit(recommended)
+                            }
+                        ) {
+                            Text(stringResource(R.string.settings_use_recommended))
+                        }
+                    }
+                }
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_memory_cache)) },
+                    supportingContent = {
+                        Text(
+                            stringResource(
+                                R.string.settings_memory_cache_description,
+                                memoryInfo.deviceRam,
+                                memoryInfo.regularHeapMb,
+                                memoryInfo.extendedHeapMb,
+                                memoryInfo.cacheTarget
+                            )
+                        )
+                    },
+                    leadingContent = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_info),
+                            contentDescription = null,
+                            tint = AppColors.brandAccent
+                        )
+                    }
+                )
+            }
+            item {
+                IntegerSliderPreference(
+                    title = stringResource(R.string.settings_cache_heap_share),
+                    description = stringResource(R.string.settings_cache_heap_share_description),
+                    value = directoryCachePercent,
+                    valueRange = AppSettingsStore.MIN_DIRECTORY_CACHE_HEAP_PERCENT.toFloat()..
+                        AppSettingsStore.MAX_DIRECTORY_CACHE_HEAP_PERCENT.toFloat(),
+                    steps = AppSettingsStore.MAX_DIRECTORY_CACHE_HEAP_PERCENT -
+                        AppSettingsStore.MIN_DIRECTORY_CACHE_HEAP_PERCENT - 1,
+                    valueSuffix = "%",
+                    onValueChange = { percent ->
+                        directoryCachePercent = percent
+                        appSettingsStore.setDirectoryCacheHeapPercent(percent)
+                        DirectoryCache.getInstance(context).updateMemoryCacheSettings(
+                            context,
+                            percent,
+                            useExtendedFolderCache
+                        )
+                    }
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_extended_cache)) },
+                    supportingContent = { Text(stringResource(R.string.settings_extended_cache_description)) },
+                    trailingContent = {
+                        Switch(
+                            checked = useExtendedFolderCache,
+                            onCheckedChange = { enabled ->
+                                useExtendedFolderCache = enabled
+                                appSettingsStore.setUseExtendedFolderCache(enabled)
+                                DirectoryCache.getInstance(context).updateMemoryCacheSettings(
+                                    context,
+                                    directoryCachePercent,
+                                    enabled
+                                )
+                            }
+                        )
                     }
                 )
             }
@@ -463,6 +610,7 @@ private fun IntegerSliderPreference(
     value: Int,
     valueRange: ClosedFloatingPointRange<Float>,
     steps: Int,
+    valueSuffix: String = "",
     onValueChange: (Int) -> Unit
 ) {
     var sliderValue by remember(value) { mutableFloatStateOf(value.toFloat()) }
@@ -485,7 +633,7 @@ private fun IntegerSliderPreference(
                 )
             }
             Text(
-                text = sliderValue.roundToInt().toString(),
+                text = "${sliderValue.roundToInt()}$valueSuffix",
                 style = MaterialTheme.typography.titleMedium,
                 color = AppColors.brandAccent,
                 modifier = Modifier.padding(start = Dimensions.SpacingMedium)
@@ -503,7 +651,7 @@ private fun IntegerSliderPreference(
             steps = steps,
             modifier = Modifier.fillMaxWidth().semantics {
                 contentDescription = title
-                stateDescription = sliderValue.roundToInt().toString()
+                stateDescription = "${sliderValue.roundToInt()}$valueSuffix"
             }
         )
     }

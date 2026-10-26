@@ -92,6 +92,7 @@ sealed interface ExplorerUiState {
         val breadcrumbs: List<Breadcrumb>,
         val items: List<FileItem>,
         val isRefreshing: Boolean = false,
+        val isLoadingContents: Boolean = false,
         val clipboard: Clipboard? = null,
         val showHiddenFiles: Boolean = false,
         val sortOption: SortOption = SortOption.NAME_ASC,
@@ -101,6 +102,7 @@ sealed interface ExplorerUiState {
     data class Empty(
         val currentPath: String,
         val breadcrumbs: List<Breadcrumb>,
+        val isLoadingContents: Boolean = false,
         val clipboard: Clipboard? = null,
         val showHiddenFiles: Boolean = false,
         val sortOption: SortOption = SortOption.NAME_ASC,

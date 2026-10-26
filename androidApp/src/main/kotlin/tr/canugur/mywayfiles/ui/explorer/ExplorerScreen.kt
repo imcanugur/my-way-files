@@ -67,6 +67,13 @@ import tr.canugur.mywayfiles.ui.viewer.ImageViewerScreen
 import tr.canugur.mywayfiles.ui.explorer.components.MoveTargetRoot
 import tr.canugur.mywayfiles.ui.explorer.components.MoveToFolderDialog
 
+private data class DirectoryScrollPosition(
+    val listIndex: Int,
+    val listOffset: Int,
+    val gridIndex: Int,
+    val gridOffset: Int
+)
+
 /**
  * Stateful entry point for the Directory and File Explorer screen.
  */
@@ -759,6 +766,24 @@ fun ExplorerScreenContent(
         else -> emptyList()
     }
     val isAllSelected = currentItems.isNotEmpty() && selectedPaths.size >= currentItems.size
+    // AnimatedContent intentionally gives each directory a separate list state. Keep the
+    // last position after a page leaves so Back restores the parent instead of jumping to top.
+    val directoryScrollPositions = remember { LinkedHashMap<String, DirectoryScrollPosition>() }
+    val appSettingsStore = remember(context) { tr.canugur.mywayfiles.data.preferences.AppSettingsStore(context) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    fun trimDirectoryScrollPositions() {
+        val limit = appSettingsStore.directoryScrollHistoryLimit()
+        while (directoryScrollPositions.size > limit) {
+            directoryScrollPositions.remove(directoryScrollPositions.keys.first())
+        }
+    }
+    DisposableEffect(lifecycleOwner, appSettingsStore) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) trimDirectoryScrollPositions()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Scaffold(
         containerColor = AppColors.canvasBackground,
@@ -793,7 +818,16 @@ fun ExplorerScreenContent(
                 if (!isSearchActive && !isSelectionMode) {
                     ExplorerBreadcrumbsBar(
                         breadcrumbs = breadcrumbs,
-                        onBreadcrumbClick = onBreadcrumbClick
+                        onBreadcrumbClick = onBreadcrumbClick,
+                        isLoading = when (contentState) {
+                            is ExplorerUiState.Success -> contentState.isLoadingContents
+                            is ExplorerUiState.Empty -> contentState.isLoadingContents
+                            else -> false
+                        },
+                        loadedItemCount = when (contentState) {
+                            is ExplorerUiState.Success -> contentState.items.size
+                            else -> 0
+                        }
                     )
                 }
                 PullToRefreshBox(
@@ -827,9 +861,35 @@ fun ExplorerScreenContent(
                 modifier = Modifier.fillMaxSize(),
                 label = "directory-content"
             ) { state ->
-                // Keep outgoing and incoming directory pages from sharing scroll state.
-                val listState = rememberLazyListState()
-                val gridState = rememberLazyGridState()
+                // Each animated directory owns its own state; persist the small scroll
+                // coordinates after it leaves so returning to it restores the same viewport.
+                val directoryPath = state.directoryPathOrNull()
+                val savedPosition = directoryPath?.let(directoryScrollPositions::get)
+                val listState = rememberLazyListState(
+                    initialFirstVisibleItemIndex = savedPosition?.listIndex ?: 0,
+                    initialFirstVisibleItemScrollOffset = savedPosition?.listOffset ?: 0
+                )
+                val gridState = rememberLazyGridState(
+                    initialFirstVisibleItemIndex = savedPosition?.gridIndex ?: 0,
+                    initialFirstVisibleItemScrollOffset = savedPosition?.gridOffset ?: 0
+                )
+                LaunchedEffect(directoryPath, listState, gridState) {
+                    val path = directoryPath ?: return@LaunchedEffect
+                    snapshotFlow {
+                        DirectoryScrollPosition(
+                            listIndex = listState.firstVisibleItemIndex,
+                            listOffset = listState.firstVisibleItemScrollOffset,
+                            gridIndex = gridState.firstVisibleItemIndex,
+                            gridOffset = gridState.firstVisibleItemScrollOffset
+                        )
+                    }.collect { position ->
+                        // Update on every scroll so navigation never depends on an animation
+                        // disposal callback to capture the latest viewport.
+                        directoryScrollPositions.remove(path)
+                        directoryScrollPositions[path] = position
+                        trimDirectoryScrollPositions()
+                    }
+                }
                 when (state) {
                 is ExplorerUiState.Loading -> {
                     Box(

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -17,6 +18,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -34,10 +38,13 @@ import tr.canugur.mywayfiles.ui.theme.Dimensions
 fun ExplorerBreadcrumbsBar(
     breadcrumbs: List<Breadcrumb>,
     onBreadcrumbClick: (String) -> Unit,
+    isLoading: Boolean = false,
+    loadedItemCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    if (breadcrumbs.size <= 1) return
-
+    val loadingDescription = if (isLoading) {
+        stringResource(R.string.folder_scan_progress, loadedItemCount)
+    } else null
     val scrollState = rememberScrollState()
     LaunchedEffect(breadcrumbs.size) {
         scrollState.animateScrollTo(scrollState.maxValue)
@@ -50,12 +57,15 @@ fun ExplorerBreadcrumbsBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(scrollState)
                 .padding(horizontal = Dimensions.SpacingLarge, vertical = Dimensions.SpacingExtraSmall),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Dimensions.SpacingMicro)
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            breadcrumbs.forEachIndexed { index, crumb ->
+            Row(
+                modifier = Modifier.weight(1f).horizontalScroll(scrollState),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Dimensions.SpacingMicro)
+            ) {
+                breadcrumbs.forEachIndexed { index, crumb ->
                 val isLast = index == breadcrumbs.lastIndex
 
                 if (isLast) {
@@ -89,6 +99,19 @@ fun ExplorerBreadcrumbsBar(
                         modifier = Modifier.size(14.dp)
                     )
                 }
+                }
+            }
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .padding(start = Dimensions.SpacingSmall)
+                        .size(14.dp)
+                        .semantics {
+                            contentDescription = loadingDescription.orEmpty()
+                        },
+                    color = AppColors.brandAccent,
+                    strokeWidth = 2.dp
+                )
             }
         }
     }

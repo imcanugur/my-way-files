@@ -73,6 +73,7 @@ class ExplorerViewModel(
     private var showHiddenFiles: Boolean = explorerPreferences.showHiddenFiles
     private var sortOption: SortOption = explorerPreferences.sortOption
     @Volatile private var directoryRequestId: Long = 0L
+    private var directoryLoadJob: Job? = null
     private var searchRequestId: Long = 0L
     private var searchJob: Job? = null
     fun cancelOperation(operationId: String) {
@@ -578,118 +579,148 @@ class ExplorerViewModel(
     ) {
         if (fileRepository.hasStoragePermission()) activePath = path
         val requestId = ++directoryRequestId
-        viewModelScope.launch {
-            if (!fileRepository.hasStoragePermission()) {
+        directoryLoadJob?.cancel()
+        val loadJob = viewModelScope.launch(start = CoroutineStart.LAZY) {
+            try {
+                if (!fileRepository.hasStoragePermission()) {
+                    if (requestId != directoryRequestId) return@launch
+                    _uiState.value = ExplorerUiState.PermissionRequired
+                    return@launch
+                }
+
+                activePath = path
+                val breadcrumbs = buildBreadcrumbs(path)
+                val cached = fileRepository.getCachedContents(path, showHiddenFiles)
                 if (requestId != directoryRequestId) return@launch
-                _uiState.value = ExplorerUiState.PermissionRequired
-                return@launch
+                if (cached != null) {
+                    val sortedCached = withContext(Dispatchers.Default) { sortItems(cached, sortOption) }
+                    if (requestId != directoryRequestId) return@launch
+                    _uiState.value = if (sortedCached.isEmpty()) {
+                        ExplorerUiState.Empty(
+                            currentPath = path,
+                            breadcrumbs = breadcrumbs,
+                            isLoadingContents = true,
+                            clipboard = activeClipboard,
+                            showHiddenFiles = showHiddenFiles,
+                            sortOption = sortOption,
+                            operationError = operationError
+                        )
+                    } else {
+                        ExplorerUiState.Success(
+                            currentPath = path,
+                            breadcrumbs = breadcrumbs,
+                            items = sortedCached,
+                            isRefreshing = isRefreshing,
+                            isLoadingContents = true,
+                            clipboard = activeClipboard,
+                            showHiddenFiles = showHiddenFiles,
+                            sortOption = sortOption,
+                            operationError = operationError
+                        )
+                    }
+                } else {
+                    val currentState = _uiState.value
+                    if (currentState is ExplorerUiState.Success && currentState.currentPath == path) {
+                        _uiState.value = currentState.copy(
+                            isRefreshing = isRefreshing,
+                            isLoadingContents = true
+                        )
+                    } else if (currentState is ExplorerUiState.Empty && currentState.currentPath == path) {
+                        _uiState.value = currentState.copy(isLoadingContents = true)
+                    } else if (!isRefreshing) {
+                        _uiState.value = ExplorerUiState.Loading
+                    }
+                }
+
+                val currentVisibleState = _uiState.value as? ExplorerUiState.Success
+                val preserveVisibleItems = cached != null || isRefreshing ||
+                    currentVisibleState?.currentPath == path
+                val streamedItems = ArrayList<FileItem>()
+                var lastPublishedSize = 0
+                val result = fileRepository.getDirectoryContentsStreaming(
+                    path = path,
+                    showHidden = showHiddenFiles,
+                    forceRefresh = isRefreshing
+                ) { batch ->
+                    if (requestId != directoryRequestId) return@getDirectoryContentsStreaming
+                    streamedItems.addAll(batch)
+                    val publishInterval = if (lastPublishedSize == 0) 128 else 512
+                    if (!preserveVisibleItems && streamedItems.size - lastPublishedSize >= publishInterval) {
+                        lastPublishedSize = streamedItems.size
+                        val partial = sortItems(streamedItems.toList(), sortOption)
+                        _uiState.value = ExplorerUiState.Success(
+                            currentPath = path,
+                            breadcrumbs = breadcrumbs,
+                            items = partial,
+                            isLoadingContents = true,
+                            clipboard = activeClipboard,
+                            showHiddenFiles = showHiddenFiles,
+                            sortOption = sortOption,
+                            operationError = operationError
+                        )
+                    }
+                }
+                if (requestId != directoryRequestId) return@launch
+
+                if (result.isSuccess) {
+                    val items = withContext(Dispatchers.Default) {
+                        sortItems(result.getOrThrow(), sortOption)
+                    }
+                    if (requestId != directoryRequestId) return@launch
+                    _uiState.value = if (items.isEmpty()) {
+                        ExplorerUiState.Empty(
+                            currentPath = path,
+                            breadcrumbs = breadcrumbs,
+                            clipboard = activeClipboard,
+                            showHiddenFiles = showHiddenFiles,
+                            sortOption = sortOption,
+                            operationError = operationError
+                        )
+                    } else {
+                        ExplorerUiState.Success(
+                            currentPath = path,
+                            breadcrumbs = breadcrumbs,
+                            items = items,
+                            isRefreshing = false,
+                            clipboard = activeClipboard,
+                            showHiddenFiles = showHiddenFiles,
+                            sortOption = sortOption,
+                            operationError = operationError
+                        )
+                    }
+                } else {
+                    val error = result.exceptionOrNull() ?: IllegalStateException("Failed to read directory")
+                    val currentState = _uiState.value
+                    if (currentState is ExplorerUiState.Success && currentState.currentPath == path) {
+                        _uiState.value = currentState.copy(
+                            isRefreshing = false,
+                            isLoadingContents = false,
+                            operationError = operationError ?: error.localizedMessage ?: "Failed to refresh this folder"
+                        )
+                    } else {
+                        _uiState.value = ExplorerUiState.Error(
+                            message = error.localizedMessage ?: "Failed to read directory",
+                            currentPath = path,
+                            breadcrumbs = breadcrumbs
+                        )
+                    }
+                }            } finally {
+                if (requestId == directoryRequestId) {
+                    when (val latest = _uiState.value) {
+                        is ExplorerUiState.Success -> if (latest.currentPath == path && latest.isLoadingContents) {
+                            _uiState.value = latest.copy(isLoadingContents = false, isRefreshing = false)
+                        }
+                        is ExplorerUiState.Empty -> if (latest.currentPath == path && latest.isLoadingContents) {
+                            _uiState.value = latest.copy(isLoadingContents = false)
+                        }
+                        else -> Unit
+                    }
+                }
             }
 
-            activePath = path
-            val breadcrumbs = buildBreadcrumbs(path)
-            val cached = fileRepository.getCachedContents(path, showHiddenFiles)
-            if (requestId != directoryRequestId) return@launch
-            if (cached != null) {
-                val sortedCached = withContext(Dispatchers.Default) { sortItems(cached, sortOption) }
-                if (requestId != directoryRequestId) return@launch
-                _uiState.value = if (sortedCached.isEmpty()) {
-                    ExplorerUiState.Empty(
-                        currentPath = path,
-                        breadcrumbs = breadcrumbs,
-                        clipboard = activeClipboard,
-                        showHiddenFiles = showHiddenFiles,
-                        sortOption = sortOption,
-                        operationError = operationError
-                    )
-                } else {
-                    ExplorerUiState.Success(
-                        currentPath = path,
-                        breadcrumbs = breadcrumbs,
-                        items = sortedCached,
-                        isRefreshing = isRefreshing,
-                        clipboard = activeClipboard,
-                        showHiddenFiles = showHiddenFiles,
-                        sortOption = sortOption,
-                        operationError = operationError
-                    )
-                }
-            } else if (!isRefreshing) {
-                val currentState = _uiState.value
-                if (currentState !is ExplorerUiState.Success || currentState.currentPath != path) {
-                    _uiState.value = ExplorerUiState.Loading
-                }
-            }
-
-            val streamedItems = ArrayList<FileItem>()
-            var lastPublishedSize = 0
-            val result = fileRepository.getDirectoryContentsStreaming(
-                path = path,
-                showHidden = showHiddenFiles,
-                forceRefresh = isRefreshing
-            ) { batch ->
-                if (requestId != directoryRequestId) return@getDirectoryContentsStreaming
-                streamedItems.addAll(batch)
-                val publishInterval = if (lastPublishedSize == 0) 128 else 512
-                if (streamedItems.size - lastPublishedSize >= publishInterval) {
-                    lastPublishedSize = streamedItems.size
-                    val partial = sortItems(streamedItems.toList(), sortOption)
-                    _uiState.value = ExplorerUiState.Success(
-                        currentPath = path,
-                        breadcrumbs = breadcrumbs,
-                        items = partial,
-                        isRefreshing = isRefreshing,
-                        clipboard = activeClipboard,
-                        showHiddenFiles = showHiddenFiles,
-                        sortOption = sortOption,
-                        operationError = operationError
-                    )
-                }
-            }
-            if (requestId != directoryRequestId) return@launch
-
-            if (result.isSuccess) {
-                val items = withContext(Dispatchers.Default) {
-                    sortItems(result.getOrThrow(), sortOption)
-                }
-                if (requestId != directoryRequestId) return@launch
-                _uiState.value = if (items.isEmpty()) {
-                    ExplorerUiState.Empty(
-                        currentPath = path,
-                        breadcrumbs = breadcrumbs,
-                        clipboard = activeClipboard,
-                        showHiddenFiles = showHiddenFiles,
-                        sortOption = sortOption,
-                        operationError = operationError
-                    )
-                } else {
-                    ExplorerUiState.Success(
-                        currentPath = path,
-                        breadcrumbs = breadcrumbs,
-                        items = items,
-                        isRefreshing = false,
-                        clipboard = activeClipboard,
-                        showHiddenFiles = showHiddenFiles,
-                        sortOption = sortOption,
-                        operationError = operationError
-                    )
-                }
-            } else {
-                val error = result.exceptionOrNull() ?: IllegalStateException("Failed to read directory")
-                val currentState = _uiState.value
-                if (currentState is ExplorerUiState.Success && currentState.currentPath == path) {
-                    _uiState.value = currentState.copy(
-                        isRefreshing = false,
-                        operationError = operationError ?: error.localizedMessage ?: "Failed to refresh this folder"
-                    )
-                } else {
-                    _uiState.value = ExplorerUiState.Error(
-                        message = error.localizedMessage ?: "Failed to read directory",
-                        currentPath = path,
-                        breadcrumbs = breadcrumbs
-                    )
-                }
-            }
         }
+        directoryLoadJob = loadJob
+        loadJob.start()
     }
 
     private fun sortItems(items: List<FileItem>, sortOption: SortOption): List<FileItem> {
